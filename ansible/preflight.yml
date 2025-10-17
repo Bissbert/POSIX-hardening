@@ -1,0 +1,247 @@
+---
+# POSIX Hardening - Pre-flight Checks Playbook
+# Run this before deployment to verify readiness
+
+- name: Pre-flight Checks for POSIX Hardening
+  hosts: all
+  gather_facts: yes
+  become: yes
+
+  vars:
+    preflight_errors: []
+    preflight_warnings: []
+
+  tasks:
+    - name: System Information
+      debug:
+        msg: |
+          ========================================
+          Target System Information
+          ========================================
+          Hostname: {{ ansible_hostname }}
+          FQDN: {{ ansible_fqdn }}
+          IP Address: {{ ansible_default_ipv4.address | default('N/A') }}
+          OS: {{ ansible_distribution }} {{ ansible_distribution_version }}
+          Kernel: {{ ansible_kernel }}
+          Architecture: {{ ansible_architecture }}
+          CPU Cores: {{ ansible_processor_cores }}
+          Total Memory: {{ ansible_memtotal_mb }} MB
+          Python: {{ ansible_python_version }}
+          ========================================
+
+    - name: Check Operating System
+      block:
+        - name: Verify Debian-based system
+          assert:
+            that:
+              - ansible_os_family == "Debian"
+            fail_msg: "ERROR: Not a Debian-based system"
+            success_msg: "✓ Debian-based system confirmed"
+      rescue:
+        - name: Add OS error
+          set_fact:
+            preflight_errors: "{{ preflight_errors + ['Not a Debian-based system'] }}"
+
+    - name: Check SSH Configuration
+      block:
+        - name: Check current SSH port
+          wait_for:
+            port: "{{ ansible_port | default(22) }}"
+            host: "{{ ansible_host | default(inventory_hostname) }}"
+            timeout: 5
+          delegate_to: localhost
+          register: ssh_port_check
+
+        - name: Check for SSH keys
+          stat:
+            path: "{{ item }}"
+          loop:
+            - "/root/.ssh/authorized_keys"
+            - "/home/{{ ansible_user }}/.ssh/authorized_keys"
+          register: ssh_keys_check
+
+        - name: Verify at least one SSH key exists
+          assert:
+            that:
+              - ssh_keys_check.results | selectattr('stat.exists', 'equalto', true) | list | length > 0
+            fail_msg: "WARNING: No SSH authorized_keys found"
+            success_msg: "✓ SSH keys found"
+      rescue:
+        - name: Add SSH warning
+          set_fact:
+            preflight_warnings: "{{ preflight_warnings + ['No SSH keys configured - password auth may be disabled!'] }}"
+
+    - name: Check System Resources
+      block:
+        - name: Check available disk space
+          shell: df -BM / | awk 'NR==2 {print $4}' | sed 's/M//'
+          register: disk_space_check
+          changed_when: false
+
+        - name: Verify sufficient disk space
+          assert:
+            that:
+              - disk_space_check.stdout | int > 500
+            fail_msg: "WARNING: Low disk space"
+            success_msg: "✓ Sufficient disk space ({{ disk_space_check.stdout }}MB free)"
+
+        - name: Check memory usage
+          shell: free -m | awk 'NR==2 {printf "%.0f", $3*100/$2}'
+          register: memory_usage
+          changed_when: false
+
+        - name: Display memory status
+          debug:
+            msg: "Memory usage: {{ memory_usage.stdout }}%"
+      rescue:
+        - name: Add resource warning
+          set_fact:
+            preflight_warnings: "{{ preflight_warnings + ['Low system resources detected'] }}"
+
+    - name: Check Required Commands
+      block:
+        - name: Check for required commands
+          command: which {{ item }}
+          loop:
+            - iptables
+            - sysctl
+            - sed
+            - awk
+            - grep
+            - systemctl
+          register: commands_check
+          changed_when: false
+          failed_when: false
+
+        - name: Report missing commands
+          debug:
+            msg: "WARNING: Command not found - {{ item.item }}"
+          when: item.rc != 0
+          loop: "{{ commands_check.results }}"
+      rescue:
+        - name: Add command warning
+          set_fact:
+            preflight_warnings: "{{ preflight_warnings + ['Some required commands are missing'] }}"
+
+    - name: Check Network Connectivity
+      block:
+        - name: Test DNS resolution
+          shell: nslookup google.com > /dev/null 2>&1 || host google.com > /dev/null 2>&1
+          register: dns_check
+          changed_when: false
+          failed_when: false
+
+        - name: Check internet connectivity
+          uri:
+            url: https://www.google.com
+            method: HEAD
+            timeout: 5
+          delegate_to: "{{ inventory_hostname }}"
+          register: internet_check
+          failed_when: false
+
+        - name: Report connectivity status
+          debug:
+            msg: |
+              DNS Resolution: {{ 'OK' if dns_check.rc == 0 else 'FAILED' }}
+              Internet Access: {{ 'OK' if internet_check.status is defined else 'LIMITED' }}
+
+    - name: Check Existing Hardening
+      block:
+        - name: Check if toolkit already deployed
+          stat:
+            path: /opt/posix-hardening
+          register: toolkit_check
+
+        - name: Check for existing backups
+          stat:
+            path: /var/backups/hardening
+          register: backup_check
+
+        - name: Report existing deployment
+          debug:
+            msg: |
+              Toolkit Present: {{ 'YES' if toolkit_check.stat.exists else 'NO' }}
+              Backups Present: {{ 'YES' if backup_check.stat.exists else 'NO' }}
+
+    - name: Check Running Services
+      block:
+        - name: Get list of running services
+          shell: systemctl list-units --state=running --type=service | grep -c ".service"
+          register: service_count
+          changed_when: false
+
+        - name: Check critical services
+          systemd:
+            name: "{{ item }}"
+            state: started
+          register: critical_services
+          failed_when: false
+          loop:
+            - ssh
+            - sshd
+
+        - name: Report service status
+          debug:
+            msg: "Running services: {{ service_count.stdout }}"
+
+    - name: Generate Pre-flight Report
+      block:
+        - name: Create report content
+          set_fact:
+            preflight_report: |
+              ========================================
+              PRE-FLIGHT CHECK REPORT
+              ========================================
+              Host: {{ inventory_hostname }}
+              Date: {{ ansible_date_time.iso8601 }}
+
+              SYSTEM STATUS:
+              - OS: {{ ansible_distribution }} {{ ansible_distribution_version }}
+              - Kernel: {{ ansible_kernel }}
+              - Uptime: {{ ansible_uptime_seconds | int // 86400 }} days
+              - Load Average: {{ ansible_load_average.1m }}
+
+              RESOURCES:
+              - CPU Cores: {{ ansible_processor_cores }}
+              - Memory: {{ ansible_memtotal_mb }}MB ({{ memory_usage.stdout }}% used)
+              - Disk Space: {{ disk_space_check.stdout }}MB free
+
+              SSH STATUS:
+              - Port: {{ ansible_port | default(22) }}
+              - Keys Present: {{ 'YES' if (ssh_keys_check.results | selectattr('stat.exists', 'equalto', true) | list | length > 0) else 'NO' }}
+
+              ERRORS: {{ preflight_errors | length }}
+              {% for error in preflight_errors %}
+              - {{ error }}
+              {% endfor %}
+
+              WARNINGS: {{ preflight_warnings | length }}
+              {% for warning in preflight_warnings %}
+              - {{ warning }}
+              {% endfor %}
+
+              RECOMMENDATION:
+              {% if preflight_errors | length > 0 %}
+              ❌ DO NOT PROCEED - Critical issues detected
+              {% elif preflight_warnings | length > 2 %}
+              ⚠️  PROCEED WITH CAUTION - Multiple warnings
+              {% else %}
+              ✅ READY FOR DEPLOYMENT
+              {% endif %}
+              ========================================
+
+        - name: Display report
+          debug:
+            msg: "{{ preflight_report.split('\n') }}"
+
+        - name: Save report to file
+          copy:
+            content: "{{ preflight_report }}"
+            dest: "/tmp/preflight_report_{{ ansible_hostname }}_{{ ansible_date_time.epoch }}.txt"
+          delegate_to: localhost
+
+        - name: Fail if critical errors
+          fail:
+            msg: "Pre-flight checks failed - critical errors detected"
+          when: preflight_errors | length > 0

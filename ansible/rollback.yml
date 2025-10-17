@@ -1,0 +1,233 @@
+---
+# POSIX Hardening - Emergency Rollback Playbook
+# Use this to restore systems to pre-hardening state
+
+- name: Emergency Rollback - Restore System Access
+  hosts: all
+  gather_facts: yes
+  become: yes
+  serial: 1  # Process one host at a time for safety
+
+  vars:
+    toolkit_path: "/opt/posix-hardening"
+    force_rollback: false
+
+  tasks:
+    - name: Warning message
+      pause:
+        prompt: |
+          ========================================
+          WARNING: EMERGENCY ROLLBACK
+          ========================================
+          This will restore systems to pre-hardening state
+          and may leave them UNSECURED.
+
+          Target hosts: {{ ansible_play_hosts | join(', ') }}
+
+          Press Ctrl+C to abort, Enter to continue
+          ========================================
+      when: not force_rollback | bool
+
+    - name: Check for emergency rollback script
+      stat:
+        path: "{{ toolkit_path }}/emergency-rollback.sh"
+      register: rollback_script
+
+    - name: Execute emergency rollback if toolkit exists
+      block:
+        - name: Run emergency rollback script
+          shell: |
+            cd {{ toolkit_path }}
+            sh emergency-rollback.sh --force
+          register: rollback_result
+          when: rollback_script.stat.exists
+
+        - name: Display rollback output
+          debug:
+            var: rollback_result.stdout_lines
+          when: rollback_script.stat.exists
+
+      rescue:
+        - name: Manual rollback if script fails
+          debug:
+            msg: "Rollback script failed, attempting manual recovery"
+
+    - name: Manual SSH restoration
+      block:
+        - name: Find SSH backup
+          shell: ls -t {{ toolkit_path }}/backups/sshd_config.*.bak 2>/dev/null | head -1
+          register: ssh_backup
+          failed_when: false
+
+        - name: Restore SSH configuration
+          copy:
+            src: "{{ ssh_backup.stdout }}"
+            dest: /etc/ssh/sshd_config
+            remote_src: yes
+            backup: yes
+          when: ssh_backup.stdout != ""
+
+        - name: Reset SSH to safe defaults
+          lineinfile:
+            path: /etc/ssh/sshd_config
+            regexp: "{{ item.regexp }}"
+            line: "{{ item.line }}"
+          loop:
+            - { regexp: '^PermitRootLogin', line: 'PermitRootLogin yes' }
+            - { regexp: '^PasswordAuthentication', line: 'PasswordAuthentication yes' }
+            - { regexp: '^PubkeyAuthentication', line: 'PubkeyAuthentication yes' }
+          when: ssh_backup.stdout == ""
+
+        - name: Restart SSH service
+          systemd:
+            name: "{{ item }}"
+            state: restarted
+          loop:
+            - ssh
+            - sshd
+          failed_when: false
+
+    - name: Reset firewall rules
+      block:
+        - name: Flush iptables rules
+          shell: |
+            iptables -F
+            iptables -X
+            iptables -t nat -F
+            iptables -t nat -X
+            iptables -t mangle -F
+            iptables -t mangle -X
+            iptables -P INPUT ACCEPT
+            iptables -P FORWARD ACCEPT
+            iptables -P OUTPUT ACCEPT
+          ignore_errors: yes
+
+        - name: Flush ip6tables rules
+          shell: |
+            ip6tables -F
+            ip6tables -X
+            ip6tables -P INPUT ACCEPT
+            ip6tables -P FORWARD ACCEPT
+            ip6tables -P OUTPUT ACCEPT
+          ignore_errors: yes
+
+        - name: Save cleared firewall rules
+          shell: |
+            iptables-save > /etc/iptables/rules.v4
+            ip6tables-save > /etc/iptables/rules.v6
+          ignore_errors: yes
+
+    - name: Restore file permissions
+      block:
+        - name: Reset critical file permissions
+          file:
+            path: "{{ item.path }}"
+            mode: "{{ item.mode }}"
+          loop:
+            - { path: '/etc/shadow', mode: '0640' }
+            - { path: '/etc/gshadow', mode: '0640' }
+            - { path: '/etc/ssh/sshd_config', mode: '0644' }
+            - { path: '/etc/sudoers', mode: '0440' }
+          ignore_errors: yes
+
+    - name: Find and restore from snapshots
+      block:
+        - name: List available snapshots
+          shell: ls -dt /var/backups/hardening/snapshots/* 2>/dev/null | head -5
+          register: snapshots
+          failed_when: false
+
+        - name: Display available snapshots
+          debug:
+            msg: |
+              Available snapshots:
+              {{ snapshots.stdout_lines | default(['No snapshots found']) }}
+
+        - name: Restore from latest snapshot if available
+          shell: |
+            latest_snapshot=$(ls -dt /var/backups/hardening/snapshots/* 2>/dev/null | head -1)
+            if [ -d "$latest_snapshot" ]; then
+              snapshot_id=$(basename "$latest_snapshot")
+              cd {{ toolkit_path }}
+              . ./lib/backup.sh
+              restore_system_snapshot "$snapshot_id"
+            fi
+          when: snapshots.stdout != ""
+          ignore_errors: yes
+
+    - name: Clear hardening state
+      block:
+        - name: Remove state files
+          file:
+            path: "{{ item }}"
+            state: absent
+          loop:
+            - "/var/lib/hardening/completed"
+            - "/var/lib/hardening/current_state"
+            - "/var/lib/hardening/rollback_stack"
+          ignore_errors: yes
+
+    - name: Re-enable critical services
+      systemd:
+        name: "{{ item }}"
+        enabled: yes
+        state: started
+      loop:
+        - ssh
+        - networking
+      ignore_errors: yes
+
+    - name: Verify SSH connectivity
+      wait_for_connection:
+        timeout: 30
+      register: ssh_test
+
+    - name: Generate rollback report
+      set_fact:
+        rollback_report: |
+          ========================================
+          ROLLBACK REPORT
+          ========================================
+          Host: {{ inventory_hostname }}
+          Date: {{ ansible_date_time.iso8601 }}
+
+          Actions Taken:
+          - SSH configuration: {{ 'Restored' if ssh_backup.stdout != "" else 'Reset to defaults' }}
+          - Firewall rules: Cleared (ACCEPT all)
+          - File permissions: Reset
+          - System state: Cleared
+          - Services: Re-enabled
+
+          SSH Connectivity: {{ 'OK' if ssh_test is succeeded else 'FAILED' }}
+
+          ⚠️  IMPORTANT: System is now in UNSECURED state
+          Please review security settings manually.
+          ========================================
+
+    - name: Display rollback report
+      debug:
+        msg: "{{ rollback_report.split('\n') }}"
+
+    - name: Save rollback report
+      copy:
+        content: "{{ rollback_report }}"
+        dest: "/tmp/rollback_report_{{ inventory_hostname }}_{{ ansible_date_time.epoch }}.txt"
+      delegate_to: localhost
+
+- name: Rollback Summary
+  hosts: localhost
+  gather_facts: no
+
+  tasks:
+    - name: Display final summary
+      debug:
+        msg: |
+          ========================================
+          EMERGENCY ROLLBACK COMPLETE
+          ========================================
+          Processed hosts: {{ groups['all'] | length }}
+
+          ⚠️  All systems have been restored to an
+          UNSECURED state. Manual security review
+          is strongly recommended.
+          ========================================

@@ -1,0 +1,370 @@
+---
+# POSIX Server Hardening Toolkit - Ansible Deployment Playbook
+# Main playbook for deploying and executing hardening scripts
+# SAFETY: Includes multiple checks to prevent lockout
+
+- name: POSIX Hardening Deployment - Pre-flight Checks
+  hosts: all
+  gather_facts: yes
+  become: yes
+  tags: [always, preflight]
+
+  tasks:
+    - name: Display target information
+      debug:
+        msg: |
+          Target Host: {{ inventory_hostname }}
+          SSH Port: {{ ansible_port | default(22) }}
+          OS Family: {{ ansible_os_family }}
+          Distribution: {{ ansible_distribution }} {{ ansible_distribution_version }}
+          Current User: {{ ansible_user }}
+
+    - name: Verify Debian-based system
+      assert:
+        that:
+          - ansible_os_family == "Debian"
+        fail_msg: "This toolkit is designed for Debian-based systems only"
+        success_msg: "✓ Debian-based system confirmed"
+
+    - name: Verify SSH connectivity
+      wait_for_connection:
+        timeout: 10
+      register: ssh_check
+
+    - name: Check for existing SSH keys
+      stat:
+        path: "{{ item }}"
+      loop:
+        - /root/.ssh/authorized_keys
+        - "/home/{{ ansible_user }}/.ssh/authorized_keys"
+      register: ssh_keys
+
+    - name: Warn if no SSH keys found
+      debug:
+        msg: "WARNING: No SSH keys found. Ensure you have alternate access!"
+      when: ssh_keys.results | selectattr('stat.exists', 'equalto', false) | list | length == ssh_keys.results | length
+
+    - name: Check disk space
+      shell: df -h / | awk 'NR==2 {print $4}'
+      register: disk_space
+      changed_when: false
+
+    - name: Verify sufficient disk space
+      assert:
+        that:
+          - disk_space.stdout | regex_replace('[A-Z]', '') | float > 0.5
+        fail_msg: "Insufficient disk space for backups"
+        success_msg: "✓ Sufficient disk space available"
+
+    - name: Create snapshot timestamp
+      set_fact:
+        snapshot_timestamp: "{{ ansible_date_time.epoch }}"
+        cacheable: yes
+
+- name: Deploy POSIX Hardening Toolkit
+  hosts: all
+  gather_facts: no
+  become: yes
+  tags: [deploy]
+  vars:
+    toolkit_path: "/opt/posix-hardening"
+    backup_path: "/var/backups/hardening"
+
+  tasks:
+    - name: Create toolkit directories
+      file:
+        path: "{{ item }}"
+        state: directory
+        mode: '0755'
+        owner: root
+        group: root
+      loop:
+        - "{{ toolkit_path }}"
+        - "{{ toolkit_path }}/lib"
+        - "{{ toolkit_path }}/scripts"
+        - "{{ toolkit_path }}/config"
+        - "{{ toolkit_path }}/tests"
+        - "{{ backup_path }}"
+        - "{{ backup_path }}/snapshots"
+        - "/var/log/hardening"
+        - "/var/lib/hardening"
+
+    - name: Copy library files
+      copy:
+        src: "../lib/"
+        dest: "{{ toolkit_path }}/lib/"
+        mode: '0644'
+        owner: root
+        group: root
+        backup: yes
+
+    - name: Copy hardening scripts
+      copy:
+        src: "../scripts/"
+        dest: "{{ toolkit_path }}/scripts/"
+        mode: '0755'
+        owner: root
+        group: root
+        backup: yes
+
+    - name: Copy test scripts
+      copy:
+        src: "../tests/"
+        dest: "{{ toolkit_path }}/tests/"
+        mode: '0755'
+        owner: root
+        group: root
+
+    - name: Copy orchestrator
+      copy:
+        src: "../orchestrator.sh"
+        dest: "{{ toolkit_path }}/orchestrator.sh"
+        mode: '0755'
+        owner: root
+        group: root
+
+    - name: Copy emergency rollback
+      copy:
+        src: "../emergency-rollback.sh"
+        dest: "{{ toolkit_path }}/emergency-rollback.sh"
+        mode: '0755'
+        owner: root
+        group: root
+
+    - name: Deploy configuration
+      template:
+        src: "templates/defaults.conf.j2"
+        dest: "{{ toolkit_path }}/config/defaults.conf"
+        mode: '0644'
+        owner: root
+        group: root
+        backup: yes
+
+    - name: Create pre-deployment snapshot
+      shell: |
+        cd {{ toolkit_path }}
+        . ./lib/common.sh
+        . ./lib/backup.sh
+        create_system_snapshot "ansible_deploy_{{ snapshot_timestamp }}"
+      register: snapshot_result
+
+    - name: Display snapshot information
+      debug:
+        msg: "Created snapshot: {{ snapshot_result.stdout }}"
+
+- name: Execute Hardening Scripts - Priority 1 (Critical)
+  hosts: all
+  gather_facts: no
+  become: yes
+  tags: [harden, priority1]
+  vars:
+    toolkit_path: "/opt/posix-hardening"
+
+  tasks:
+    - name: Create emergency SSH access first
+      shell: |
+        cd {{ toolkit_path }}
+        . ./lib/ssh_safety.sh
+        create_emergency_ssh_access {{ emergency_ssh_port | default(2222) }}
+      when: enable_emergency_ssh | default(true) | bool
+      ignore_errors: yes
+
+    - name: Execute SSH hardening
+      shell: |
+        cd {{ toolkit_path }}
+        export ADMIN_IP="{{ admin_ip | default('') }}"
+        export SSH_PORT="{{ ansible_port | default(22) }}"
+        export DRY_RUN="{{ dry_run | default(0) }}"
+        sh scripts/01-ssh-hardening.sh
+      register: ssh_hardening
+      async: 300
+      poll: 10
+
+    - name: Verify SSH connectivity after hardening
+      wait_for_connection:
+        timeout: 30
+      register: ssh_verify
+
+    - name: Execute firewall setup
+      shell: |
+        cd {{ toolkit_path }}
+        export ADMIN_IP="{{ admin_ip | default('') }}"
+        export SSH_PORT="{{ ansible_port | default(22) }}"
+        export DRY_RUN="{{ dry_run | default(0) }}"
+        sh scripts/02-firewall-setup.sh
+      register: firewall_setup
+      when: ssh_verify is succeeded
+
+- name: Execute Hardening Scripts - Priority 2 (Core)
+  hosts: all
+  gather_facts: no
+  become: yes
+  tags: [harden, priority2]
+  vars:
+    toolkit_path: "/opt/posix-hardening"
+  when: run_full_hardening | default(true) | bool
+
+  tasks:
+    - name: Execute kernel parameters hardening
+      shell: |
+        cd {{ toolkit_path }}
+        export DRY_RUN="{{ dry_run | default(0) }}"
+        sh scripts/03-kernel-params.sh
+      register: kernel_params
+
+    - name: Execute network stack hardening
+      shell: |
+        cd {{ toolkit_path }}
+        export DRY_RUN="{{ dry_run | default(0) }}"
+        sh scripts/04-network-stack.sh
+      register: network_stack
+
+    - name: Execute file permissions hardening
+      shell: |
+        cd {{ toolkit_path }}
+        export DRY_RUN="{{ dry_run | default(0) }}"
+        sh scripts/05-file-permissions.sh
+      register: file_permissions
+
+    - name: Execute process limits configuration
+      shell: |
+        cd {{ toolkit_path }}
+        export DRY_RUN="{{ dry_run | default(0) }}"
+        sh scripts/06-process-limits.sh
+      register: process_limits
+
+    - name: Execute sudo restrictions
+      shell: |
+        cd {{ toolkit_path }}
+        export DRY_RUN="{{ dry_run | default(0) }}"
+        sh scripts/10-sudo-restrictions.sh
+      register: sudo_restrictions
+
+    - name: Execute sysctl hardening
+      shell: |
+        cd {{ toolkit_path }}
+        export DRY_RUN="{{ dry_run | default(0) }}"
+        sh scripts/14-sysctl-hardening.sh
+      register: sysctl_hardening
+
+- name: Execute Hardening Scripts - Priority 3 (Standard)
+  hosts: all
+  gather_facts: no
+  become: yes
+  tags: [harden, priority3]
+  vars:
+    toolkit_path: "/opt/posix-hardening"
+  when: run_full_hardening | default(true) | bool
+
+  tasks:
+    - name: Execute remaining priority 3 scripts
+      shell: |
+        cd {{ toolkit_path }}
+        export DRY_RUN="{{ dry_run | default(0) }}"
+        sh scripts/{{ item }}
+      loop:
+        - "07-audit-logging.sh"
+        - "08-password-policy.sh"
+        - "09-account-lockdown.sh"
+        - "11-service-disable.sh"
+        - "12-tmp-hardening.sh"
+        - "15-cron-restrictions.sh"
+        - "16-mount-options.sh"
+        - "19-log-retention.sh"
+      register: priority3_results
+
+- name: Execute Hardening Scripts - Priority 4 (Additional)
+  hosts: all
+  gather_facts: no
+  become: yes
+  tags: [harden, priority4]
+  vars:
+    toolkit_path: "/opt/posix-hardening"
+  when: run_full_hardening | default(true) | bool
+
+  tasks:
+    - name: Execute remaining priority 4 scripts
+      shell: |
+        cd {{ toolkit_path }}
+        export DRY_RUN="{{ dry_run | default(0) }}"
+        sh scripts/{{ item }}
+      loop:
+        - "13-core-dump-disable.sh"
+        - "17-shell-timeout.sh"
+        - "18-banner-warnings.sh"
+        - "20-integrity-baseline.sh"
+      register: priority4_results
+
+- name: Validation and Cleanup
+  hosts: all
+  gather_facts: no
+  become: yes
+  tags: [validate, cleanup]
+  vars:
+    toolkit_path: "/opt/posix-hardening"
+
+  tasks:
+    - name: Run validation suite
+      shell: |
+        cd {{ toolkit_path }}
+        sh tests/validation_suite.sh
+      register: validation_results
+      ignore_errors: yes
+
+    - name: Display validation results
+      debug:
+        var: validation_results.stdout_lines
+
+    - name: Remove emergency SSH if requested
+      shell: |
+        cd {{ toolkit_path }}
+        . ./lib/ssh_safety.sh
+        kill_emergency_ssh
+      when:
+        - enable_emergency_ssh | default(true) | bool
+        - remove_emergency_ssh | default(false) | bool
+      ignore_errors: yes
+
+    - name: Create completion report
+      copy:
+        content: |
+          POSIX Hardening Deployment Report
+          ==================================
+          Host: {{ inventory_hostname }}
+          Date: {{ ansible_date_time.iso8601 }}
+
+          Deployment Status: Complete
+          Snapshot Created: ansible_deploy_{{ snapshot_timestamp }}
+
+          Scripts Executed:
+          - Priority 1: SSH and Firewall
+          - Priority 2: {{ 'Completed' if run_full_hardening | default(true) else 'Skipped' }}
+          - Priority 3: {{ 'Completed' if run_full_hardening | default(true) else 'Skipped' }}
+          - Priority 4: {{ 'Completed' if run_full_hardening | default(true) else 'Skipped' }}
+
+          Validation: {{ 'PASSED' if validation_results.rc == 0 else 'REVIEW NEEDED' }}
+
+          Emergency Recovery:
+          - Rollback script: {{ toolkit_path }}/emergency-rollback.sh
+          - Snapshot location: /var/backups/hardening/snapshots/
+        dest: "{{ toolkit_path }}/deployment_report_{{ ansible_date_time.epoch }}.txt"
+
+    - name: Final SSH connectivity check
+      wait_for_connection:
+        timeout: 10
+
+    - name: Display completion message
+      debug:
+        msg: |
+          ========================================
+          POSIX Hardening Deployment Complete
+          ========================================
+          Toolkit Location: {{ toolkit_path }}
+          Emergency Rollback: {{ toolkit_path }}/emergency-rollback.sh
+
+          {% if validation_results.rc == 0 %}
+          ✓ All validation tests passed
+          {% else %}
+          ⚠ Some validation tests need review
+          {% endif %}
+          ========================================

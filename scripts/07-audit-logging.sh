@@ -1,0 +1,50 @@
+#!/bin/sh
+# Script: 07-audit-logging.sh - Enable audit logging
+
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+LIB_DIR="$(dirname "$SCRIPT_DIR")/lib"
+. "$LIB_DIR/common.sh"
+CONFIG_FILE="$(dirname "$SCRIPT_DIR")/config/defaults.conf"
+[ -f "$CONFIG_FILE" ] && . "$CONFIG_FILE"
+
+SCRIPT_NAME="07-audit-logging"
+
+configure_audit() {
+    show_progress "Configuring audit logging"
+
+    # Enable auth logging
+    if [ -f /etc/rsyslog.conf ]; then
+        if ! grep -q "auth,authpriv.*" /etc/rsyslog.conf; then
+            echo "auth,authpriv.* /var/log/auth.log" >> /etc/rsyslog.conf
+        fi
+    fi
+
+    # Create audit rules if auditd is available
+    if command -v auditctl >/dev/null 2>&1; then
+        cat > /etc/audit/rules.d/hardening.rules <<'EOF'
+# POSIX Hardening Audit Rules
+-w /etc/passwd -p wa -k passwd_changes
+-w /etc/shadow -p wa -k shadow_changes
+-w /etc/group -p wa -k group_changes
+-w /etc/sudoers -p wa -k sudoers_changes
+-w /etc/ssh/sshd_config -p wa -k sshd_config
+-a exit,always -F arch=b64 -S execve -k command_execution
+EOF
+        service auditd reload 2>/dev/null || true
+    fi
+
+    show_success "Audit logging configured"
+}
+
+main() {
+    init_hardening_environment "$SCRIPT_NAME"
+
+    if [ "$DRY_RUN" != "1" ]; then
+        configure_audit
+    fi
+
+    mark_completed "$SCRIPT_NAME"
+    exit 0
+}
+
+main "$@"

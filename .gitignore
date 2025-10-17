@@ -1,0 +1,82 @@
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+
+# Logs
+*.log
+logs/
+*.log.*
+
+# Backups
+*.bak
+*.backup
+*.old
+*.orig
+backups/*.tar.gz
+backups/*.tgz
+
+# Temporary files
+*.tmp
+*.temp
+*.swp
+*.swo
+*~
+.~*
+
+# SSH keys and sensitive data
+*.key
+*.pem
+*.ppk
+id_rsa*
+id_dsa*
+id_ecdsa*
+id_ed25519*
+known_hosts
+authorized_keys
+
+# Configuration overrides (keep templates)
+config/*.override
+config/local.*
+
+# Test artifacts
+tests/tmp/
+tests/output/
+tests/*.result
+
+# Ansible
+ansible/*.retry
+ansible/vault.yml
+ansible/vault-password
+ansible/inventory/production
+ansible/inventory/staging
+ansible/host_vars/*
+!ansible/host_vars/.gitkeep
+ansible/group_vars/*/vault.yml
+
+# IDE
+.vscode/
+.idea/
+*.sublime-*
+
+# Python (for any future Python tools)
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+venv/
+
+# Environment variables
+.env
+.env.local
+.env.*.local
+
+# Coverage reports
+coverage/
+*.coverage
+.coverage.*
+
+# Documentation build artifacts
+docs/_build/
+docs/.doctrees/
