@@ -2,6 +2,13 @@
 
 A comprehensive, safety-first server hardening toolkit written in pure POSIX shell for maximum compatibility with Debian-based systems accessed remotely via SSH.
 
+## 📚 Documentation
+
+- **[Complete Documentation](docs/README.md)** - Full documentation index
+- **[Script Documentation](docs/SCRIPTS.md)** - Detailed documentation for all 20 hardening scripts
+- **[Implementation Guide](docs/guides/IMPLEMENTATION_GUIDE.md)** - Step-by-step deployment instructions
+- **[Ansible Deployment](ansible/README.md)** - Automated deployment for multiple servers
+
 ## Critical Features
 
 - **Remote-Safe**: Never locks out SSH access with multiple safety mechanisms
@@ -34,7 +41,9 @@ A comprehensive, safety-first server hardening toolkit written in pure POSIX she
    - Automatic rollback on script failure
    - Checkpoint system for partial rollbacks
 
-## Quick Start
+## 🚀 Quick Start
+
+For detailed instructions, see the [Implementation Guide](docs/guides/IMPLEMENTATION_GUIDE.md).
 
 ### Prerequisites
 
@@ -43,7 +52,14 @@ A comprehensive, safety-first server hardening toolkit written in pure POSIX she
 - SSH key authentication configured (recommended)
 - At least 100MB free space for backups
 
-### Basic Usage
+### Interactive Setup (Recommended)
+
+```sh
+# Run the interactive quick-start script
+sudo sh quick-start.sh
+```
+
+### Manual Setup
 
 1. **Configure your settings**:
 ```sh
@@ -100,22 +116,24 @@ sudo sh orchestrator.sh
 └── tests/                # Validation tests
 ```
 
-## Script Priority Order
+## 📋 Script Overview
+
+See [Script Documentation](docs/SCRIPTS.md) for detailed information about each script.
 
 ### Critical Priority (Run First)
-1. **01-ssh-hardening.sh** - SSH configuration (preserves access)
-2. **02-firewall-setup.sh** - Firewall rules (with SSH protection)
+1. **[01-ssh-hardening.sh](docs/SCRIPTS.md#01-ssh-hardening)** - SSH configuration (preserves access)
+2. **[02-firewall-setup.sh](docs/SCRIPTS.md#02-firewall-setup)** - Firewall rules (with SSH protection)
 
 ### High Priority
-3. **03-kernel-params.sh** - Kernel security parameters
-4. **04-network-stack.sh** - Network stack hardening
-5. **05-file-permissions.sh** - Critical file permissions
+3-5. Core system hardening (kernel, network, permissions)
 
-### Medium Priority
-6-15. Various security hardening (process limits, audit logging, etc.)
+### Standard Priority
+6-15. Service hardening and access controls
 
-### Low Priority
-16-20. Additional hardening (banners, integrity checks, etc.)
+### Additional Security
+16-20. Optional hardening measures
+
+Full script listing and details in [SCRIPTS.md](docs/SCRIPTS.md).
 
 ## Configuration Options
 
@@ -254,19 +272,25 @@ cat /var/lib/hardening/current_state
 - Sets appropriate umask
 - Restricts world-writable directories
 
+## 📖 Additional Resources
+
+- **[Testing Framework](docs/guides/TESTING_FRAMEWORK.md)** - Comprehensive testing procedures
+- **[Hardening Requirements](docs/guides/HARDENING_REQUIREMENTS.md)** - Security standards and compliance
+- **[Quick Reference](docs/guides/QUICK_REFERENCE.md)** - Command reference and cheat sheet
+- **[Contributing](docs/development/CONTRIBUTING.md)** - How to contribute to the project
+
 ## Support
 
 For issues or questions:
-1. Check logs in `/var/log/hardening/`
-2. Review configuration in `config/defaults.conf`
-3. Test with DRY_RUN=1 first
-4. Ensure backups are available before proceeding
+1. Check the **[Documentation Index](docs/README.md)**
+2. Review **[Script Documentation](docs/SCRIPTS.md)** for script-specific help
+3. Check logs in `/var/log/hardening/`
+4. Test with DRY_RUN=1 first
 
 ## License
 
-This toolkit is provided as-is for securing Debian-based servers. Always test in a non-production environment first.
+MIT License - See [LICENSE](LICENSE) file for details.
 
-## Author
+## Version
 
-POSIX Shell Server Hardening Toolkit v1.0.0
-Designed for maximum safety on remotely-accessed servers.
+Current Version: **1.0.0** - See [Changelog](docs/releases/CHANGELOG.md) for release history.
