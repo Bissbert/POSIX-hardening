@@ -1,0 +1,109 @@
+---
+# POSIX Hardening - Global Variables
+# These variables apply to all hosts unless overridden
+
+# Deployment settings
+toolkit_path: "/opt/posix-hardening"
+backup_path: "/var/backups/hardening"
+log_path: "/var/log/hardening"
+state_path: "/var/lib/hardening"
+
+# Safety settings - NEVER disable these in production
+safety_mode: 1
+backup_before_change: 1
+rollback_enabled: 1
+fail_fast: 1
+
+# Execution mode
+dry_run: 0  # Set to 1 for simulation
+verbose: 0  # Set to 1 for detailed output
+run_full_hardening: true  # Set to false for critical only
+
+# SSH Configuration
+ssh_port: 22
+admin_ip: ""  # YOUR MANAGEMENT IP - CRITICAL!
+ssh_allow_users: ""  # Space-separated list
+ssh_allow_groups: ""  # Space-separated list
+ssh_test_port: 2222
+ssh_rollback_timeout: 60
+
+# Emergency Access
+enable_emergency_ssh: true
+emergency_ssh_port: 2222
+remove_emergency_ssh: false  # Set to true after verification
+
+# Firewall Configuration
+enable_firewall: true
+firewall_timeout: 300  # 5 minutes
+allowed_ports: []  # List of additional ports
+trusted_networks: []  # List of CIDR blocks
+
+# Kernel and System Hardening
+enable_kernel_hardening: true
+enable_network_hardening: true
+enable_process_limits: true
+max_user_processes: 1024
+core_dump_limit: 0
+
+# File Permissions
+enable_file_permissions: true
+system_umask: "027"
+user_umask: "077"
+
+# Password and Authentication
+password_min_length: 12
+password_max_age: 90
+password_warn_age: 14
+account_lockout_threshold: 5
+account_lockout_duration: 30
+
+# Logging and Auditing
+enable_audit_logging: true
+log_retention_days: 90
+audit_log: "/var/log/audit/audit.log"
+
+# Service Hardening
+disable_services:
+  - bluetooth
+  - cups
+  - avahi-daemon
+  - rpcbind
+  - nfs-server
+  - snmpd
+
+required_services:
+  - ssh
+
+# Mount Options
+enable_mount_hardening: true
+tmp_dirs:
+  - /tmp
+  - /var/tmp
+  - /dev/shm
+tmp_mount_options: "noexec,nosuid,nodev"
+
+# Shell Configuration
+shell_timeout: 900  # 15 minutes
+
+# Integrity Checking
+enable_integrity_check: true
+integrity_dirs:
+  - /etc
+  - /bin
+  - /sbin
+  - /usr/bin
+  - /usr/sbin
+
+# Ansible-specific settings
+ansible_become_method: sudo
+ansible_python_interpreter: /usr/bin/python3
+
+# Validation settings
+run_validation: true
+test_mode: 0
+
+# Deployment tags
+deployment_tags:
+  - deploy
+  - harden
+  - validate
