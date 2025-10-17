@@ -78,7 +78,7 @@ net.ipv4.tcp_keepalive_probes = 5
 
 # Memory Protection
 kernel.randomize_va_space = 2
-kernel.exec-shield = 1
+# kernel.exec-shield = 1  # Deprecated - only for older RHEL/CentOS kernels
 kernel.kptr_restrict = 2
 kernel.yama.ptrace_scope = 1
 
