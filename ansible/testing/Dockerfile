@@ -21,6 +21,7 @@ RUN apt-get update && apt-get install -y \
     procps \
     net-tools \
     iproute2 \
+    netcat-openbsd \
     && rm -rf /var/lib/apt/lists/*
 
 # Create SSH directory and configure SSH

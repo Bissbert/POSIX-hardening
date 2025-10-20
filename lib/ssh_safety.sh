@@ -287,8 +287,8 @@ update_ssh_setting() {
 
     # Check if setting exists (commented or not)
     if grep -q "^#*$setting " "$config"; then
-        # Update existing setting
-        sed -i "s/^#*$setting .*/$setting $value/" "$config"
+        # Update existing setting (use | as delimiter to handle paths with /)
+        sed -i "s|^#*$setting .*|$setting $value|" "$config"
         log "DEBUG" "Updated: $setting $value"
     else
         # Add new setting
