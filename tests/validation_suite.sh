@@ -141,7 +141,7 @@ test_permissions() {
 
     # Check critical file permissions
     run_test "/etc/passwd permissions" "[ -f /etc/passwd ] && [ $(stat -c %a /etc/passwd 2>/dev/null || stat -f %Lp /etc/passwd 2>/dev/null) = '644' ]"
-    run_test "/etc/shadow permissions" "[ -f /etc/shadow ] && [ $(stat -c %a /etc/shadow 2>/dev/null || stat -f %Lp /etc/shadow 2>/dev/null) = '000' ]"
+    run_test "/etc/shadow permissions" "[ -f /etc/shadow ] && [ $(stat -c %a /etc/shadow 2>/dev/null || stat -f %Lp /etc/shadow 2>/dev/null) = '640' ]"
     run_test "/etc/ssh/sshd_config permissions" "[ -f /etc/ssh/sshd_config ] && [ $(stat -c %a /etc/ssh/sshd_config 2>/dev/null || stat -f %Lp /etc/ssh/sshd_config 2>/dev/null) = '600' ]"
 
     # Check for world-writable files

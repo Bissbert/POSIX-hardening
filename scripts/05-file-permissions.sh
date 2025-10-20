@@ -26,9 +26,9 @@ secure_system_files() {
 
     # Secure sensitive files
     [ -f /etc/passwd ] && chmod 644 /etc/passwd
-    [ -f /etc/shadow ] && chmod 000 /etc/shadow
+    [ -f /etc/shadow ] && chmod 640 /etc/shadow
     [ -f /etc/group ] && chmod 644 /etc/group
-    [ -f /etc/gshadow ] && chmod 000 /etc/gshadow
+    [ -f /etc/gshadow ] && chmod 640 /etc/gshadow
     [ -f /etc/ssh/sshd_config ] && chmod 600 /etc/ssh/sshd_config
 
     # Secure cron files
