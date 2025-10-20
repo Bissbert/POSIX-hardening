@@ -6,23 +6,25 @@
 
 set -e
 
-# Global configuration with safe defaults
+# Global configuration - NO DEFAULTS
+# All values must be set in config file (loaded by scripts)
 readonly VERSION="1.0.0"
 readonly TOOLKIT_NAME="POSIX-hardening"
 
-# Safety flags - can be overridden by environment
-readonly SAFETY_MODE="${SAFETY_MODE:-1}"
-readonly DRY_RUN="${DRY_RUN:-0}"
-readonly BACKUP_BEFORE_CHANGE="${BACKUP_BEFORE_CHANGE:-1}"
-readonly FAIL_FAST="${FAIL_FAST:-1}"
-readonly VERBOSE="${VERBOSE:-0}"
+# Safety flags - read from config file only
+# No environment variable fallbacks to enforce config file usage
+readonly SAFETY_MODE="${SAFETY_MODE}"
+readonly DRY_RUN="${DRY_RUN}"
+readonly BACKUP_BEFORE_CHANGE="${BACKUP_BEFORE_CHANGE}"
+readonly FAIL_FAST="${FAIL_FAST}"
+readonly VERBOSE="${VERBOSE}"
 
-# Critical paths
-readonly SSH_PORT="${SSH_PORT:-22}"
-readonly ADMIN_IP="${ADMIN_IP:-}"
-readonly BACKUP_DIR="${BACKUP_DIR:-/var/backups/hardening}"
-readonly LOG_DIR="${LOG_DIR:-/var/log/hardening}"
-readonly STATE_DIR="${STATE_DIR:-/var/lib/hardening}"
+# Critical paths - read from config file only
+readonly SSH_PORT="${SSH_PORT}"
+readonly ADMIN_IP="${ADMIN_IP}"
+readonly BACKUP_DIR="${BACKUP_DIR}"
+readonly LOG_DIR="${LOG_DIR}"
+readonly STATE_DIR="${STATE_DIR}"
 
 # Create required directories
 for dir in "$BACKUP_DIR" "$LOG_DIR" "$STATE_DIR"; do
@@ -30,7 +32,7 @@ for dir in "$BACKUP_DIR" "$LOG_DIR" "$STATE_DIR"; do
 done
 
 # Log file with timestamp
-readonly LOG_FILE="${LOG_FILE:-$LOG_DIR/hardening-$(date +%Y%m%d-%H%M%S).log}"
+readonly LOG_FILE="$LOG_DIR/hardening-$(date +%Y%m%d-%H%M%S).log"
 
 # Color codes for terminal output (disabled if not tty)
 if [ -t 1 ]; then

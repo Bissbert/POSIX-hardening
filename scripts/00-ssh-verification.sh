@@ -27,7 +27,7 @@ CONFIG_FILE="$TOOLKIT_ROOT/config/defaults.conf"
 SCRIPT_NAME="00-ssh-verification"
 
 # Configuration
-EMERGENCY_SSH_PORT="${EMERGENCY_SSH_PORT:-2222}"
+EMERGENCY_SSH_PORT="${EMERGENCY_SSH_PORT}"
 ROLLBACK_TIMEOUT=60
 
 # ============================================================================
