@@ -423,20 +423,23 @@ monitor_ssh_connections() {
 
     # Method 1: Check who is logged in via SSH
     if command -v who >/dev/null 2>&1; then
-        who | grep pts
+        who | grep pts || true
     fi
 
     # Method 2: Check established SSH connections
     if command -v ss >/dev/null 2>&1; then
-        ss -tn state established '( sport = :22 or dport = :22 )'
+        ss -tn state established '( sport = :22 or dport = :22 )' || true
     elif command -v netstat >/dev/null 2>&1; then
-        netstat -tn | grep ':22 ' | grep ESTABLISHED
+        netstat -tn | grep ':22 ' | grep ESTABLISHED || true
     fi
 
     # Method 3: Check SSH daemon status
     if command -v systemctl >/dev/null 2>&1; then
-        systemctl status ssh 2>/dev/null || systemctl status sshd 2>/dev/null
+        systemctl status ssh 2>/dev/null || systemctl status sshd 2>/dev/null || true
     fi
+
+    # Always return success (this is informational only)
+    return 0
 }
 
 # ============================================================================
