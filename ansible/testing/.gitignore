@@ -1,0 +1,9 @@
+# SSH keys (generated for testing)
+ssh_keys/
+authorized_keys
+
+# Docker volumes and data
+*.log
+
+# Test reports
+*_report_*.txt

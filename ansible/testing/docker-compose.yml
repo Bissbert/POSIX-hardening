@@ -1,0 +1,97 @@
+---
+# Docker Compose configuration for Ansible testing
+# Simulates a multi-host environment for hardening playbook testing
+
+version: '3.8'
+
+services:
+  # Primary test target
+  target1:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: posix-hardening-target1
+    hostname: target1
+    privileged: true
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:rw
+      - target1-data:/var/lib/hardening
+      - target1-backups:/var/backups/hardening
+      - target1-logs:/var/log
+    networks:
+      test_network:
+        ipv4_address: 172.20.0.10
+    ports:
+      - "2201:22"
+    cap_add:
+      - SYS_ADMIN
+      - NET_ADMIN
+      - SYS_TIME
+    security_opt:
+      - apparmor:unconfined
+    tmpfs:
+      - /run
+      - /run/lock
+      - /tmp
+
+  # Secondary test target
+  target2:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: posix-hardening-target2
+    hostname: target2
+    privileged: true
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:rw
+      - target2-data:/var/lib/hardening
+      - target2-backups:/var/backups/hardening
+      - target2-logs:/var/log
+    networks:
+      test_network:
+        ipv4_address: 172.20.0.11
+    ports:
+      - "2202:22"
+    cap_add:
+      - SYS_ADMIN
+      - NET_ADMIN
+      - SYS_TIME
+    security_opt:
+      - apparmor:unconfined
+    tmpfs:
+      - /run
+      - /run/lock
+      - /tmp
+
+  # Ansible control node
+  ansible-controller:
+    image: cytopia/ansible:latest-tools
+    container_name: posix-hardening-controller
+    hostname: controller
+    working_dir: /ansible
+    volumes:
+      - ../:/ansible
+      - ./ssh_keys:/root/.ssh:ro
+      - ./inventory-docker.ini:/ansible/inventory-docker.ini:ro
+    networks:
+      test_network:
+        ipv4_address: 172.20.0.2
+    depends_on:
+      - target1
+      - target2
+    command: sleep infinity
+
+networks:
+  test_network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16
+
+volumes:
+  target1-data:
+  target1-backups:
+  target1-logs:
+  target2-data:
+  target2-backups:
+  target2-logs:

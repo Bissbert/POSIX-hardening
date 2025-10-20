@@ -4,7 +4,18 @@ Automated deployment of the POSIX Shell Server Hardening Toolkit using Ansible.
 
 ## 🚀 Quick Start
 
-### Prerequisites
+### Testing with Docker (Recommended)
+
+Test the playbooks in a safe, isolated environment:
+
+```bash
+cd ansible/testing
+./test-runner.sh full
+```
+
+See [testing/README.md](testing/README.md) for complete Docker testing documentation.
+
+### Prerequisites for Production
 
 1. **Ansible installed on control machine**:
 ```bash
@@ -391,6 +402,12 @@ ansible/
 ├── host_vars/           # Host-specific variables
 ├── templates/
 │   └── defaults.conf.j2 # Configuration template
+├── testing/             # Docker-based testing
+│   ├── Dockerfile       # Target system image
+│   ├── docker-compose.yml # Multi-container setup
+│   ├── inventory-docker.ini # Docker inventory
+│   ├── test-runner.sh   # Automated testing script
+│   └── README.md        # Testing documentation
 └── README.md            # This file
 ```
 
