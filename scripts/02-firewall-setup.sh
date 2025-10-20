@@ -399,28 +399,38 @@ verify_connectivity() {
 save_firewall_rules() {
     show_progress "Saving firewall rules"
 
-    # Debian/Ubuntu method
+    # Debian/Ubuntu method - create directory if needed
+    if [ ! -d /etc/iptables ]; then
+        mkdir -p /etc/iptables
+        log "INFO" "Created /etc/iptables directory"
+    fi
+
     if [ -d /etc/iptables ]; then
         iptables-save > /etc/iptables/rules.v4
         ip6tables-save > /etc/iptables/rules.v6
         log "INFO" "Rules saved to /etc/iptables/"
     fi
 
-    # Alternative method
+    # Alternative method for RHEL/CentOS
     if [ -d /etc/sysconfig ]; then
         iptables-save > /etc/sysconfig/iptables
         ip6tables-save > /etc/sysconfig/ip6tables
         log "INFO" "Rules saved to /etc/sysconfig/"
     fi
 
-    # Create restore script for boot
-    cat > /etc/network/if-pre-up.d/iptables <<'EOF'
+    # Create restore script for boot (if directory exists)
+    if [ -d /etc/network/if-pre-up.d ]; then
+        cat > /etc/network/if-pre-up.d/iptables <<'EOF'
 #!/bin/sh
 [ -f /etc/iptables/rules.v4 ] && iptables-restore < /etc/iptables/rules.v4
 [ -f /etc/iptables/rules.v6 ] && ip6tables-restore < /etc/iptables/rules.v6
 exit 0
 EOF
-    chmod +x /etc/network/if-pre-up.d/iptables
+        chmod +x /etc/network/if-pre-up.d/iptables
+        log "INFO" "Created network restart hook for iptables"
+    else
+        log "INFO" "Skipping network hook (directory /etc/network/if-pre-up.d not found)"
+    fi
 
     show_success "Firewall rules saved persistently"
 }
