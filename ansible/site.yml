@@ -202,7 +202,6 @@
   tags: [harden, priority2]
   vars:
     toolkit_path: "/opt/posix-hardening"
-  when: run_full_hardening | default(true) | bool
 
   tasks:
     - name: Execute kernel parameters hardening
@@ -211,6 +210,7 @@
         export DRY_RUN="{{ dry_run | default(0) }}"
         sh scripts/03-kernel-params.sh
       register: kernel_params
+      when: run_full_hardening | default(true) | bool
 
     - name: Execute network stack hardening
       shell: |
@@ -218,6 +218,7 @@
         export DRY_RUN="{{ dry_run | default(0) }}"
         sh scripts/04-network-stack.sh
       register: network_stack
+      when: run_full_hardening | default(true) | bool
 
     - name: Execute file permissions hardening
       shell: |
@@ -225,6 +226,7 @@
         export DRY_RUN="{{ dry_run | default(0) }}"
         sh scripts/05-file-permissions.sh
       register: file_permissions
+      when: run_full_hardening | default(true) | bool
 
     - name: Execute process limits configuration
       shell: |
@@ -232,6 +234,7 @@
         export DRY_RUN="{{ dry_run | default(0) }}"
         sh scripts/06-process-limits.sh
       register: process_limits
+      when: run_full_hardening | default(true) | bool
 
     - name: Execute sudo restrictions
       shell: |
@@ -239,6 +242,7 @@
         export DRY_RUN="{{ dry_run | default(0) }}"
         sh scripts/10-sudo-restrictions.sh
       register: sudo_restrictions
+      when: run_full_hardening | default(true) | bool
 
     - name: Execute sysctl hardening
       shell: |
@@ -246,6 +250,7 @@
         export DRY_RUN="{{ dry_run | default(0) }}"
         sh scripts/14-sysctl-hardening.sh
       register: sysctl_hardening
+      when: run_full_hardening | default(true) | bool
 
 - name: Execute Hardening Scripts - Priority 3 (Standard)
   hosts: all
@@ -254,7 +259,6 @@
   tags: [harden, priority3]
   vars:
     toolkit_path: "/opt/posix-hardening"
-  when: run_full_hardening | default(true) | bool
 
   tasks:
     - name: Execute remaining priority 3 scripts
@@ -272,6 +276,7 @@
         - "16-mount-options.sh"
         - "19-log-retention.sh"
       register: priority3_results
+      when: run_full_hardening | default(true) | bool
 
 - name: Execute Hardening Scripts - Priority 4 (Additional)
   hosts: all
@@ -280,7 +285,6 @@
   tags: [harden, priority4]
   vars:
     toolkit_path: "/opt/posix-hardening"
-  when: run_full_hardening | default(true) | bool
 
   tasks:
     - name: Execute remaining priority 4 scripts
@@ -294,6 +298,7 @@
         - "18-banner-warnings.sh"
         - "20-integrity-baseline.sh"
       register: priority4_results
+      when: run_full_hardening | default(true) | bool
 
 - name: Validation and Cleanup
   hosts: all
