@@ -65,18 +65,20 @@ create_ssh_test_config() {
     fi
 
     # Create test configuration
-    cp "$SSHD_CONFIG" "$test_config"
+    cp "$SSHD_CONFIG" "$test_config" || return 1
 
     # Modify to use test port
-    if grep -q "^Port " "$test_config"; then
-        sed -i "s/^Port .*/Port $test_port/" "$test_config"
+    if grep -q "^Port " "$test_config" 2>/dev/null; then
+        sed -i.bak "s/^Port .*/Port $test_port/" "$test_config"
+        rm -f "$test_config.bak"
     else
         echo "Port $test_port" >> "$test_config"
     fi
 
     # Add PID file for test instance
-    if grep -q "^PidFile " "$test_config"; then
-        sed -i "s|^PidFile .*|PidFile /var/run/sshd_test.pid|" "$test_config"
+    if grep -q "^PidFile " "$test_config" 2>/dev/null; then
+        sed -i.bak "s|^PidFile .*|PidFile /var/run/sshd_test.pid|" "$test_config"
+        rm -f "$test_config.bak"
     else
         echo "PidFile /var/run/sshd_test.pid" >> "$test_config"
     fi
@@ -99,8 +101,8 @@ test_ssh_config() {
 
     log "DEBUG" "SSH configuration syntax is valid"
 
-    # If not in dry run, test with actual daemon
-    if [ "$DRY_RUN" != "1" ]; then
+    # If not in dry run, test with actual daemon (skip if SKIP_SSH_DAEMON_TEST=1)
+    if [ "$DRY_RUN" != "1" ] && [ "$SKIP_SSH_DAEMON_TEST" != "1" ]; then
         local test_config
         test_config=$(create_ssh_test_config "$config_file.test" "$SSHD_TEST_PORT")
 
