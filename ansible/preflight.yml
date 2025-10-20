@@ -199,17 +199,17 @@
               SYSTEM STATUS:
               - OS: {{ ansible_distribution }} {{ ansible_distribution_version }}
               - Kernel: {{ ansible_kernel }}
-              - Uptime: {{ ansible_uptime_seconds | int // 86400 }} days
-              - Load Average: {{ ansible_load_average.1m }}
+              - Uptime: {{ (ansible_uptime_seconds | default(0) | int) // 86400 }} days
+              - Load Average: {{ ansible_load_average['1m'] | default('N/A') }}
 
               RESOURCES:
               - CPU Cores: {{ ansible_processor_cores }}
-              - Memory: {{ ansible_memtotal_mb }}MB ({{ memory_usage.stdout }}% used)
-              - Disk Space: {{ disk_space_check.stdout }}MB free
+              - Memory: {{ ansible_memtotal_mb }}MB ({{ memory_usage.stdout | default('N/A') }}% used)
+              - Disk Space: {{ disk_space_check.stdout | default('N/A') }}MB free
 
               SSH STATUS:
               - Port: {{ ansible_port | default(22) }}
-              - Keys Present: {{ 'YES' if (ssh_keys_check.results | selectattr('stat.exists', 'equalto', true) | list | length > 0) else 'NO' }}
+              - Keys Present: {{ 'YES' if (ssh_keys_check.results | default([]) | selectattr('stat.exists', 'equalto', true) | list | length > 0) else 'NO' }}
 
               ERRORS: {{ preflight_errors | length }}
               {% for error in preflight_errors %}
