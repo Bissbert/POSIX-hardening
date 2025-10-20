@@ -20,7 +20,7 @@ services:
       - target1-logs:/var/log
     networks:
       test_network:
-        ipv4_address: 172.20.0.10
+        ipv4_address: 172.25.0.10
     ports:
       - "2201:22"
     cap_add:
@@ -49,7 +49,7 @@ services:
       - target2-logs:/var/log
     networks:
       test_network:
-        ipv4_address: 172.20.0.11
+        ipv4_address: 172.25.0.11
     ports:
       - "2202:22"
     cap_add:
@@ -68,14 +68,14 @@ services:
     image: cytopia/ansible:latest-tools
     container_name: posix-hardening-controller
     hostname: controller
-    working_dir: /ansible
+    working_dir: /repo/ansible
     volumes:
-      - ../:/ansible
+      - ../../:/repo
       - ./ssh_keys:/root/.ssh:ro
-      - ./inventory-docker.ini:/ansible/inventory-docker.ini:ro
+      - ./inventory-docker.ini:/repo/ansible/inventory-docker.ini:ro
     networks:
       test_network:
-        ipv4_address: 172.20.0.2
+        ipv4_address: 172.25.0.2
     depends_on:
       - target1
       - target2
@@ -86,7 +86,7 @@ networks:
     driver: bridge
     ipam:
       config:
-        - subnet: 172.20.0.0/16
+        - subnet: 172.25.0.0/16
 
 volumes:
   target1-data:
