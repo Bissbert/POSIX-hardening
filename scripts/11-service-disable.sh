@@ -1,10 +1,16 @@
 #!/bin/sh
 # Script: 11-service-disable.sh - Disable unnecessary services
 
-SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-LIB_DIR="$(dirname "$SCRIPT_DIR")/lib"
+
+SCRIPT_PATH="$0"
+case "$SCRIPT_PATH" in
+    /*) SCRIPT_DIR="$(dirname "$SCRIPT_PATH")" ;;
+    *)  SCRIPT_DIR="$(cd "$(dirname "$SCRIPT_PATH")" && pwd)" ;;
+esac
+TOOLKIT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+LIB_DIR="$TOOLKIT_ROOT/lib"
+CONFIG_FILE="$TOOLKIT_ROOT/config/defaults.conf"
 . "$LIB_DIR/common.sh"
-CONFIG_FILE="$(dirname "$SCRIPT_DIR")/config/defaults.conf"
 [ -f "$CONFIG_FILE" ] && . "$CONFIG_FILE"
 
 SCRIPT_NAME="11-service-disable"

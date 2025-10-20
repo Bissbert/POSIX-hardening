@@ -3,9 +3,7 @@
 # lib/backup.sh - Comprehensive backup and restore system
 # Ensures all changes can be reverted
 
-# Source common functions
-SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-. "$SCRIPT_DIR/common.sh"
+# Note: common.sh should be sourced before this file
 
 # Backup configuration
 readonly BACKUP_RETENTION_DAYS="${BACKUP_RETENTION_DAYS:-30}"

@@ -3,9 +3,7 @@
 # lib/ssh_safety.sh - SSH preservation and safety mechanisms
 # Critical: Prevents lockout on remote servers
 
-# Source common functions
-SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-. "$SCRIPT_DIR/common.sh"
+# Note: common.sh should be sourced before this file
 
 # SSH-specific configuration
 readonly SSHD_CONFIG="${SSHD_CONFIG:-/etc/ssh/sshd_config}"

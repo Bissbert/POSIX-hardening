@@ -3,9 +3,7 @@
 # lib/rollback.sh - Transaction-based rollback system
 # Provides atomic operations with automatic rollback on failure
 
-# Source common functions
-SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-. "$SCRIPT_DIR/common.sh"
+# Note: common.sh should be sourced before this file
 
 # Rollback configuration
 readonly ROLLBACK_STACK="$STATE_DIR/rollback_stack"
