@@ -152,6 +152,68 @@
       debug:
         msg: "Created snapshot: {{ snapshot_result.stdout }}"
 
+- name: Deploy Team SSH Keys (BEFORE Hardening)
+  hosts: all
+  gather_facts: no
+  become: yes
+  tags: [harden, priority1, ssh_keys]
+  vars:
+    team_keys_dir: "{{ playbook_dir }}/team_keys"
+    ansible_key_name: "ansible_ed25519"
+    team_key_name: "team_shared_ed25519"
+
+  tasks:
+    - name: Check if team keys exist
+      stat:
+        path: "{{ team_keys_dir }}/{{ item }}.pub"
+      delegate_to: localhost
+      become: no
+      register: key_check
+      loop:
+        - "{{ ansible_key_name }}"
+        - "{{ team_key_name }}"
+      failed_when: false
+
+    - name: Read team public keys (if they exist)
+      slurp:
+        src: "{{ team_keys_dir }}/{{ item }}.pub"
+      delegate_to: localhost
+      become: no
+      register: public_keys
+      loop:
+        - "{{ ansible_key_name }}"
+        - "{{ team_key_name }}"
+      when: key_check.results | selectattr('stat.exists', 'equalto', true) | list | length == 2
+
+    - name: Ensure .ssh directory exists for root
+      file:
+        path: /root/.ssh
+        state: directory
+        owner: root
+        group: root
+        mode: '0700'
+      when: public_keys is defined and public_keys.results is defined
+
+    - name: Deploy Ansible automation key to root
+      authorized_key:
+        user: root
+        key: "{{ public_keys.results[0].content | b64decode }}"
+        comment: "ansible-automation@posix-hardening"
+        state: present
+      when: public_keys is defined and public_keys.results is defined
+
+    - name: Deploy team shared key to root
+      authorized_key:
+        user: root
+        key: "{{ public_keys.results[1].content | b64decode }}"
+        comment: "team-access@posix-hardening"
+        state: present
+      when: public_keys is defined and public_keys.results is defined
+
+    - name: Display key deployment status
+      debug:
+        msg: "{{ 'SSH team keys deployed successfully' if (public_keys is defined and public_keys.results is defined) else 'SSH team keys not found - skipping (generate with: cd ansible/team_keys && ./generate_keys.sh)' }}"
+
 - name: Execute Hardening Scripts - Priority 1 (Critical)
   hosts: all
   gather_facts: no

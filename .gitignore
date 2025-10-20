@@ -55,6 +55,16 @@ ansible/host_vars/*
 !ansible/host_vars/.gitkeep
 ansible/group_vars/*/vault.yml
 
+# Ansible team keys - NEVER commit private keys!
+ansible/team_keys/*_ed25519
+ansible/team_keys/*_rsa
+ansible/team_keys/*.pem
+ansible/team_keys/*.key
+!ansible/team_keys/*.pub
+!ansible/team_keys/README.md
+!ansible/team_keys/.gitkeep
+!ansible/team_keys/generate_keys.sh
+
 # IDE
 .vscode/
 .idea/

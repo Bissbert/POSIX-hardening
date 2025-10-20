@@ -49,8 +49,44 @@ For detailed instructions, see the [Implementation Guide](docs/guides/IMPLEMENTA
 
 - Root or sudo access
 - Debian-based system (Ubuntu, Debian, etc.)
-- SSH key authentication configured (recommended)
+- **SSH key authentication configured (REQUIRED for automated deployment)**
 - At least 100MB free space for backups
+
+### SSH Key Management (Important!)
+
+After SSH hardening, password authentication will be disabled. To prevent lockout:
+
+**Option 1: For Ansible Deployment (Recommended)**
+
+```sh
+# Generate centralized SSH keys for team access
+cd ansible/team_keys
+./generate_keys.sh
+
+# This creates two keys:
+# - ansible_ed25519: For Ansible automation
+# - team_shared_ed25519: For team member access to ALL hardened servers
+
+# The keys are automatically deployed before hardening
+# See ansible/team_keys/README.md for distribution guide
+```
+
+**Option 2: Manual SSH Key Setup**
+
+```sh
+# On your local machine, generate an SSH key if you don't have one
+ssh-keygen -t ed25519 -C "your-email@example.com"
+
+# Copy your public key to the server
+ssh-copy-id -i ~/.ssh/id_ed25519.pub root@your-server
+
+# Verify key-based access works
+ssh -i ~/.ssh/id_ed25519 root@your-server
+
+# ONLY THEN proceed with hardening
+```
+
+**Emergency Access**: Port 2222 provides emergency SSH access with password authentication if you get locked out.
 
 ### Interactive Setup (Recommended)
 
