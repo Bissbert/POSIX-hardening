@@ -1,0 +1,289 @@
+---
+# ==============================================================================
+# POSIX Hardening Configuration Validation Playbook
+# ==============================================================================
+# Run this BEFORE deploying to catch configuration errors early
+# Usage: ansible-playbook validate_config.yml -i inventory.ini
+# ==============================================================================
+
+- name: Validate Hardening Configuration
+  hosts: all
+  gather_facts: yes
+  become: no
+
+  tasks:
+    - name: Display validation start message
+      debug:
+        msg: |
+          ================================
+          Configuration Validation
+          ================================
+          Host: {{ inventory_hostname }}
+          Environment: {{ group_names | join(', ') }}
+          ================================
+
+    # ==========================================================================
+    # CRITICAL REQUIRED VARIABLES
+    # ==========================================================================
+
+    - name: Validate admin_ip is set (REQUIRED)
+      assert:
+        that:
+          - admin_ip is defined
+          - admin_ip != ""
+          - admin_ip != "YOUR_ADMIN_IP_HERE"
+        fail_msg: |
+          CRITICAL: admin_ip is not set!
+          This is your management IP address that will be whitelisted in the firewall.
+          Set it in ansible/inventory.ini for your environment group.
+          Example: admin_ip=203.0.113.50
+        success_msg: "✓ admin_ip is set: {{ admin_ip }}"
+
+    - name: Validate admin_ip format (IP address or CIDR)
+      assert:
+        that:
+          - admin_ip is match('^[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}(/[0-9]{1,2})?$')
+        fail_msg: "ERROR: admin_ip '{{ admin_ip }}' is not a valid IP address or CIDR notation"
+        success_msg: "✓ admin_ip format is valid"
+
+    - name: Validate ssh_allow_users is set (prevents lockout)
+      assert:
+        that:
+          - ssh_allow_users is defined
+          - ssh_allow_users != ""
+        fail_msg: |
+          CRITICAL: ssh_allow_users is empty!
+          Root login will be DISABLED by hardening.
+          You must specify which users can SSH to prevent lockout.
+          Set in ansible/group_vars/all.yml: ssh_allow_users: "admin"
+        success_msg: "✓ ssh_allow_users is set: {{ ssh_allow_users }}"
+
+    - name: Parse ssh_allow_users into list for validation
+      set_fact:
+        users_to_validate: "{{ ssh_allow_users.split() }}"
+      when: ssh_allow_users is defined and ssh_allow_users != ""
+
+    - name: Validate each username is valid Linux username format
+      assert:
+        that:
+          - item is match('^[a-z_][a-z0-9_-]*[$]?$')
+          - item | length >= 1
+          - item | length <= 32
+        fail_msg: |
+          ERROR: '{{ item }}' is not a valid Linux username!
+          Username requirements:
+          - Must start with lowercase letter or underscore
+          - Can contain: lowercase letters, digits, underscore, hyphen
+          - Max 32 characters
+          - No uppercase letters, spaces, or special characters
+        success_msg: "✓ Username '{{ item }}' is valid"
+      loop: "{{ users_to_validate }}"
+      when: users_to_validate is defined
+
+    - name: Display users that will be created
+      debug:
+        msg: |
+          ================================
+          SSH USER SETUP
+          ================================
+          The following users will be created with sudo access:
+            {{ users_to_validate | join(', ') }}
+
+          These users will:
+            ✓ Receive SSH keys
+            ✓ Have sudo privileges (NOPASSWD)
+            ✓ Be allowed to SSH to the server
+
+          Root login will be DISABLED after hardening.
+          ================================
+      when: users_to_validate is defined
+
+    # ==========================================================================
+    # PORT VALIDATION
+    # ==========================================================================
+
+    - name: Validate SSH port is in valid range
+      assert:
+        that:
+          - ssh_port | int >= 1
+          - ssh_port | int <= 65535
+        fail_msg: "ERROR: ssh_port {{ ssh_port }} is not in valid range (1-65535)"
+        success_msg: "✓ SSH port is valid: {{ ssh_port }}"
+
+    - name: Validate emergency SSH port is different from main SSH port
+      assert:
+        that:
+          - emergency_ssh_port | int != ssh_port | int
+        fail_msg: "ERROR: emergency_ssh_port ({{ emergency_ssh_port }}) cannot be the same as ssh_port ({{ ssh_port }})"
+        success_msg: "✓ Emergency SSH port is different: {{ emergency_ssh_port }}"
+      when: enable_emergency_ssh | bool
+
+    - name: Validate allowed_ports are in valid range
+      assert:
+        that:
+          - item | int >= 1
+          - item | int <= 65535
+        fail_msg: "ERROR: Port {{ item }} is not in valid range (1-65535)"
+      loop: "{{ allowed_ports }}"
+      when: allowed_ports is defined and allowed_ports | length > 0
+
+    # ==========================================================================
+    # NETWORK VALIDATION
+    # ==========================================================================
+
+    - name: Validate trusted_networks CIDR notation
+      assert:
+        that:
+          - item is match('^[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}/[0-9]{1,2}$')
+        fail_msg: "ERROR: '{{ item }}' is not valid CIDR notation (e.g., 10.0.0.0/8)"
+      loop: "{{ trusted_networks }}"
+      when: trusted_networks is defined and trusted_networks | length > 0
+
+    # ==========================================================================
+    # TIMEOUT VALIDATION
+    # ==========================================================================
+
+    - name: Validate firewall_timeout is reasonable
+      assert:
+        that:
+          - firewall_timeout | int >= 60
+          - firewall_timeout | int <= 3600
+        fail_msg: "WARNING: firewall_timeout {{ firewall_timeout }} is outside recommended range (60-3600 seconds)"
+      failed_when: false  # Warning only
+      when: firewall_timeout is defined
+
+    - name: Validate shell_timeout is reasonable
+      assert:
+        that:
+          - shell_timeout | int >= 300
+          - shell_timeout | int <= 7200
+        fail_msg: "WARNING: shell_timeout {{ shell_timeout }} is outside recommended range (300-7200 seconds)"
+      failed_when: false  # Warning only
+      when: shell_timeout is defined
+
+    # ==========================================================================
+    # PASSWORD POLICY VALIDATION
+    # ==========================================================================
+
+    - name: Validate password minimum length
+      assert:
+        that:
+          - password_min_length | int >= 8
+          - password_min_length | int <= 64
+        fail_msg: "ERROR: password_min_length {{ password_min_length }} should be between 8 and 64"
+      when: password_min_length is defined
+
+    - name: Validate password max age
+      assert:
+        that:
+          - password_max_age | int >= 1
+          - password_max_age | int <= 365
+        fail_msg: "ERROR: password_max_age {{ password_max_age }} should be between 1 and 365 days"
+      when: password_max_age is defined
+
+    # ==========================================================================
+    # SAFETY CHECKS
+    # ==========================================================================
+
+    - name: Check if running in production
+      debug:
+        msg: |
+          ================================
+          PRODUCTION DEPLOYMENT WARNING
+          ================================
+          Target: {{ inventory_hostname }}
+          Group: {{ group_names | join(', ') }}
+
+          CRITICAL REMINDERS:
+          1. Verify admin_ip is YOUR current IP: {{ admin_ip }}
+          2. Emergency SSH enabled: {{ enable_emergency_ssh }}
+          3. Dry run mode: {{ dry_run }}
+
+          If any of these are wrong, STOP and fix them!
+          ================================
+      when: "'production' in group_names"
+
+    - name: Validate dry_run is disabled for production
+      assert:
+        that:
+          - dry_run | int == 0
+        fail_msg: |
+          ERROR: dry_run=1 in production environment!
+          Production deployments must apply real changes.
+          Set dry_run=0 in your inventory or group_vars.
+      when: "'production' in group_names"
+
+    - name: Warn if emergency SSH is disabled in production
+      debug:
+        msg: |
+          WARNING: Emergency SSH is disabled in production!
+          This is RISKY for initial deployment.
+          Consider enabling it until hardening is verified.
+      when:
+        - "'production' in group_names"
+        - not enable_emergency_ssh | bool
+
+    # ==========================================================================
+    # SYSTEM COMPATIBILITY
+    # ==========================================================================
+
+    - name: Verify target is Debian-based
+      assert:
+        that:
+          - ansible_os_family == "Debian"
+        fail_msg: "ERROR: Target OS '{{ ansible_os_family }}' is not Debian-based. This toolkit only supports Debian/Ubuntu."
+        success_msg: "✓ Target OS is Debian-based: {{ ansible_distribution }} {{ ansible_distribution_version }}"
+
+    - name: Check Python interpreter is available
+      assert:
+        that:
+          - ansible_python_interpreter is defined
+        fail_msg: "ERROR: Python interpreter not found on target system"
+        success_msg: "✓ Python interpreter: {{ ansible_python_interpreter }}"
+
+    # ==========================================================================
+    # SSH KEY VALIDATION
+    # ==========================================================================
+
+    - name: Check if SSH team keys exist on controller
+      stat:
+        path: "{{ playbook_dir }}/team_keys/{{ item }}.pub"
+      delegate_to: localhost
+      become: no
+      register: key_files
+      loop:
+        - ansible_ed25519
+        - team_shared_ed25519
+
+    - name: Warn if SSH keys are missing
+      debug:
+        msg: |
+          WARNING: SSH team keys not found!
+          Location: {{ playbook_dir }}/team_keys/
+
+          Generate keys with:
+            cd ansible/team_keys
+            ./generate_keys.sh
+
+          Keys are REQUIRED for deployment!
+      when: key_files.results | selectattr('stat.exists', 'equalto', false) | list | length > 0
+
+    # ==========================================================================
+    # FINAL SUMMARY
+    # ==========================================================================
+
+    - name: Display validation summary
+      debug:
+        msg: |
+          ================================
+          Validation Complete
+          ================================
+          ✓ All required variables are set
+          ✓ All values are in valid ranges
+          ✓ Target system is compatible
+
+          Ready to deploy to: {{ inventory_hostname }}
+
+          Next step:
+            ansible-playbook site.yml -i inventory.ini --limit {{ inventory_hostname }}
+          ================================

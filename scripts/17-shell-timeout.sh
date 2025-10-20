@@ -17,20 +17,20 @@ CONFIG_FILE="$TOOLKIT_ROOT/config/defaults.conf"
 SCRIPT_NAME="17-shell-timeout"
 
 configure_timeout() {
-    show_progress "Configuring shell timeout"
+    show_progress "Configuring shell timeout (${SHELL_TIMEOUT}s)"
 
     # Set timeout in profile
-    echo "TMOUT=${SHELL_TIMEOUT:-900}" >> /etc/profile
+    echo "TMOUT=${SHELL_TIMEOUT}" >> /etc/profile
     echo "readonly TMOUT" >> /etc/profile
     echo "export TMOUT" >> /etc/profile
 
     # Set in bash profile if exists
     if [ -f /etc/bash.bashrc ]; then
-        echo "TMOUT=${SHELL_TIMEOUT:-900}" >> /etc/bash.bashrc
+        echo "TMOUT=${SHELL_TIMEOUT}" >> /etc/bash.bashrc
         echo "readonly TMOUT" >> /etc/bash.bashrc
     fi
 
-    show_success "Shell timeout configured"
+    show_success "Shell timeout configured (${SHELL_TIMEOUT}s)"
 }
 
 main() {
