@@ -140,6 +140,16 @@
         group: root
         backup: yes
 
+    - name: Deploy firewall configuration (if variables defined)
+      template:
+        src: "templates/firewall.conf.j2"
+        dest: "{{ toolkit_path }}/config/firewall.conf"
+        mode: '0644'
+        owner: root
+        group: root
+        backup: yes
+      when: deploy_firewall_config | default(false) | bool
+
     - name: Create pre-deployment snapshot
       shell: |
         cd {{ toolkit_path }}
@@ -151,6 +161,59 @@
     - name: Display snapshot information
       debug:
         msg: "Created snapshot: {{ snapshot_result.stdout }}"
+
+- name: Create SSH-Allowed Users (CRITICAL - Prevents Lockout)
+  hosts: all
+  gather_facts: no
+  become: yes
+  tags: [harden, priority1, user_setup]
+
+  tasks:
+    - name: Parse ssh_allow_users into list
+      set_fact:
+        allowed_users_list: "{{ ssh_allow_users.split() }}"
+      when: ssh_allow_users is defined and ssh_allow_users != ""
+
+    - name: Validate allowed_users_list is not empty
+      assert:
+        that:
+          - allowed_users_list is defined
+          - allowed_users_list | length > 0
+        fail_msg: |
+          CRITICAL: No users in ssh_allow_users!
+          Root login will be disabled, so you need at least one non-root user.
+          Set ssh_allow_users in ansible/group_vars/all.yml
+        success_msg: "Will create {{ allowed_users_list | length }} user(s): {{ allowed_users_list | join(', ') }}"
+
+    - name: Create each allowed user with sudo privileges
+      user:
+        name: "{{ item }}"
+        comment: "SSH-Allowed User"
+        groups: sudo
+        append: yes
+        shell: /bin/bash
+        create_home: yes
+        state: present
+      loop: "{{ allowed_users_list }}"
+      when: allowed_users_list is defined
+      register: users_created
+
+    - name: Allow each user to use sudo without password (for Ansible)
+      lineinfile:
+        path: "/etc/sudoers.d/{{ item }}"
+        line: "{{ item }} ALL=(ALL) NOPASSWD:ALL"
+        create: yes
+        mode: '0440'
+        validate: '/usr/sbin/visudo -cf %s'
+      loop: "{{ allowed_users_list }}"
+      when: allowed_users_list is defined
+
+    - name: Display user creation status
+      debug:
+        msg: |
+          Created {{ allowed_users_list | length }} SSH-allowed user(s): {{ allowed_users_list | join(', ') }}
+          All users have sudo privileges.
+          Root login will be disabled during hardening.
 
 - name: Deploy Team SSH Keys (BEFORE Hardening)
   hosts: all
@@ -210,9 +273,39 @@
         state: present
       when: public_keys is defined and public_keys.results is defined
 
+    - name: Parse ssh_allow_users for key deployment
+      set_fact:
+        allowed_users_list: "{{ ssh_allow_users.split() }}"
+      when: ssh_allow_users is defined and ssh_allow_users != ""
+
+    - name: Ensure .ssh directory exists for all allowed users
+      file:
+        path: "/home/{{ item }}/.ssh"
+        state: directory
+        owner: "{{ item }}"
+        group: "{{ item }}"
+        mode: '0700'
+      loop: "{{ allowed_users_list }}"
+      when:
+        - public_keys is defined
+        - public_keys.results is defined
+        - allowed_users_list is defined
+
+    - name: Deploy team shared key to all allowed users (PRIMARY ACCESS)
+      authorized_key:
+        user: "{{ item }}"
+        key: "{{ public_keys.results[1].content | b64decode }}"
+        comment: "team-access@posix-hardening"
+        state: present
+      loop: "{{ allowed_users_list }}"
+      when:
+        - public_keys is defined
+        - public_keys.results is defined
+        - allowed_users_list is defined
+
     - name: Display key deployment status
       debug:
-        msg: "{{ 'SSH team keys deployed successfully' if (public_keys is defined and public_keys.results is defined) else 'SSH team keys not found - skipping (generate with: cd ansible/team_keys && ./generate_keys.sh)' }}"
+        msg: "{{ 'SSH team keys deployed to root and users: ' + (allowed_users_list | join(', ')) if (public_keys is defined and allowed_users_list is defined) else 'SSH team keys not found - skipping (generate with: cd ansible/team_keys && ./generate_keys.sh)' }}"
 
 - name: Execute Hardening Scripts - Priority 1 (Critical)
   hosts: all
@@ -226,8 +319,6 @@
     - name: Verify SSH package integrity (BEFORE hardening)
       shell: |
         cd {{ toolkit_path }}
-        export DRY_RUN="{{ dry_run | default(0) }}"
-        export FORCE_SSH_VERIFICATION="{{ force_ssh_verification | default(0) }}"
         sh scripts/00-ssh-verification.sh
       register: ssh_verification
       tags: [ssh_verification]
@@ -251,9 +342,6 @@
     - name: Execute SSH hardening
       shell: |
         cd {{ toolkit_path }}
-        export ADMIN_IP="{{ admin_ip | default('') }}"
-        export SSH_PORT="{{ ansible_port | default(22) }}"
-        export DRY_RUN="{{ dry_run | default(0) }}"
         sh scripts/01-ssh-hardening.sh
       register: ssh_hardening
       async: 300
@@ -267,9 +355,6 @@
     - name: Execute firewall setup
       shell: |
         cd {{ toolkit_path }}
-        export ADMIN_IP="{{ admin_ip | default('') }}"
-        export SSH_PORT="{{ ansible_port | default(22) }}"
-        export DRY_RUN="{{ dry_run | default(0) }}"
         sh scripts/02-firewall-setup.sh
       register: firewall_setup
       when: ssh_verify is succeeded
@@ -286,7 +371,6 @@
     - name: Execute kernel parameters hardening
       shell: |
         cd {{ toolkit_path }}
-        export DRY_RUN="{{ dry_run | default(0) }}"
         sh scripts/03-kernel-params.sh
       register: kernel_params
       when: run_full_hardening | default(true) | bool
@@ -294,7 +378,6 @@
     - name: Execute network stack hardening
       shell: |
         cd {{ toolkit_path }}
-        export DRY_RUN="{{ dry_run | default(0) }}"
         sh scripts/04-network-stack.sh
       register: network_stack
       when: run_full_hardening | default(true) | bool
@@ -302,7 +385,6 @@
     - name: Execute file permissions hardening
       shell: |
         cd {{ toolkit_path }}
-        export DRY_RUN="{{ dry_run | default(0) }}"
         sh scripts/05-file-permissions.sh
       register: file_permissions
       when: run_full_hardening | default(true) | bool
@@ -310,7 +392,6 @@
     - name: Execute process limits configuration
       shell: |
         cd {{ toolkit_path }}
-        export DRY_RUN="{{ dry_run | default(0) }}"
         sh scripts/06-process-limits.sh
       register: process_limits
       when: run_full_hardening | default(true) | bool
@@ -318,7 +399,6 @@
     - name: Execute sudo restrictions
       shell: |
         cd {{ toolkit_path }}
-        export DRY_RUN="{{ dry_run | default(0) }}"
         sh scripts/10-sudo-restrictions.sh
       register: sudo_restrictions
       when: run_full_hardening | default(true) | bool
@@ -326,7 +406,6 @@
     - name: Execute sysctl hardening
       shell: |
         cd {{ toolkit_path }}
-        export DRY_RUN="{{ dry_run | default(0) }}"
         sh scripts/14-sysctl-hardening.sh
       register: sysctl_hardening
       when: run_full_hardening | default(true) | bool
@@ -343,7 +422,6 @@
     - name: Execute remaining priority 3 scripts
       shell: |
         cd {{ toolkit_path }}
-        export DRY_RUN="{{ dry_run | default(0) }}"
         sh scripts/{{ item }}
       loop:
         - "07-audit-logging.sh"
@@ -369,7 +447,6 @@
     - name: Execute remaining priority 4 scripts
       shell: |
         cd {{ toolkit_path }}
-        export DRY_RUN="{{ dry_run | default(0) }}"
         sh scripts/{{ item }}
       loop:
         - "13-core-dump-disable.sh"

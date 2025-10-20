@@ -27,6 +27,45 @@ CONFIG_FILE="$TOOLKIT_ROOT/config/defaults.conf"
 SCRIPT_NAME="02-firewall-setup"
 
 # ============================================================================
+# Load Firewall-Specific Configuration
+# ============================================================================
+
+# Load firewall.conf if it exists (overrides defaults.conf)
+FIREWALL_CONFIG_FILE="$TOOLKIT_ROOT/config/firewall.conf"
+if [ -f "$FIREWALL_CONFIG_FILE" ]; then
+    . "$FIREWALL_CONFIG_FILE"
+    log "INFO" "Loaded firewall configuration from: $FIREWALL_CONFIG_FILE"
+else
+    log "INFO" "No firewall.conf found, using default configuration"
+fi
+
+# Set defaults for firewall-specific variables (if not set in firewall.conf)
+: "${SSH_RATE_LIMIT_ENABLED:=1}"
+: "${SSH_RATE_LIMIT_HITS:=4}"
+: "${SSH_RATE_LIMIT_SECONDS:=60}"
+: "${ICMP_ENABLED:=1}"
+: "${ICMP_RATE_LIMIT:=1/s}"
+: "${ICMP_TYPES:=echo-request echo-reply destination-unreachable time-exceeded}"
+: "${LOG_DROPPED_PACKETS:=1}"
+: "${LOG_RATE_LIMIT:=2/min}"
+: "${LOG_PREFIX:=IPTables-Dropped: }"
+: "${LOG_LEVEL:=4}"
+: "${ALLOW_DNS:=1}"
+: "${ALLOW_NTP:=1}"
+: "${ALLOW_HTTP:=1}"
+: "${ALLOW_HTTPS:=1}"
+: "${CUSTOM_OUTBOUND_TCP:=}"
+: "${CUSTOM_OUTBOUND_UDP:=}"
+: "${DEFAULT_INPUT_POLICY:=DROP}"
+: "${DEFAULT_FORWARD_POLICY:=DROP}"
+: "${DEFAULT_OUTPUT_POLICY:=ACCEPT}"
+: "${IPV6_ENABLED:=1}"
+: "${IPV6_MODE:=same}"
+: "${CUSTOM_RULES_IPV4:=}"
+: "${CUSTOM_RULES_IPV6:=}"
+: "${CUSTOM_CHAINS:=}"
+
+# ============================================================================
 # Firewall Configuration
 # ============================================================================
 
@@ -117,8 +156,11 @@ apply_firewall_rules() {
     iptables -A OUTPUT -m state --state ESTABLISHED,RELATED -j ACCEPT
 
     # CRITICAL: Allow SSH before any DROP rules
-    iptables -A INPUT -p tcp --dport "$SSH_PORT" -m state --state NEW -m recent --set
-    iptables -A INPUT -p tcp --dport "$SSH_PORT" -m state --state NEW -m recent --update --seconds 60 --hitcount 4 -j DROP
+    if [ "$SSH_RATE_LIMIT_ENABLED" = "1" ]; then
+        iptables -A INPUT -p tcp --dport "$SSH_PORT" -m state --state NEW -m recent --set
+        iptables -A INPUT -p tcp --dport "$SSH_PORT" -m state --state NEW -m recent --update --seconds "$SSH_RATE_LIMIT_SECONDS" --hitcount "$SSH_RATE_LIMIT_HITS" -j DROP
+        log "INFO" "SSH rate limiting: $SSH_RATE_LIMIT_HITS attempts per $SSH_RATE_LIMIT_SECONDS seconds"
+    fi
     iptables -A INPUT -p tcp --dport "$SSH_PORT" -m state --state NEW -j ACCEPT
 
     # Priority access for admin IP
@@ -135,10 +177,20 @@ apply_firewall_rules() {
     iptables -A INPUT -m state --state INVALID -j DROP
 
     # Allow ICMP (ping) with rate limit
-    iptables -A INPUT -p icmp --icmp-type echo-request -m limit --limit 1/s -j ACCEPT
-    iptables -A INPUT -p icmp --icmp-type echo-reply -j ACCEPT
-    iptables -A INPUT -p icmp --icmp-type destination-unreachable -j ACCEPT
-    iptables -A INPUT -p icmp --icmp-type time-exceeded -j ACCEPT
+    if [ "$ICMP_ENABLED" = "1" ]; then
+        for icmp_type in $ICMP_TYPES; do
+            if [ "$icmp_type" = "echo-request" ]; then
+                # Rate-limit echo-request (ping)
+                iptables -A INPUT -p icmp --icmp-type "$icmp_type" -m limit --limit "$ICMP_RATE_LIMIT" -j ACCEPT
+            else
+                # Other ICMP types without rate limit
+                iptables -A INPUT -p icmp --icmp-type "$icmp_type" -j ACCEPT
+            fi
+        done
+        log "INFO" "ICMP enabled: $ICMP_TYPES (rate limit: $ICMP_RATE_LIMIT)"
+    else
+        log "INFO" "ICMP disabled"
+    fi
 
     # Allow additional configured ports
     if [ -n "$ALLOWED_PORTS" ]; then
@@ -156,30 +208,109 @@ apply_firewall_rules() {
         done
     fi
 
-    # DNS (if server)
-    iptables -A OUTPUT -p udp --dport 53 -j ACCEPT
-    iptables -A OUTPUT -p tcp --dport 53 -j ACCEPT
+    # DNS (if enabled)
+    if [ "$ALLOW_DNS" = "1" ]; then
+        iptables -A OUTPUT -p udp --dport 53 -j ACCEPT
+        iptables -A OUTPUT -p tcp --dport 53 -j ACCEPT
+        log "INFO" "Outbound DNS allowed"
+    fi
 
-    # NTP
-    iptables -A OUTPUT -p udp --dport 123 -j ACCEPT
+    # NTP (if enabled)
+    if [ "$ALLOW_NTP" = "1" ]; then
+        iptables -A OUTPUT -p udp --dport 123 -j ACCEPT
+        log "INFO" "Outbound NTP allowed"
+    fi
 
-    # HTTP/HTTPS for updates
-    iptables -A OUTPUT -p tcp --dport 80 -j ACCEPT
-    iptables -A OUTPUT -p tcp --dport 443 -j ACCEPT
+    # HTTP (if enabled)
+    if [ "$ALLOW_HTTP" = "1" ]; then
+        iptables -A OUTPUT -p tcp --dport 80 -j ACCEPT
+        log "INFO" "Outbound HTTP allowed"
+    fi
 
-    # Log dropped packets
-    iptables -N LOGGING
-    iptables -A INPUT -j LOGGING
-    iptables -A LOGGING -m limit --limit 2/min -j LOG --log-prefix "IPTables-Dropped: " --log-level 4
-    iptables -A LOGGING -j DROP
+    # HTTPS (if enabled)
+    if [ "$ALLOW_HTTPS" = "1" ]; then
+        iptables -A OUTPUT -p tcp --dport 443 -j ACCEPT
+        log "INFO" "Outbound HTTPS allowed"
+    fi
 
-    # Default policies (after all rules are set)
-    iptables -P INPUT DROP
-    iptables -P FORWARD DROP
-    iptables -P OUTPUT ACCEPT
+    # Custom outbound TCP ports
+    if [ -n "$CUSTOM_OUTBOUND_TCP" ]; then
+        for port in $CUSTOM_OUTBOUND_TCP; do
+            iptables -A OUTPUT -p tcp --dport "$port" -j ACCEPT
+            log "INFO" "Outbound TCP port allowed: $port"
+        done
+    fi
+
+    # Custom outbound UDP ports
+    if [ -n "$CUSTOM_OUTBOUND_UDP" ]; then
+        for port in $CUSTOM_OUTBOUND_UDP; do
+            iptables -A OUTPUT -p udp --dport "$port" -j ACCEPT
+            log "INFO" "Outbound UDP port allowed: $port"
+        done
+    fi
+
+    # === CUSTOM CHAINS ===
+    # Create custom chains if defined
+    if [ -n "$CUSTOM_CHAINS" ]; then
+        echo "$CUSTOM_CHAINS" | while IFS=: read -r chain_name description; do
+            # Skip empty lines
+            [ -z "$chain_name" ] && continue
+
+            # Trim whitespace
+            chain_name=$(echo "$chain_name" | tr -d ' \t')
+
+            if [ -n "$chain_name" ]; then
+                iptables -N "$chain_name" 2>/dev/null || log "WARN" "Chain $chain_name already exists"
+                log "INFO" "Created custom chain: $chain_name ($description)"
+            fi
+        done
+    fi
+
+    # === CUSTOM IPv4 RULES ===
+    # Apply custom iptables rules (if defined)
+    if [ -n "$CUSTOM_RULES_IPV4" ]; then
+        log "INFO" "Applying custom IPv4 firewall rules"
+        echo "$CUSTOM_RULES_IPV4" | while IFS= read -r rule; do
+            # Skip empty lines and comments
+            [ -z "$rule" ] && continue
+            echo "$rule" | grep -q "^#" && continue
+
+            # Validate rule starts with -A, -I, or other valid flags
+            if echo "$rule" | grep -qE "^-[AID]"; then
+                # Apply rule (without 'iptables' prefix)
+                if iptables $rule 2>/dev/null; then
+                    log "INFO" "Applied custom rule: iptables $rule"
+                else
+                    log "WARN" "Failed to apply custom rule: iptables $rule"
+                fi
+            else
+                log "WARN" "Skipping invalid rule (must start with -A, -I, or -D): $rule"
+            fi
+        done
+    fi
+
+    # === LOGGING ===
+    # Log dropped packets (if enabled)
+    if [ "$LOG_DROPPED_PACKETS" = "1" ]; then
+        iptables -N LOGGING 2>/dev/null || true
+        iptables -A INPUT -j LOGGING
+        iptables -A LOGGING -m limit --limit "$LOG_RATE_LIMIT" -j LOG --log-prefix "$LOG_PREFIX" --log-level "$LOG_LEVEL"
+        iptables -A LOGGING -j DROP
+        log "INFO" "Firewall logging enabled (rate: $LOG_RATE_LIMIT, level: $LOG_LEVEL)"
+    else
+        # No logging, just drop
+        iptables -A INPUT -j DROP
+    fi
+
+    # === DEFAULT POLICIES ===
+    # Set default policies (after all rules are set)
+    iptables -P INPUT "$DEFAULT_INPUT_POLICY"
+    iptables -P FORWARD "$DEFAULT_FORWARD_POLICY"
+    iptables -P OUTPUT "$DEFAULT_OUTPUT_POLICY"
+    log "INFO" "Default policies: INPUT=$DEFAULT_INPUT_POLICY FORWARD=$DEFAULT_FORWARD_POLICY OUTPUT=$DEFAULT_OUTPUT_POLICY"
 
     # === IPv6 Rules ===
-    if command -v ip6tables >/dev/null 2>&1; then
+    if [ "$IPV6_ENABLED" = "1" ] && command -v ip6tables >/dev/null 2>&1; then
         ip6tables -F
         ip6tables -X
 
@@ -193,12 +324,47 @@ apply_firewall_rules() {
             # Check if admin IP is IPv6
             if echo "$ADMIN_IP" | grep -q ":"; then
                 ip6tables -I INPUT 1 -s "$ADMIN_IP" -j ACCEPT
+                log "INFO" "IPv6: Admin IP priority access: $ADMIN_IP"
             fi
         fi
 
-        ip6tables -P INPUT DROP
-        ip6tables -P FORWARD DROP
-        ip6tables -P OUTPUT ACCEPT
+        # Apply custom IPv6 rules if IPV6_MODE is custom
+        if [ "$IPV6_MODE" = "custom" ] && [ -n "$CUSTOM_RULES_IPV6" ]; then
+            log "INFO" "Applying custom IPv6 firewall rules"
+            echo "$CUSTOM_RULES_IPV6" | while IFS= read -r rule; do
+                # Skip empty lines and comments
+                [ -z "$rule" ] && continue
+                echo "$rule" | grep -q "^#" && continue
+
+                # Validate rule
+                if echo "$rule" | grep -qE "^-[AID]"; then
+                    if ip6tables $rule 2>/dev/null; then
+                        log "INFO" "Applied custom IPv6 rule: ip6tables $rule"
+                    else
+                        log "WARN" "Failed to apply IPv6 rule: ip6tables $rule"
+                    fi
+                else
+                    log "WARN" "Skipping invalid IPv6 rule: $rule"
+                fi
+            done
+        elif [ "$IPV6_MODE" = "block" ]; then
+            # Block all IPv6 except SSH
+            log "INFO" "IPv6 mode: block (only SSH allowed)"
+        else
+            # Mode "same" - apply same rules as IPv4 (already done above)
+            log "INFO" "IPv6 mode: same as IPv4"
+        fi
+
+        ip6tables -P INPUT "$DEFAULT_INPUT_POLICY"
+        ip6tables -P FORWARD "$DEFAULT_FORWARD_POLICY"
+        ip6tables -P OUTPUT "$DEFAULT_OUTPUT_POLICY"
+        log "INFO" "IPv6 firewall enabled"
+    else
+        if [ "$IPV6_ENABLED" = "0" ]; then
+            log "INFO" "IPv6 firewall disabled by configuration"
+        else
+            log "INFO" "IPv6 not available (ip6tables not found)"
+        fi
     fi
 
     log "INFO" "Firewall rules applied"
