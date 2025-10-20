@@ -453,6 +453,154 @@ main() {
     echo "${RED}NEVER Commit (Private Keys):${NC}"
     ls -lh "$KEYS_DIR"/*_ed25519 2>/dev/null | grep -v ".pub" || echo "  (No private keys found)"
     echo ""
+
+    # Prompt for local installation (optional)
+    prompt_local_installation
+}
+
+# ============================================================================
+# Local Installation Functions
+# ============================================================================
+
+# Install team key on local machine
+install_team_key_locally() {
+    local ssh_dir="$HOME/.ssh"
+    local install_path="$ssh_dir/$TEAM_KEY"
+
+    print_header
+    echo "${BLUE}Installing Team Key Locally${NC}"
+    echo ""
+
+    # Ensure .ssh directory exists
+    if [ ! -d "$ssh_dir" ]; then
+        print_info "Creating .ssh directory..."
+        mkdir -p "$ssh_dir"
+        chmod 700 "$ssh_dir"
+    fi
+
+    # Copy key
+    print_info "Copying key to $install_path..."
+    cp "$KEYS_DIR/$TEAM_KEY" "$install_path"
+    chmod 600 "$install_path"
+    print_success "Key installed to $install_path"
+
+    # Add to ssh-agent
+    print_info "Adding key to ssh-agent..."
+
+    # Check if ssh-agent is running
+    if ! pgrep -u "$USER" ssh-agent >/dev/null 2>&1; then
+        print_warning "ssh-agent not running, starting..."
+        eval "$(ssh-agent -s)"
+    fi
+
+    # Add key to agent
+    if ssh-add "$install_path" 2>/dev/null; then
+        print_success "Key added to ssh-agent"
+    else
+        print_warning "Could not add key to ssh-agent (may require passphrase)"
+    fi
+
+    # Configure shell auto-load
+    configure_shell_autoload "$install_path"
+
+    # Show fingerprint
+    local fingerprint=$(ssh-keygen -lf "$install_path" | awk '{print $2}')
+    print_success "Key loaded with fingerprint: $fingerprint"
+
+    echo ""
+    print_success "Local installation complete!"
+    echo ""
+    print_info "You can now SSH to hardened servers without -i flag:"
+    echo "  ${GREEN}ssh root@server-hostname${NC}"
+    echo ""
+}
+
+# Configure shell to auto-load key on login
+configure_shell_autoload() {
+    local key_path="$1"
+    local ssh_add_cmd="ssh-add -q $key_path 2>/dev/null || true"
+    local added=0
+
+    print_info "Configuring shell to auto-load key..."
+
+    # Check for bash
+    if [ -f "$HOME/.bashrc" ]; then
+        if ! grep -q "$TEAM_KEY" "$HOME/.bashrc" 2>/dev/null; then
+            echo "" >> "$HOME/.bashrc"
+            echo "# Auto-load team SSH key for hardened servers" >> "$HOME/.bashrc"
+            echo "$ssh_add_cmd" >> "$HOME/.bashrc"
+            print_success "Added to ~/.bashrc"
+            added=1
+        fi
+    fi
+
+    # Check for zsh
+    if [ -f "$HOME/.zshrc" ]; then
+        if ! grep -q "$TEAM_KEY" "$HOME/.zshrc" 2>/dev/null; then
+            echo "" >> "$HOME/.zshrc"
+            echo "# Auto-load team SSH key for hardened servers" >> "$HOME/.zshrc"
+            echo "$ssh_add_cmd" >> "$HOME/.zshrc"
+            print_success "Added to ~/.zshrc"
+            added=1
+        fi
+    fi
+
+    # Fallback to .profile
+    if [ $added -eq 0 ] && [ -f "$HOME/.profile" ]; then
+        if ! grep -q "$TEAM_KEY" "$HOME/.profile" 2>/dev/null; then
+            echo "" >> "$HOME/.profile"
+            echo "# Auto-load team SSH key for hardened servers" >> "$HOME/.profile"
+            echo "$ssh_add_cmd" >> "$HOME/.profile"
+            print_success "Added to ~/.profile"
+            added=1
+        fi
+    fi
+
+    if [ $added -eq 0 ]; then
+        print_warning "Could not detect shell profile for auto-load"
+        print_info "Add this to your shell profile manually:"
+        print_info "  $ssh_add_cmd"
+    fi
+}
+
+# Prompt user for local installation
+prompt_local_installation() {
+    print_header
+    echo "${YELLOW}[OPTIONAL] Install Team Key Locally?${NC}"
+    echo ""
+    echo "This will install the team key on THIS machine for automatic SSH access."
+    echo ""
+    echo "What it does:"
+    echo "  ✓ Copy $TEAM_KEY to ~/.ssh/"
+    echo "  ✓ Add to ssh-agent for automatic use"
+    echo "  ✓ Configure shell to load key on login"
+    echo "  ✓ Enable SSH access without -i flag"
+    echo ""
+    echo "After installation, you can connect to hardened servers:"
+    echo "  ${GREEN}ssh root@server-hostname${NC}  ${BLUE}# No -i flag needed!${NC}"
+    echo ""
+    printf "${YELLOW}Install team key on this machine? (y/N): ${NC}"
+    read -r response
+
+    case "$response" in
+        [yY][eE][sS]|[yY])
+            install_team_key_locally
+            return 0
+            ;;
+        *)
+            print_info "Skipping local installation"
+            echo ""
+            print_info "To install later:"
+            echo "  ${BLUE}./install_team_key.sh $TEAM_KEY${NC}"
+            echo ""
+            print_info "Or manually:"
+            echo "  cp $TEAM_KEY ~/.ssh/"
+            echo "  chmod 600 ~/.ssh/$TEAM_KEY"
+            echo "  ssh-add ~/.ssh/$TEAM_KEY"
+            echo ""
+            return 1
+            ;;
+    esac
 }
 
 # Run main function

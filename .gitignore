@@ -64,6 +64,7 @@ ansible/team_keys/*.key
 !ansible/team_keys/README.md
 !ansible/team_keys/.gitkeep
 !ansible/team_keys/generate_keys.sh
+!ansible/team_keys/install_team_key.sh
 
 # IDE
 .vscode/

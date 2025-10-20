@@ -21,21 +21,60 @@ This directory contains SSH keys for accessing hardened servers.
 
 **Distribution Process:**
 1. Admin generates keys using `./generate_keys.sh`
-2. Admin securely distributes `team_shared_ed25519` (private key) to team members
-3. Team members store key securely and set permissions:
-   ```bash
-   chmod 600 team_shared_ed25519
-   ```
+2. **[NEW]** Admin can install key automatically during generation (interactive prompt)
+3. Admin securely distributes `team_shared_ed25519` (private key) to team members
+4. Team members install key using provided script (recommended) or manually
 
-**Usage by Team Members:**
+**Automatic Installation (Recommended):**
+
+During key generation, you'll be prompted to install the team key locally:
 ```bash
-# Connect to any hardened server
-ssh -i ~/.ssh/team_shared_ed25519 root@server-hostname
+cd ansible/team_keys
+./generate_keys.sh
 
-# Or add to SSH config (~/.ssh/config):
-Host hardened-*
-    IdentityFile ~/.ssh/team_shared_ed25519
-    User root
+# After generation, you'll see:
+[OPTIONAL] Install Team Key Locally?
+Install team key on this machine? (y/N): y
+
+# If you answer 'y':
+✓ Key copied to ~/.ssh/team_shared_ed25519
+✓ Key added to ssh-agent
+✓ Shell configured to auto-load key on login
+```
+
+**Manual Installation (Team Members):**
+
+Option 1 - Use the installation script (easiest):
+```bash
+# Receive team_shared_ed25519 from admin
+./install_team_key.sh team_shared_ed25519
+
+# The script will:
+# - Copy key to ~/.ssh/
+# - Add to ssh-agent
+# - Configure shell to auto-load
+```
+
+Option 2 - Manual installation:
+```bash
+# Copy key to SSH directory
+cp team_shared_ed25519 ~/.ssh/
+chmod 600 ~/.ssh/team_shared_ed25519
+
+# Add to ssh-agent for automatic use
+ssh-add ~/.ssh/team_shared_ed25519
+
+# (Optional) Add to shell profile for persistence
+echo 'ssh-add -q ~/.ssh/team_shared_ed25519 2>/dev/null || true' >> ~/.bashrc
+```
+
+**Usage After Installation:**
+```bash
+# Connect to any hardened server (NO -i flag needed!)
+ssh root@server-hostname
+
+# Verify key is loaded
+ssh-add -l
 ```
 
 ## Security Best Practices
@@ -93,6 +132,7 @@ Host hardened-*
 
 ### Safe to Commit to Git:
 - ✅ `generate_keys.sh` - Key generation script
+- ✅ `install_team_key.sh` - Installation script for team members
 - ✅ `README.md` - This documentation
 - ✅ `*.pub` - Public keys (safe to share)
 - ✅ `.gitkeep` - Directory structure marker
