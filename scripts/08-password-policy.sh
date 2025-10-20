@@ -27,10 +27,35 @@ configure_password_policy() {
 
     # Update login.defs
     if [ -f /etc/login.defs ]; then
-        sed -i 's/^PASS_MAX_DAYS.*/PASS_MAX_DAYS   90/' /etc/login.defs
-        sed -i 's/^PASS_MIN_DAYS.*/PASS_MIN_DAYS   1/' /etc/login.defs
-        sed -i 's/^PASS_WARN_AGE.*/PASS_WARN_AGE   14/' /etc/login.defs
-        sed -i 's/^PASS_MIN_LEN.*/PASS_MIN_LEN    12/' /etc/login.defs
+        # Update or add PASS_MAX_DAYS
+        if grep -q "^PASS_MAX_DAYS" /etc/login.defs; then
+            sed -i 's/^PASS_MAX_DAYS.*/PASS_MAX_DAYS   90/' /etc/login.defs
+        else
+            echo "PASS_MAX_DAYS   90" >> /etc/login.defs
+        fi
+
+        # Update or add PASS_MIN_DAYS
+        if grep -q "^PASS_MIN_DAYS" /etc/login.defs; then
+            sed -i 's/^PASS_MIN_DAYS.*/PASS_MIN_DAYS   1/' /etc/login.defs
+        else
+            echo "PASS_MIN_DAYS   1" >> /etc/login.defs
+        fi
+
+        # Update or add PASS_WARN_AGE
+        if grep -q "^PASS_WARN_AGE" /etc/login.defs; then
+            sed -i 's/^PASS_WARN_AGE.*/PASS_WARN_AGE   14/' /etc/login.defs
+        else
+            echo "PASS_WARN_AGE   14" >> /etc/login.defs
+        fi
+
+        # Update or add PASS_MIN_LEN
+        if grep -q "^PASS_MIN_LEN" /etc/login.defs; then
+            sed -i 's/^PASS_MIN_LEN.*/PASS_MIN_LEN    12/' /etc/login.defs
+        else
+            echo "PASS_MIN_LEN    12" >> /etc/login.defs
+        fi
+
+        log "INFO" "Password policy settings configured in /etc/login.defs"
     fi
 
     # Configure PAM if available
