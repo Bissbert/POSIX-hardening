@@ -1,0 +1,255 @@
+---
+# POSIX Hardening Toolkit - Team SSH Key Deployment
+#
+# Purpose: Deploy shared team SSH key to all target servers
+#
+# This playbook MUST run BEFORE SSH hardening to ensure:
+# 1. Team members can access servers after PasswordAuthentication is disabled
+# 2. One shared key provides access to ALL hardened servers
+# 3. Ansible automation key is also deployed for playbook execution
+#
+# Security:
+# - Only public keys (.pub files) are deployed
+# - Private keys must NEVER be committed to git
+# - .gitignore blocks private key files
+#
+# Usage:
+#   ansible-playbook -i inventory.ini deploy_team_keys.yml
+
+- name: Deploy Team SSH Keys
+  hosts: all
+  become: yes
+  gather_facts: yes
+
+  vars:
+    team_keys_dir: "{{ playbook_dir }}/team_keys"
+    ansible_key_name: "ansible_ed25519"
+    team_key_name: "team_shared_ed25519"
+
+  tasks:
+    - name: Display deployment information
+      debug:
+        msg:
+          - "Deploying SSH keys for centralized access"
+          - "Ansible key: {{ ansible_key_name }}"
+          - "Team key: {{ team_key_name }}"
+          - "Target users: root, ansible"
+      tags: [always]
+
+    - name: Check if team keys exist
+      stat:
+        path: "{{ team_keys_dir }}/{{ item }}.pub"
+      delegate_to: localhost
+      become: no
+      register: key_check
+      loop:
+        - "{{ ansible_key_name }}"
+        - "{{ team_key_name }}"
+      failed_when: false
+      tags: [always]
+
+    - name: Verify keys are available
+      assert:
+        that:
+          - key_check.results[0].stat.exists
+          - key_check.results[1].stat.exists
+        fail_msg: |
+          SSH keys not found! Please generate them first:
+          cd {{ team_keys_dir }}
+          ./generate_keys.sh
+        success_msg: "All required SSH keys found"
+      tags: [always]
+
+    - name: Read team public keys
+      slurp:
+        src: "{{ team_keys_dir }}/{{ item }}.pub"
+      delegate_to: localhost
+      become: no
+      register: public_keys
+      loop:
+        - "{{ ansible_key_name }}"
+        - "{{ team_key_name }}"
+      tags: [always]
+
+    - name: Ensure .ssh directory exists for root
+      file:
+        path: /root/.ssh
+        state: directory
+        owner: root
+        group: root
+        mode: '0700'
+      tags: [root]
+
+    - name: Deploy Ansible automation key to root
+      authorized_key:
+        user: root
+        key: "{{ public_keys.results[0].content | b64decode }}"
+        comment: "ansible-automation@posix-hardening"
+        state: present
+      tags: [root, ansible_key]
+
+    - name: Deploy team shared key to root
+      authorized_key:
+        user: root
+        key: "{{ public_keys.results[1].content | b64decode }}"
+        comment: "team-access@posix-hardening"
+        state: present
+      tags: [root, team_key]
+
+    - name: Check if ansible user exists
+      getent:
+        database: passwd
+        key: ansible
+      register: ansible_user_check
+      failed_when: false
+      tags: [ansible_user]
+
+    - name: Create ansible user if it doesn't exist
+      user:
+        name: ansible
+        comment: "Ansible automation user"
+        shell: /bin/bash
+        create_home: yes
+        state: present
+      when: ansible_user_check.failed
+      tags: [ansible_user]
+
+    - name: Ensure .ssh directory exists for ansible user
+      file:
+        path: /home/ansible/.ssh
+        state: directory
+        owner: ansible
+        group: ansible
+        mode: '0700'
+      when: ansible_user_check is defined
+      tags: [ansible_user]
+
+    - name: Deploy Ansible automation key to ansible user
+      authorized_key:
+        user: ansible
+        key: "{{ public_keys.results[0].content | b64decode }}"
+        comment: "ansible-automation@posix-hardening"
+        state: present
+      when: ansible_user_check is defined
+      tags: [ansible_user, ansible_key]
+
+    - name: Deploy team shared key to ansible user
+      authorized_key:
+        user: ansible
+        key: "{{ public_keys.results[1].content | b64decode }}"
+        comment: "team-access@posix-hardening"
+        state: present
+      when: ansible_user_check is defined
+      tags: [ansible_user, team_key]
+
+    - name: Grant ansible user sudo privileges
+      copy:
+        content: |
+          # Ansible automation user
+          ansible ALL=(ALL) NOPASSWD: ALL
+        dest: /etc/sudoers.d/ansible
+        owner: root
+        group: root
+        mode: '0440'
+        validate: 'visudo -cf %s'
+      when: ansible_user_check is defined
+      tags: [ansible_user, sudo]
+
+    - name: Verify root authorized_keys permissions
+      file:
+        path: /root/.ssh/authorized_keys
+        owner: root
+        group: root
+        mode: '0600'
+      tags: [permissions]
+
+    - name: Verify ansible user authorized_keys permissions
+      file:
+        path: /home/ansible/.ssh/authorized_keys
+        owner: ansible
+        group: ansible
+        mode: '0600'
+      when: ansible_user_check is defined
+      tags: [permissions]
+
+    - name: Display key fingerprints on targets
+      shell: |
+        echo "=== Deployed SSH Keys ==="
+        echo "Root authorized_keys:"
+        ssh-keygen -lf /root/.ssh/authorized_keys 2>/dev/null || echo "  (No keys or error reading)"
+        if [ -f /home/ansible/.ssh/authorized_keys ]; then
+          echo "Ansible user authorized_keys:"
+          ssh-keygen -lf /home/ansible/.ssh/authorized_keys 2>/dev/null || echo "  (No keys or error reading)"
+        fi
+      register: deployed_keys
+      changed_when: false
+      tags: [verify]
+
+    - name: Show deployed keys
+      debug:
+        var: deployed_keys.stdout_lines
+      tags: [verify]
+
+    - name: Create deployment summary
+      debug:
+        msg:
+          - "============================================"
+          - "SSH Key Deployment Complete"
+          - "============================================"
+          - "Deployed to: {{ inventory_hostname }}"
+          - "Root user: ✓ Ansible key + Team key"
+          - "Ansible user: {{ '✓ Ansible key + Team key' if not ansible_user_check.failed else '✗ User not created' }}"
+          - ""
+          - "Next Steps:"
+          - "1. Verify key-based access works"
+          - "2. Run SSH hardening playbook"
+          - "3. Test team key access after hardening"
+          - ""
+          - "Testing access:"
+          - "  ssh -i team_keys/team_shared_ed25519 root@{{ inventory_hostname }}"
+          - "  ssh -i team_keys/ansible_ed25519 ansible@{{ inventory_hostname }}"
+      tags: [always]
+
+- name: Verification Tests
+  hosts: all
+  become: yes
+  gather_facts: no
+
+  tasks:
+    - name: Count deployed keys for root
+      shell: |
+        grep -c "posix-hardening" /root/.ssh/authorized_keys 2>/dev/null || echo "0"
+      register: root_key_count
+      changed_when: false
+      tags: [verify]
+
+    - name: Count deployed keys for ansible user
+      shell: |
+        if [ -f /home/ansible/.ssh/authorized_keys ]; then
+          grep -c "posix-hardening" /home/ansible/.ssh/authorized_keys 2>/dev/null || echo "0"
+        else
+          echo "0"
+        fi
+      register: ansible_key_count
+      changed_when: false
+      tags: [verify]
+
+    - name: Verify deployment success
+      assert:
+        that:
+          - root_key_count.stdout | int >= 2
+        fail_msg: "Expected 2 keys for root (Ansible + Team), found {{ root_key_count.stdout }}"
+        success_msg: "Root user has {{ root_key_count.stdout }} keys deployed ✓"
+      tags: [verify]
+
+    - name: Display final status
+      debug:
+        msg:
+          - "============================================"
+          - "Deployment Verification"
+          - "============================================"
+          - "{{ inventory_hostname }}:"
+          - "  Root keys: {{ root_key_count.stdout }}/2"
+          - "  Ansible user keys: {{ ansible_key_count.stdout }}/2"
+          - "  Status: {{ '✓ READY FOR HARDENING' if root_key_count.stdout | int >= 2 else '✗ KEYS MISSING' }}"
+      tags: [verify]

@@ -10,8 +10,43 @@
   vars:
     preflight_errors: []
     preflight_warnings: []
+    team_keys_dir: "{{ playbook_dir }}/team_keys"
 
   tasks:
+    - name: Check Ansible Controller SSH Keys
+      block:
+        - name: Check if team keys exist on controller
+          stat:
+            path: "{{ team_keys_dir }}/{{ item }}"
+          delegate_to: localhost
+          become: no
+          register: controller_keys
+          loop:
+            - "ansible_ed25519"
+            - "ansible_ed25519.pub"
+            - "team_shared_ed25519"
+            - "team_shared_ed25519.pub"
+          failed_when: false
+
+        - name: Display key status
+          debug:
+            msg:
+              - "Team Keys Directory: {{ team_keys_dir }}"
+              - "Ansible Key (private): {{ 'FOUND' if controller_keys.results[0].stat.exists else 'MISSING' }}"
+              - "Ansible Key (public): {{ 'FOUND' if controller_keys.results[1].stat.exists else 'MISSING' }}"
+              - "Team Key (private): {{ 'FOUND' if controller_keys.results[2].stat.exists else 'MISSING' }}"
+              - "Team Key (public): {{ 'FOUND' if controller_keys.results[3].stat.exists else 'MISSING' }}"
+
+        - name: Warn if keys not found
+          set_fact:
+            preflight_warnings: "{{ preflight_warnings + ['Team SSH keys not found. Generate with: cd ansible/team_keys && ./generate_keys.sh'] }}"
+          when: >
+            not controller_keys.results[0].stat.exists or
+            not controller_keys.results[1].stat.exists or
+            not controller_keys.results[2].stat.exists or
+            not controller_keys.results[3].stat.exists
+      tags: [ssh_keys]
+
     - name: System Information
       debug:
         msg: |
