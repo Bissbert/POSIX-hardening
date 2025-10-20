@@ -4,9 +4,15 @@
 # Priority: CRITICAL - Must preserve remote access
 # Description: Configures firewall with safety mechanisms
 
-# Get script directory
-SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-LIB_DIR="$(dirname "$SCRIPT_DIR")/lib"
+# Get script directory and toolkit root
+SCRIPT_PATH="$0"
+case "$SCRIPT_PATH" in
+    /*) SCRIPT_DIR="$(dirname "$SCRIPT_PATH")" ;;
+    *)  SCRIPT_DIR="$(cd "$(dirname "$SCRIPT_PATH")" && pwd)" ;;
+esac
+TOOLKIT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+LIB_DIR="$TOOLKIT_ROOT/lib"
+CONFIG_FILE="$TOOLKIT_ROOT/config/defaults.conf"
 
 # Source libraries
 . "$LIB_DIR/common.sh"
@@ -15,7 +21,6 @@ LIB_DIR="$(dirname "$SCRIPT_DIR")/lib"
 . "$LIB_DIR/rollback.sh"
 
 # Load configuration
-CONFIG_FILE="$(dirname "$SCRIPT_DIR")/config/defaults.conf"
 [ -f "$CONFIG_FILE" ] && . "$CONFIG_FILE"
 
 # Script name for logging
