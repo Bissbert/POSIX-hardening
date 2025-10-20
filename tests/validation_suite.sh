@@ -172,8 +172,9 @@ test_accounts() {
     echo ""
     echo "=== Account Security Tests ==="
 
-    # Check for accounts with empty passwords
-    run_test "No empty password accounts" "! awk -F: '(\$2 == \"\" || \$2 == \"!\") {print \$1}' /etc/shadow 2>/dev/null | grep -v '^root$' | grep -q ."
+    # Check for accounts with empty passwords (truly empty, not locked with !)
+    # Note: Accounts with ! or * are locked, which is secure
+    run_test "No empty password accounts" "! awk -F: '(\$2 == \"\") {print \$1}' /etc/shadow 2>/dev/null | grep -q ."
 
     # Check password policy
     if [ -f /etc/login.defs ]; then
