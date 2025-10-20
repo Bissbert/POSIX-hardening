@@ -230,12 +230,78 @@ Configures iptables firewall rules with automatic safety mechanisms to prevent l
 5. **Automatic rule backup**
 
 ### Configuration Options
+
+**Basic configuration** (in `config/defaults.conf`):
 ```bash
 ADMIN_IP=""                   # Your management IP (always allowed)
 ALLOWED_PORTS="80 443"        # Additional allowed ports
-ALLOWED_NETWORKS=""           # Trusted network ranges (CIDR)
+TRUSTED_NETWORKS=""           # Trusted network ranges (CIDR)
 FIREWALL_TIMEOUT=300          # Auto-reset timeout in seconds
 ```
+
+**Advanced configuration** (in `config/firewall.conf`):
+
+Create a custom firewall configuration by copying the example:
+```bash
+cp config/firewall.conf.example config/firewall.conf
+```
+
+All firewall rules are fully customizable via `config/firewall.conf`:
+
+**SSH Protection:**
+```bash
+SSH_RATE_LIMIT_ENABLED=1      # Enable brute-force protection
+SSH_RATE_LIMIT_HITS=4         # Max connection attempts
+SSH_RATE_LIMIT_SECONDS=60     # Time window for rate limiting
+```
+
+**ICMP Settings:**
+```bash
+ICMP_ENABLED=1                # Allow ping
+ICMP_RATE_LIMIT="1/s"         # Rate limit for ping
+ICMP_TYPES="echo-request echo-reply destination-unreachable time-exceeded"
+```
+
+**Logging:**
+```bash
+LOG_DROPPED_PACKETS=1         # Log dropped packets
+LOG_RATE_LIMIT="2/min"        # Prevent log flooding
+LOG_PREFIX="IPTables-Dropped: "
+LOG_LEVEL=4                   # Syslog level
+```
+
+**Outbound Traffic:**
+```bash
+ALLOW_DNS=1                   # Port 53
+ALLOW_NTP=1                   # Port 123
+ALLOW_HTTP=1                  # Port 80
+ALLOW_HTTPS=1                 # Port 443
+CUSTOM_OUTBOUND_TCP=""        # Additional TCP ports
+CUSTOM_OUTBOUND_UDP=""        # Additional UDP ports
+```
+
+**Default Policies:**
+```bash
+DEFAULT_INPUT_POLICY="DROP"   # Block all incoming by default
+DEFAULT_FORWARD_POLICY="DROP" # Block forwarding
+DEFAULT_OUTPUT_POLICY="ACCEPT" # Allow all outgoing
+```
+
+**Custom Rules:**
+```bash
+# Define custom iptables rules directly
+CUSTOM_RULES_IPV4="
+-A INPUT -p tcp --dport 8080 -j ACCEPT
+-A INPUT -s 10.0.0.0/8 -j ACCEPT
+"
+
+# For IPv6 (if IPV6_MODE=custom)
+CUSTOM_RULES_IPV6="
+-A INPUT -p tcp --dport 8080 -j ACCEPT
+"
+```
+
+See `config/firewall.conf.example` for complete documentation and preset configurations.
 
 ### Modified Files
 - `/etc/iptables/rules.v4` - IPv4 rules
