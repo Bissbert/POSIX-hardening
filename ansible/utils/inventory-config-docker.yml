@@ -1,0 +1,169 @@
+# ==============================================================================
+# Inventory Generator Configuration - Docker Testing
+# ==============================================================================
+# Test configuration for Docker environment scanning
+# ==============================================================================
+
+# ==============================================================================
+# SCANNING ZONES
+# ==============================================================================
+
+zones:
+  docker-test:
+    subnet: "127.0.0.1/32"
+    description: "Docker test environment"
+    # Ports to scan - Docker container exposes these on host
+    scan_ports: "2222,2223,8080,8443"
+    vars:
+      remove_emergency_ssh: false
+      run_full_hardening: false
+      dry_run: 1
+
+# ==============================================================================
+# SCAN SETTINGS
+# ==============================================================================
+scan_settings:
+  # Use basic scan (no root required)
+  type: "basic"
+
+  # Timeout for each host (seconds)
+  host_timeout: 60
+
+  # Parallel hosts to scan simultaneously
+  parallel: 5
+
+  # Retry failed hosts
+  max_retries: 1
+
+  # Skip hosts that don't respond to ping
+  skip_host_discovery: false
+
+# ==============================================================================
+# SSH CONNECTIVITY TESTING
+# ==============================================================================
+ssh_test:
+  # Test SSH connectivity to discovered hosts
+  enabled: true
+
+  # Timeout for SSH connection test (seconds)
+  timeout: 5
+
+  # Skip hosts where SSH fails
+  skip_unreachable: false
+
+# ==============================================================================
+# DEFAULT ANSIBLE VARIABLES
+# ==============================================================================
+
+defaults:
+  # Default SSH user for all hosts
+  ansible_user: "testuser"
+
+  # Default SSH port (will be auto-detected if different)
+  ansible_port: 22
+
+  # Python interpreter path
+  ansible_python_interpreter: "/usr/bin/python3"
+
+  # Privilege escalation method
+  ansible_become_method: "sudo"
+
+  # SSH connection timeout
+  ansible_timeout: 30
+
+  # Admin IP - auto-detect from scanner
+  admin_ip: "auto"
+
+  # Users allowed to SSH
+  ssh_allow_users: "testuser"
+
+  # Groups allowed to SSH
+  ssh_allow_groups: ""
+
+# ==============================================================================
+# SERVICE DETECTION
+# ==============================================================================
+
+service_detection:
+  # Enable intelligent port suggestion
+  enabled: true
+
+  # Service definitions for port mapping
+  services:
+    22:
+      name: "SSH"
+      category: "management"
+      always_allow: true
+      description: "Secure Shell - required for Ansible"
+
+    80:
+      name: "HTTP"
+      category: "web"
+      suggest_allow: true
+      description: "Web server"
+
+    443:
+      name: "HTTPS"
+      category: "web"
+      suggest_allow: true
+      description: "Secure web server"
+
+    2222:
+      name: "SSH-Alt"
+      category: "management"
+      always_allow: true
+      description: "Alternate SSH port"
+
+    8080:
+      name: "HTTP-Alt"
+      category: "web"
+      suggest_allow: true
+      description: "Alternate HTTP port"
+
+    8443:
+      name: "HTTPS-Alt"
+      category: "web"
+      suggest_allow: true
+      description: "Alternate HTTPS port"
+
+# ==============================================================================
+# HOSTNAME RESOLUTION
+# ==============================================================================
+hostname_resolution:
+  # Try to resolve hostnames via reverse DNS
+  enabled: true
+
+  # Fallback hostname pattern if DNS fails
+  fallback_pattern: "{zone}{index}"
+
+  # Domain suffix to append
+  domain_suffix: ".local"
+
+# ==============================================================================
+# OUTPUT SETTINGS
+# ==============================================================================
+output:
+  # Default output file
+  default_file: "../inventory-docker-generated.ini"
+
+  # Backup existing inventory before overwriting
+  backup_existing: true
+
+  # Include scan metadata in comments
+  include_metadata: true
+
+  # Include service detection comments
+  include_service_hints: true
+
+# ==============================================================================
+# VALIDATION
+# ==============================================================================
+validation:
+  # Require at least one host discovered per zone
+  require_hosts: true
+
+  # Warn if no SSH detected on host
+  warn_no_ssh: true
+
+  # Fail if duplicate IPs found
+  fail_on_duplicates: true

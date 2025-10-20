@@ -51,6 +51,21 @@ get_yaml_value() {
     grep "^${key}:" "$file" 2>/dev/null | head -1 | cut -d':' -f2- | sed 's/^[[:space:]]*//' | sed 's/"//g'
 }
 
+get_default_value() {
+    local key="$1"
+
+    awk -v key="$key" '
+        /^defaults:/ { in_defaults=1; next }
+        in_defaults && /^[a-z]/ { in_defaults=0 }
+        in_defaults && $0 ~ "^  " key ":" {
+            sub(/^[^:]*: */, "")
+            gsub(/"/, "")
+            print
+            exit
+        }
+    ' "$CONFIG_FILE"
+}
+
 get_zone_value() {
     local zone="$1"
     local key="$2"
@@ -470,6 +485,16 @@ main() {
             prompt_zones
         fi
         prompt_config
+    else
+        # Non-interactive: Load defaults from config
+        if [ -z "$ANSIBLE_USER" ]; then
+            ANSIBLE_USER="$(get_default_value "ansible_user")"
+            ANSIBLE_USER="${ANSIBLE_USER:-admin}"
+        fi
+        if [ -z "$SSH_ALLOW_USERS" ]; then
+            SSH_ALLOW_USERS="$(get_default_value "ssh_allow_users")"
+            SSH_ALLOW_USERS="${SSH_ALLOW_USERS:-$ANSIBLE_USER}"
+        fi
     fi
 
     # Validate zones

@@ -47,7 +47,8 @@ discover_hosts() {
     # Use ping scan for host discovery (-sn = no port scan)
     # -n = no DNS resolution (faster)
     # -T4 = aggressive timing
-    nmap -sn -n -T4 "$subnet" 2>/dev/null | \
+    # -Pn = skip ping, treat all hosts as online (useful for Docker/filtered hosts)
+    nmap -sn -Pn -n -T4 "$subnet" 2>/dev/null | \
         grep "Nmap scan report for" | \
         awk '{print $NF}' | \
         tr -d '()' > "$output_file"
@@ -346,8 +347,25 @@ validate_subnet() {
 
 # Get scanner's IP address (useful for admin_ip)
 get_scanner_ip() {
-    # Try to get IP from default route interface
-    ip route get 1.1.1.1 2>/dev/null | awk '{print $7; exit}'
+    # Try to get IP from default route interface (Linux)
+    if command -v ip >/dev/null 2>&1; then
+        ip route get 1.1.1.1 2>/dev/null | awk '{print $7; exit}'
+        return
+    fi
+
+    # macOS fallback: use route and ifconfig
+    if command -v route >/dev/null 2>&1 && command -v ifconfig >/dev/null 2>&1; then
+        local default_if=$(route -n get default 2>/dev/null | grep 'interface:' | awk '{print $2}')
+        if [ -n "$default_if" ]; then
+            ifconfig "$default_if" 2>/dev/null | grep 'inet ' | grep -v 127.0.0.1 | awk '{print $2}' | head -1
+            return
+        fi
+    fi
+
+    # Final fallback: get any non-loopback IP
+    if command -v hostname >/dev/null 2>&1; then
+        hostname -I 2>/dev/null | awk '{print $1}'
+    fi
 }
 
 # Test SSH connectivity
