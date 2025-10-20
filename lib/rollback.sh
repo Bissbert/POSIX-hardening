@@ -470,10 +470,10 @@ cleanup_transactions() {
 # Export Functions
 # ============================================================================
 
-export -f begin_transaction commit_transaction rollback_transaction
-export -f register_rollback register_file_rollback register_command_rollback
-export -f register_service_rollback register_firewall_rollback register_sysctl_rollback
-export -f execute_rollback_action atomic_operation atomic_file_update
-export -f create_checkpoint rollback_to_checkpoint
-export -f safe_file_operation safe_service_operation
-export -f show_rollback_history cleanup_transactions
+#export -f begin_transaction commit_transaction rollback_transaction
+#export -f register_rollback register_file_rollback register_command_rollback
+#export -f register_service_rollback register_firewall_rollback register_sysctl_rollback
+#export -f execute_rollback_action atomic_operation atomic_file_update
+#export -f create_checkpoint rollback_to_checkpoint
+#export -f safe_file_operation safe_service_operation
+#export -f show_rollback_history cleanup_transactions

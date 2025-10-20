@@ -500,7 +500,7 @@ kill_emergency_ssh() {
 # Export Functions
 # ============================================================================
 
-export -f verify_ssh_connection create_ssh_test_config test_ssh_config
-export -f update_ssh_config_safe check_ssh_setting update_ssh_setting
-export -f fix_ssh_key_permissions manage_ssh_access ensure_ssh_firewall_access
-export -f monitor_ssh_connections create_emergency_ssh_access kill_emergency_ssh
+#export -f verify_ssh_connection create_ssh_test_config test_ssh_config
+#export -f update_ssh_config_safe check_ssh_setting update_ssh_setting
+#export -f fix_ssh_key_permissions manage_ssh_access ensure_ssh_firewall_access
+#export -f monitor_ssh_connections create_emergency_ssh_access kill_emergency_ssh

@@ -441,6 +441,6 @@ list_snapshots() {
 # Export Functions
 # ============================================================================
 
-export -f generate_backup_name backup_file backup_directory
-export -f create_system_snapshot restore_file restore_system_snapshot
-export -f cleanup_old_backups list_backups list_snapshots
+#export -f generate_backup_name backup_file backup_directory
+#export -f create_system_snapshot restore_file restore_system_snapshot
+#export -f cleanup_old_backups list_backups list_snapshots
