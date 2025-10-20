@@ -14,13 +14,13 @@ TOOLKIT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 LIB_DIR="$TOOLKIT_ROOT/lib"
 CONFIG_FILE="$TOOLKIT_ROOT/config/defaults.conf"
 
+# Load configuration first (before libraries set readonly variables)
+[ -f "$CONFIG_FILE" ] && . "$CONFIG_FILE"
+
 # Source libraries
 . "$LIB_DIR/common.sh"
 . "$LIB_DIR/backup.sh"
 . "$LIB_DIR/rollback.sh"
-
-# Load configuration
-[ -f "$CONFIG_FILE" ] && . "$CONFIG_FILE"
 
 # Script name
 SCRIPT_NAME="03-kernel-params"

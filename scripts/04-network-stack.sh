@@ -13,10 +13,11 @@ esac
 TOOLKIT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 LIB_DIR="$TOOLKIT_ROOT/lib"
 CONFIG_FILE="$TOOLKIT_ROOT/config/defaults.conf"
+# Load configuration first (before libraries set readonly variables)
+[ -f "$CONFIG_FILE" ] && . "$CONFIG_FILE"
 . "$LIB_DIR/common.sh"
 . "$LIB_DIR/backup.sh"
 . "$LIB_DIR/rollback.sh"
-[ -f "$CONFIG_FILE" ] && . "$CONFIG_FILE"
 
 SCRIPT_NAME="04-network-stack"
 
