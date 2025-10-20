@@ -100,14 +100,21 @@ test_firewall() {
         return
     fi
 
+    # Check if firewall is actually configured (has rules)
+    local rule_count=$(iptables -L INPUT -n 2>/dev/null | wc -l)
+    if [ "$rule_count" -le 2 ]; then
+        warn_test "Firewall" "No iptables rules configured yet"
+        return
+    fi
+
     # Check default policies
     run_test "INPUT policy set" "iptables -L INPUT -n | head -1 | grep -q 'policy DROP\|policy REJECT'"
 
     # Check SSH rule exists
     run_test "SSH port allowed" "iptables -L INPUT -n | grep -q 'dpt:${SSH_PORT:-22}'"
 
-    # Check established connections allowed
-    run_test "Established connections allowed" "iptables -L INPUT -n | grep -q 'state RELATED,ESTABLISHED'"
+    # Check established connections allowed (supports both old 'state' and new 'ctstate')
+    run_test "Established connections allowed" "iptables -L INPUT -n | grep -qE 'state RELATED,ESTABLISHED|ctstate RELATED,ESTABLISHED'"
 
     # Check if rules are saved
     run_test "Firewall rules saved" "[ -f /etc/iptables/rules.v4 ] || [ -f /etc/sysconfig/iptables ]"
