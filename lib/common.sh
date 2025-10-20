@@ -6,25 +6,24 @@
 
 set -e
 
-# Global configuration - NO DEFAULTS
-# All values must be set in config file (loaded by scripts)
+# Global configuration
 readonly VERSION="1.0.0"
 readonly TOOLKIT_NAME="POSIX-hardening"
 
-# Safety flags - read from config file only
-# No environment variable fallbacks to enforce config file usage
-readonly SAFETY_MODE="${SAFETY_MODE}"
-readonly DRY_RUN="${DRY_RUN}"
-readonly BACKUP_BEFORE_CHANGE="${BACKUP_BEFORE_CHANGE}"
-readonly FAIL_FAST="${FAIL_FAST}"
-readonly VERBOSE="${VERBOSE}"
+# Safety flags - use config values if set, otherwise use sensible defaults
+# This allows both Ansible deployment (with defaults.conf) and standalone execution
+readonly SAFETY_MODE="${SAFETY_MODE:-1}"
+readonly DRY_RUN="${DRY_RUN:-0}"
+readonly BACKUP_BEFORE_CHANGE="${BACKUP_BEFORE_CHANGE:-1}"
+readonly FAIL_FAST="${FAIL_FAST:-1}"
+readonly VERBOSE="${VERBOSE:-0}"
 
-# Critical paths - read from config file only
-readonly SSH_PORT="${SSH_PORT}"
-readonly ADMIN_IP="${ADMIN_IP}"
-readonly BACKUP_DIR="${BACKUP_DIR}"
-readonly LOG_DIR="${LOG_DIR}"
-readonly STATE_DIR="${STATE_DIR}"
+# Critical paths - use config values if set, otherwise use standard paths
+readonly SSH_PORT="${SSH_PORT:-22}"
+readonly ADMIN_IP="${ADMIN_IP:-}"
+readonly BACKUP_DIR="${BACKUP_DIR:-/var/backups/hardening}"
+readonly LOG_DIR="${LOG_DIR:-/var/log/hardening}"
+readonly STATE_DIR="${STATE_DIR:-/var/lib/hardening}"
 
 # Create required directories
 for dir in "$BACKUP_DIR" "$LOG_DIR" "$STATE_DIR"; do

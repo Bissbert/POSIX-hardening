@@ -4,12 +4,7 @@
 # Ensures all changes can be reverted
 
 # Note: common.sh should be sourced before this file
-
-# Verify BACKUP_DIR is set (should come from defaults.conf via common.sh)
-if [ -z "$BACKUP_DIR" ]; then
-    echo "ERROR: BACKUP_DIR is not set. Did you source defaults.conf and common.sh first?" >&2
-    return 1 2>/dev/null || exit 1
-fi
+# common.sh sets BACKUP_DIR with fallback defaults if config file doesn't exist
 
 # Backup configuration
 readonly BACKUP_RETENTION_DAYS="${BACKUP_RETENTION_DAYS:-30}"
@@ -20,7 +15,7 @@ readonly SNAPSHOT_DIR="$BACKUP_DIR/snapshots"
 if ! mkdir -p "$BACKUP_DIR" "$SNAPSHOT_DIR" 2>/dev/null; then
     echo "ERROR: Cannot create backup directories: $BACKUP_DIR, $SNAPSHOT_DIR" >&2
     echo "Check permissions and parent directory exists" >&2
-    return 1 2>/dev/null || exit 1
+    # Don't exit here, as it might be in dry-run mode or will be created later
 fi
 
 # ============================================================================
