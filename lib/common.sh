@@ -480,6 +480,52 @@ cleanup_on_exit() {
 }
 
 # ============================================================================
+# Network Port Checking with Fallbacks
+# ============================================================================
+
+# Check if a port is listening (with multiple fallback methods)
+# Usage: check_port_listening <host> <port> [timeout]
+check_port_listening() {
+    local host="${1:-localhost}"
+    local port="$2"
+    local timeout_sec="${3:-5}"
+
+    if [ -z "$port" ]; then
+        log "ERROR" "Port number required for check_port_listening"
+        return 1
+    fi
+
+    # Method 1: nc (netcat) - most reliable
+    if command -v nc >/dev/null 2>&1; then
+        if timeout "$timeout_sec" nc -z "$host" "$port" 2>/dev/null; then
+            return 0
+        fi
+    fi
+
+    # Method 2: ss (modern alternative)
+    if command -v ss >/dev/null 2>&1; then
+        if ss -ltn 2>/dev/null | grep -q ":$port "; then
+            return 0
+        fi
+    fi
+
+    # Method 3: netstat (legacy fallback)
+    if command -v netstat >/dev/null 2>&1; then
+        if netstat -ltn 2>/dev/null | grep -q ":$port "; then
+            return 0
+        fi
+    fi
+
+    # Method 4: Try direct connection with timeout (last resort)
+    # Use /dev/tcp if available (bash feature, but works in some sh)
+    if timeout "$timeout_sec" sh -c "echo '' | telnet $host $port" >/dev/null 2>&1; then
+        return 0
+    fi
+
+    return 1
+}
+
+# ============================================================================
 # Export Functions
 # ============================================================================
 

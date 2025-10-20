@@ -69,24 +69,36 @@ verify_package_source() {
 verify_package_signatures() {
     show_progress "Verifying package GPG signatures"
 
-    # Check if GPG keys are present
-    if ! command -v apt-key >/dev/null 2>&1; then
-        log "WARN" "apt-key not available, skipping signature check"
-        return 0
+    # Modern method: Check trusted.gpg.d directory (preferred)
+    if [ -d /etc/apt/trusted.gpg.d ]; then
+        log "DEBUG" "Checking modern GPG keyring directory"
+
+        if ls /etc/apt/trusted.gpg.d/*ubuntu* >/dev/null 2>&1 || \
+           ls /etc/apt/trusted.gpg.d/*debian* >/dev/null 2>&1; then
+            show_success "Official GPG keys found (modern keyring)"
+            log "INFO" "Debian/Ubuntu GPG keys present in /etc/apt/trusted.gpg.d"
+            return 0
+        fi
     fi
 
-    # List trusted keys
-    local keys=$(apt-key list 2>/dev/null)
+    # Legacy method: Use apt-key if available (deprecated but still works)
+    if command -v apt-key >/dev/null 2>&1; then
+        log "DEBUG" "Checking legacy GPG keyring (apt-key is deprecated)"
 
-    if echo "$keys" | grep -qi "debian\|ubuntu"; then
-        show_success "Official GPG keys found"
-        log "INFO" "Debian/Ubuntu GPG keys present in keyring"
-        return 0
-    else
-        show_warning "Could not verify official GPG keys"
-        log "WARN" "No Debian/Ubuntu GPG keys found"
-        return 1
+        # Suppress deprecation warning
+        local keys=$(apt-key list 2>&1 | grep -v "Warning: apt-key")
+
+        if echo "$keys" | grep -qi "debian\|ubuntu"; then
+            show_success "Official GPG keys found (legacy keyring)"
+            log "INFO" "Debian/Ubuntu GPG keys present in legacy keyring"
+            log "WARN" "Note: apt-key is deprecated, keys should be in /etc/apt/trusted.gpg.d"
+            return 0
+        fi
     fi
+
+    show_warning "Could not verify official GPG keys"
+    log "WARN" "No Debian/Ubuntu GPG keys found in modern or legacy keyrings"
+    return 1
 }
 
 # Get current package information
@@ -241,7 +253,7 @@ reinstall_ssh_package() {
     log "INFO" "Setting up automatic rollback (${ROLLBACK_TIMEOUT}s timeout)"
     (
         sleep "$ROLLBACK_TIMEOUT"
-        if ! timeout 5 nc -z localhost "$SSH_PORT" 2>/dev/null; then
+        if ! check_port_listening localhost "$SSH_PORT" 5; then
             log "ERROR" "SSH not responding - triggering rollback"
 
             # Try to restart SSH
@@ -271,7 +283,7 @@ reinstall_ssh_package() {
     sleep 3
 
     # Verify SSH is responding
-    if timeout 10 nc -z localhost "$SSH_PORT" 2>/dev/null; then
+    if check_port_listening localhost "$SSH_PORT" 10; then
         show_success "SSH service verified after reinstall"
 
         # Cancel rollback
