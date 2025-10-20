@@ -5,7 +5,7 @@ A comprehensive, safety-first server hardening toolkit written in pure POSIX she
 ## 📚 Documentation
 
 - **[Complete Documentation](docs/README.md)** - Full documentation index
-- **[Script Documentation](docs/SCRIPTS.md)** - Detailed documentation for all 20 hardening scripts
+- **[Script Documentation](docs/SCRIPTS.md)** - Detailed documentation for all 21 hardening scripts (including SSH package verification)
 - **[Implementation Guide](docs/guides/IMPLEMENTATION_GUIDE.md)** - Step-by-step deployment instructions
 - **[Ansible Deployment](ansible/README.md)** - Automated deployment for multiple servers
 
@@ -149,9 +149,10 @@ sudo sh orchestrator.sh
 │   ├── backup.sh          # Backup and restore system
 │   └── rollback.sh        # Transaction-based rollback
 ├── scripts/               # Individual hardening scripts
+│   ├── 00-ssh-verification.sh
 │   ├── 01-ssh-hardening.sh
 │   ├── 02-firewall-setup.sh
-│   └── ... (20 scripts total)
+│   └── ... (21 scripts total)
 ├── config/
 │   └── defaults.conf      # Configuration settings
 ├── backups/              # Automatic backups (created at runtime)

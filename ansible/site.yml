@@ -223,6 +223,23 @@
     toolkit_path: "/opt/posix-hardening"
 
   tasks:
+    - name: Verify SSH package integrity (BEFORE hardening)
+      shell: |
+        cd {{ toolkit_path }}
+        export DRY_RUN="{{ dry_run | default(0) }}"
+        export FORCE_SSH_VERIFICATION="{{ force_ssh_verification | default(0) }}"
+        sh scripts/00-ssh-verification.sh
+      register: ssh_verification
+      tags: [ssh_verification]
+
+    - name: Verify SSH verification succeeded
+      assert:
+        that:
+          - ssh_verification.rc == 0
+        fail_msg: "SSH package verification failed - cannot proceed"
+        success_msg: "SSH package verified and ready for hardening"
+      tags: [ssh_verification]
+
     - name: Create emergency SSH access first
       shell: |
         cd {{ toolkit_path }}
