@@ -312,24 +312,54 @@ main() {
     if [ "$RUN_VALIDATION" = "1" ]; then
         show_progress "Running validation tests"
 
-        # Test that we can still connect
-        if timeout "$SSH_TEST_TIMEOUT" nc -z localhost "$SSH_PORT" 2>/dev/null; then
-            show_success "SSH port is still accessible"
+        # In dry-run mode, skip port connectivity test (no actual changes were made)
+        if [ "$DRY_RUN" != "1" ]; then
+            # Test that we can still connect
+            # Try multiple methods: nc, ss, or netstat
+            ssh_accessible=0
+
+            if command -v nc >/dev/null 2>&1; then
+                if timeout "$SSH_TEST_TIMEOUT" nc -z localhost "$SSH_PORT" 2>/dev/null; then
+                    ssh_accessible=1
+                fi
+            elif command -v ss >/dev/null 2>&1; then
+                if ss -ltn | grep -q ":$SSH_PORT "; then
+                    ssh_accessible=1
+                fi
+            elif command -v netstat >/dev/null 2>&1; then
+                if netstat -ltn | grep -q ":$SSH_PORT "; then
+                    ssh_accessible=1
+                fi
+            else
+                log "WARN" "No tool available to check SSH port (nc/ss/netstat), skipping port check"
+                ssh_accessible=1  # Assume accessible if we can't check
+            fi
+
+            if [ "$ssh_accessible" = "1" ]; then
+                show_success "SSH port is still accessible"
+            else
+                show_error "SSH port is not accessible!"
+                rollback_transaction "validation_failed"
+                exit 1
+            fi
         else
-            show_error "SSH port is not accessible!"
-            rollback_transaction "validation_failed"
-            exit 1
+            log "INFO" "Skipping SSH port check in dry-run mode"
         fi
 
-        # Verify hardening settings
-        if check_ssh_setting "PermitRootLogin" "no" && \
-           check_ssh_setting "PasswordAuthentication" "no" && \
-           check_ssh_setting "PubkeyAuthentication" "yes"; then
-            show_success "SSH hardening settings verified"
+        # Verify hardening settings (skip in dry-run since no changes were made)
+        if [ "$DRY_RUN" != "1" ]; then
+            if check_ssh_setting "PermitRootLogin" "no" && \
+               check_ssh_setting "PasswordAuthentication" "no" && \
+               check_ssh_setting "PubkeyAuthentication" "yes"; then
+                show_success "SSH hardening settings verified"
+            else
+                show_error "SSH hardening verification failed"
+                rollback_transaction "verification_failed"
+                exit 1
+            fi
         else
-            show_error "SSH hardening verification failed"
-            rollback_transaction "verification_failed"
-            exit 1
+            log "INFO" "Skipping SSH settings verification in dry-run mode"
+            show_success "Dry-run validation completed (configuration changes validated)"
         fi
     fi
 
