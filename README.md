@@ -181,6 +181,8 @@ Full script listing and details in [SCRIPTS.md](docs/SCRIPTS.md).
 
 ## Configuration Options
 
+### Basic Configuration (`config/defaults.conf`)
+
 Key settings in `config/defaults.conf`:
 
 - `SAFETY_MODE=1` - Never disable this on production
@@ -189,6 +191,37 @@ Key settings in `config/defaults.conf`:
 - `SSH_PORT=22` - Your SSH port
 - `SSH_ALLOW_USERS=""` - Restrict SSH to specific users
 - `BACKUP_RETENTION_DAYS=30` - How long to keep backups
+
+### Advanced Firewall Configuration (`config/firewall.conf`)
+
+For full control over iptables firewall rules, create a custom firewall configuration:
+
+```sh
+# Copy the example configuration
+cp config/firewall.conf.example config/firewall.conf
+
+# Edit to customize
+vi config/firewall.conf
+```
+
+Customize all firewall settings:
+- SSH brute-force protection thresholds
+- ICMP (ping) rules and rate limits
+- Firewall logging settings
+- Outbound traffic rules (DNS, NTP, HTTP/HTTPS)
+- Default policies (INPUT/OUTPUT/FORWARD)
+- Custom iptables rules
+
+Example custom firewall rules:
+```sh
+# In config/firewall.conf
+CUSTOM_RULES_IPV4="
+-A INPUT -p tcp --dport 8080 -j ACCEPT
+-A INPUT -s 10.0.0.0/8 -j ACCEPT
+"
+```
+
+See `config/firewall.conf.example` for complete documentation and preset configurations (web server, database server, etc.).
 
 ## Emergency Recovery
 

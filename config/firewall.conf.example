@@ -1,0 +1,288 @@
+# POSIX Shell Server Hardening Toolkit - Firewall Configuration
+# This file allows full customization of iptables firewall rules
+#
+# USAGE:
+#   1. Copy this file to firewall.conf:
+#      cp config/firewall.conf.example config/firewall.conf
+#
+#   2. Customize the settings below
+#
+#   3. Run firewall hardening:
+#      sudo sh scripts/02-firewall-setup.sh
+#
+# SAFETY: All safety mechanisms (auto-rollback, SSH protection) remain active
+#         regardless of custom configuration.
+
+# ============================================================================
+# BASIC FIREWALL SETTINGS
+# ============================================================================
+
+# Enable/disable firewall hardening
+# Set to 0 to skip firewall configuration entirely
+FIREWALL_ENABLED=1
+
+# Firewall mode (informational only, affects documentation)
+# Options: strict, balanced, permissive
+FIREWALL_MODE="strict"
+
+# ============================================================================
+# SSH BRUTE-FORCE PROTECTION
+# ============================================================================
+
+# Enable SSH rate limiting (protection against brute-force attacks)
+SSH_RATE_LIMIT_ENABLED=1
+
+# SSH rate limit: max connection attempts within time window
+# Default: 4 attempts in 60 seconds (conservative)
+SSH_RATE_LIMIT_HITS=4
+SSH_RATE_LIMIT_SECONDS=60
+
+# Example configurations:
+# Strict:     SSH_RATE_LIMIT_HITS=3  SSH_RATE_LIMIT_SECONDS=30
+# Balanced:   SSH_RATE_LIMIT_HITS=4  SSH_RATE_LIMIT_SECONDS=60
+# Permissive: SSH_RATE_LIMIT_HITS=6  SSH_RATE_LIMIT_SECONDS=120
+
+# ============================================================================
+# ICMP (PING) SETTINGS
+# ============================================================================
+
+# Allow ICMP traffic (ping, traceroute, network diagnostics)
+ICMP_ENABLED=1
+
+# ICMP rate limiting (prevents ping floods)
+# Format: number/interval (s=second, m=minute, h=hour, d=day)
+# Examples: "1/s", "5/m", "100/h"
+ICMP_RATE_LIMIT="1/s"
+
+# Allowed ICMP types (space-separated)
+# Common types:
+#   echo-request        - Allow incoming pings
+#   echo-reply          - Allow outgoing ping responses
+#   destination-unreachable - Network unreachable messages
+#   time-exceeded       - TTL expired (traceroute)
+#   parameter-problem   - Bad packet headers
+ICMP_TYPES="echo-request echo-reply destination-unreachable time-exceeded"
+
+# Note: Setting ICMP_ENABLED=0 blocks ALL ICMP including these diagnostic types
+
+# ============================================================================
+# FIREWALL LOGGING
+# ============================================================================
+
+# Log dropped packets (helps detect attacks and troubleshoot issues)
+LOG_DROPPED_PACKETS=1
+
+# Logging rate limit (prevents log flooding)
+# Format: number/interval (s=second, m=minute, h=hour, d=day)
+LOG_RATE_LIMIT="2/min"
+
+# Log prefix (appears in /var/log/kern.log or /var/log/messages)
+LOG_PREFIX="IPTables-Dropped: "
+
+# Log level (syslog priority)
+# Levels: 0=emerg, 1=alert, 2=crit, 3=err, 4=warning, 5=notice, 6=info, 7=debug
+LOG_LEVEL=4
+
+# ============================================================================
+# OUTBOUND TRAFFIC RULES
+# ============================================================================
+
+# Allow DNS queries (required for name resolution)
+# Ports: 53/tcp, 53/udp
+ALLOW_DNS=1
+
+# Allow NTP (time synchronization)
+# Port: 123/udp
+ALLOW_NTP=1
+
+# Allow HTTP (web access, package downloads)
+# Port: 80/tcp
+ALLOW_HTTP=1
+
+# Allow HTTPS (secure web access, package downloads)
+# Port: 443/tcp
+ALLOW_HTTPS=1
+
+# Custom outbound TCP ports (space-separated)
+# Example: "3306 5432" for MySQL and PostgreSQL
+# Example: "25 587" for SMTP email
+CUSTOM_OUTBOUND_TCP=""
+
+# Custom outbound UDP ports (space-separated)
+# Example: "514" for syslog
+# Example: "161 162" for SNMP
+CUSTOM_OUTBOUND_UDP=""
+
+# ============================================================================
+# DEFAULT POLICIES
+# ============================================================================
+
+# Default policy for INPUT chain (incoming traffic)
+# DROP - Block all incoming traffic not explicitly allowed (recommended)
+# ACCEPT - Allow all incoming traffic (NOT RECOMMENDED)
+DEFAULT_INPUT_POLICY="DROP"
+
+# Default policy for FORWARD chain (routed traffic)
+# DROP - Block all forwarded traffic (recommended for non-routers)
+# ACCEPT - Allow forwarding (only for routers/gateways)
+DEFAULT_FORWARD_POLICY="DROP"
+
+# Default policy for OUTPUT chain (outgoing traffic)
+# ACCEPT - Allow all outgoing traffic (recommended)
+# DROP - Block all outgoing traffic not explicitly allowed (very restrictive)
+DEFAULT_OUTPUT_POLICY="ACCEPT"
+
+# WARNING: Setting DEFAULT_INPUT_POLICY=ACCEPT defeats firewall protection!
+# WARNING: Setting DEFAULT_OUTPUT_POLICY=DROP requires explicit rules for all outbound services!
+
+# ============================================================================
+# IPv6 CONFIGURATION
+# ============================================================================
+
+# Enable IPv6 firewall rules
+# Set to 0 if you don't use IPv6
+IPV6_ENABLED=1
+
+# IPv6 firewall mode
+# same   - Apply same rules as IPv4 (recommended)
+# custom - Use CUSTOM_RULES_IPV6 for different rules
+# block  - Block all IPv6 traffic
+IPV6_MODE="same"
+
+# ============================================================================
+# CUSTOM IPTABLES RULES
+# ============================================================================
+
+# Define custom iptables rules for IPv4
+# Rules are applied AFTER base protection rules, BEFORE logging/drop
+# Each rule should be a complete iptables command (without 'iptables')
+# Start each rule with -A (append) or -I (insert)
+#
+# IMPORTANT:
+# - One rule per line
+# - Use full iptables syntax
+# - SSH protection rules are ALWAYS applied first (cannot be overridden)
+# - Test thoroughly before deploying to production!
+#
+# Examples:
+#
+# Allow web server traffic:
+# CUSTOM_RULES_IPV4="
+# -A INPUT -p tcp --dport 80 -m state --state NEW -j ACCEPT
+# -A INPUT -p tcp --dport 443 -m state --state NEW -j ACCEPT
+# "
+#
+# Allow MySQL from specific IP:
+# CUSTOM_RULES_IPV4="
+# -A INPUT -s 192.168.1.100 -p tcp --dport 3306 -j ACCEPT
+# "
+#
+# Allow specific subnet full access:
+# CUSTOM_RULES_IPV4="
+# -A INPUT -s 10.0.0.0/8 -j ACCEPT
+# "
+#
+# Rate-limit HTTP:
+# CUSTOM_RULES_IPV4="
+# -A INPUT -p tcp --dport 80 -m state --state NEW -m recent --set
+# -A INPUT -p tcp --dport 80 -m state --state NEW -m recent --update --seconds 60 --hitcount 20 -j DROP
+# -A INPUT -p tcp --dport 80 -m state --state NEW -j ACCEPT
+# "
+
+CUSTOM_RULES_IPV4=""
+
+# Define custom iptables rules for IPv6
+# Same format as CUSTOM_RULES_IPV4 but for ip6tables
+# Only used if IPV6_MODE="custom"
+#
+# Example:
+# CUSTOM_RULES_IPV6="
+# -A INPUT -p tcp --dport 80 -j ACCEPT
+# -A INPUT -p tcp --dport 443 -j ACCEPT
+# "
+
+CUSTOM_RULES_IPV6=""
+
+# ============================================================================
+# ADVANCED: CUSTOM CHAINS
+# ============================================================================
+
+# Create custom iptables chains for organization
+# Format: "CHAIN_NAME:description" (one per line)
+# These chains are created before rules are applied
+# Reference them in CUSTOM_RULES_IPV4/6 with -j CHAIN_NAME
+#
+# Example:
+# CUSTOM_CHAINS="
+# WEB_TRAFFIC:Web server traffic rules
+# DATABASE_ACCESS:Database connection rules
+# "
+
+CUSTOM_CHAINS=""
+
+# ============================================================================
+# PRESET CONFIGURATIONS
+# ============================================================================
+# Uncomment one of these preset configurations, or define your own above
+
+# --- WEB SERVER PRESET ---
+# Suitable for web servers (Apache, Nginx)
+# CUSTOM_RULES_IPV4="
+# -A INPUT -p tcp --dport 80 -m state --state NEW -j ACCEPT
+# -A INPUT -p tcp --dport 443 -m state --state NEW -j ACCEPT
+# "
+
+# --- DATABASE SERVER PRESET ---
+# Suitable for database servers (PostgreSQL, MySQL)
+# Replace 192.168.1.0/24 with your application server subnet
+# CUSTOM_RULES_IPV4="
+# -A INPUT -s 192.168.1.0/24 -p tcp --dport 5432 -j ACCEPT
+# -A INPUT -s 192.168.1.0/24 -p tcp --dport 3306 -j ACCEPT
+# "
+
+# --- MAIL SERVER PRESET ---
+# Suitable for mail servers (SMTP, IMAP, POP3)
+# CUSTOM_RULES_IPV4="
+# -A INPUT -p tcp --dport 25 -j ACCEPT
+# -A INPUT -p tcp --dport 587 -j ACCEPT
+# -A INPUT -p tcp --dport 465 -j ACCEPT
+# -A INPUT -p tcp --dport 993 -j ACCEPT
+# -A INPUT -p tcp --dport 995 -j ACCEPT
+# "
+
+# --- MINIMAL PRESET ---
+# Minimal rules (SSH only, already handled by base rules)
+# CUSTOM_RULES_IPV4=""
+
+# ============================================================================
+# NOTES
+# ============================================================================
+#
+# 1. SSH Protection:
+#    - SSH access is ALWAYS protected (cannot be blocked)
+#    - ADMIN_IP (from defaults.conf) gets priority access
+#    - Established connections always preserved
+#
+# 2. Safety Mechanisms:
+#    - 5-minute auto-rollback if connection lost
+#    - Backup of current rules before changes
+#    - Dry-run mode: DRY_RUN=1 sh scripts/02-firewall-setup.sh
+#
+# 3. Testing:
+#    - Always test in dry-run mode first
+#    - Use emergency SSH (port 2222) as backup
+#    - Monitor logs: tail -f /var/log/kern.log
+#
+# 4. Validation:
+#    - Check rules: iptables -L -n -v
+#    - Check SSH access: nc -zv localhost 22
+#    - Check from external host before disconnecting
+#
+# 5. Troubleshooting:
+#    - View current rules: iptables -L -n
+#    - View logs: grep IPTables-Dropped /var/log/kern.log
+#    - Emergency reset: sh /opt/posix-hardening/emergency-rollback.sh
+#
+# 6. Ansible Deployment:
+#    - Copy firewall.conf to config/ before running playbook
+#    - Or use ansible/templates/firewall.conf.j2 with variables
