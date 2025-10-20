@@ -67,8 +67,15 @@ cd ansible/team_keys
 # - ansible_ed25519: For Ansible automation
 # - team_shared_ed25519: For team member access to ALL hardened servers
 
+# During generation, you'll be prompted:
+# "Install team key on this machine? (y/N):"
+# Answer 'y' to automatically install the key for immediate use
+
+# After installation (if you chose 'y'):
+ssh root@server-hostname  # Works automatically, no -i flag needed!
+
 # The keys are automatically deployed before hardening
-# See ansible/team_keys/README.md for distribution guide
+# Team members can install with: ./install_team_key.sh team_shared_ed25519
 ```
 
 **Option 2: Manual SSH Key Setup**
