@@ -10,8 +10,9 @@ esac
 TOOLKIT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 LIB_DIR="$TOOLKIT_ROOT/lib"
 CONFIG_FILE="$TOOLKIT_ROOT/config/defaults.conf"
-. "$LIB_DIR/common.sh"
+# Load configuration first (before libraries set readonly variables)
 [ -f "$CONFIG_FILE" ] && . "$CONFIG_FILE"
+. "$LIB_DIR/common.sh"
 
 SCRIPT_NAME="15-cron-restrictions"
 
