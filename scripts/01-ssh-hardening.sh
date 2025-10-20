@@ -103,16 +103,24 @@ pre_flight_checks() {
     # Check for SSH keys (warn if none found)
     if [ ! -f /root/.ssh/authorized_keys ] && [ ! -f "$HOME/.ssh/authorized_keys" ]; then
         show_warning "No SSH authorized_keys found - ensure you have alternate access!"
-        printf "Continue anyway? (y/N): "
-        read -r response
-        case "$response" in
-            [yY][eE][sS]|[yY])
-                log "WARN" "Continuing without authorized_keys at user request"
-                ;;
-            *)
-                die "Aborting: No SSH keys configured"
-                ;;
-        esac
+
+        # Only prompt if running interactively
+        if [ -t 0 ]; then
+            printf "Continue anyway? (y/N): "
+            read -r response
+            case "$response" in
+                [yY][eE][sS]|[yY])
+                    log "WARN" "Continuing without authorized_keys at user request"
+                    ;;
+                *)
+                    die "Aborting: No SSH keys configured"
+                    ;;
+            esac
+        else
+            # Non-interactive mode: log warning and continue
+            log "WARN" "Non-interactive mode: Continuing without authorized_keys"
+            log "WARN" "Ensure you have alternate console/emergency access!"
+        fi
     fi
 
     # Ensure firewall won't block SSH
@@ -271,9 +279,12 @@ main() {
         fi
     fi
 
-    # Create system snapshot before changes
-    snapshot_id=$(create_system_snapshot "pre_ssh_hardening")
-    log "INFO" "Created snapshot: $snapshot_id"
+    # Create system snapshot before changes (optional, non-fatal)
+    if create_system_snapshot "pre_ssh_hardening" >/dev/null 2>&1; then
+        log "INFO" "Created snapshot: pre_ssh_hardening"
+    else
+        log "WARN" "Could not create full system snapshot (non-fatal)"
+    fi
 
     # Apply SSH hardening with automatic rollback protection
     if update_ssh_config_safe apply_ssh_hardening; then

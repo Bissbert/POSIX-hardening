@@ -72,7 +72,9 @@ log() {
             printf "${GREEN}[INFO]${RESET} %s\n" "$*"
             ;;
         DEBUG)
-            [ "$VERBOSE" = "1" ] && printf "${BLUE}[DEBUG]${RESET} %s\n" "$*"
+            if [ "$VERBOSE" = "1" ]; then
+                printf "${BLUE}[DEBUG]${RESET} %s\n" "$*"
+            fi
             ;;
         DRY_RUN)
             printf "${YELLOW}[DRY-RUN]${RESET} %s\n" "$*"
