@@ -14,6 +14,7 @@ CONFIG_FILE="$TOOLKIT_ROOT/config/defaults.conf"
 [ -f "$CONFIG_FILE" ] && . "$CONFIG_FILE"
 . "$LIB_DIR/common.sh"
 . "$LIB_DIR/backup.sh"
+. "$LIB_DIR/rollback.sh"
 
 SCRIPT_NAME="06-process-limits"
 
