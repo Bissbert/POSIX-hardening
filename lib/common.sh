@@ -481,10 +481,10 @@ cleanup_on_exit() {
 # ============================================================================
 
 # Make functions available to sourcing scripts
-export -f log die require_root validate_debian check_requirements
-export -f check_disk_space verify_ssh_alive preserve_admin_access
-export -f safe_backup_file safe_modify_file file_modified
-export -f save_state get_state is_completed mark_completed
-export -f safe_service_restart safe_service_reload execute_or_simulate
-export -f show_progress show_success show_warning show_error
-export -f init_hardening_environment cleanup_on_exit
+#export -f log die require_root validate_debian check_requirements
+#export -f check_disk_space verify_ssh_alive preserve_admin_access
+#export -f safe_backup_file safe_modify_file file_modified
+#export -f save_state get_state is_completed mark_completed
+#export -f safe_service_restart safe_service_reload execute_or_simulate
+#export -f show_progress show_success show_warning show_error
+#export -f init_hardening_environment cleanup_on_exit
