@@ -23,6 +23,14 @@ apply_limits() {
 
     backup_file /etc/security/limits.conf
 
+    # Remove old POSIX hardening section if it exists (for idempotency)
+    if [ -f /etc/security/limits.conf ]; then
+        if grep -q "# POSIX Hardening - Process Limits" /etc/security/limits.conf; then
+            log "INFO" "Removing old process limits section for update"
+            sed -i '/# POSIX Hardening - Process Limits/,/^$/d' /etc/security/limits.conf
+        fi
+    fi
+
     cat >> /etc/security/limits.conf <<EOF
 
 # POSIX Hardening - Process Limits

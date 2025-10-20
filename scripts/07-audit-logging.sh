@@ -21,8 +21,12 @@ configure_audit() {
 
     # Enable auth logging
     if [ -f /etc/rsyslog.conf ]; then
-        if ! grep -q "auth,authpriv.*" /etc/rsyslog.conf; then
+        # More specific check to avoid duplicates
+        if ! grep -q "^auth,authpriv\.\*[[:space:]]*/var/log/auth\.log" /etc/rsyslog.conf; then
+            log "INFO" "Adding auth logging to rsyslog.conf"
             echo "auth,authpriv.* /var/log/auth.log" >> /etc/rsyslog.conf
+        else
+            log "INFO" "Auth logging already configured in rsyslog.conf"
         fi
     fi
 

@@ -40,6 +40,14 @@ apply_kernel_hardening() {
         backup_file /etc/sysctl.conf
     fi
 
+    # Remove old POSIX hardening section if it exists (for idempotency)
+    if [ -f /etc/sysctl.conf ]; then
+        if grep -q "=== POSIX Hardening Toolkit - Kernel Parameters ===" /etc/sysctl.conf; then
+            log "INFO" "Removing old kernel parameters section for update"
+            sed -i '/=== POSIX Hardening Toolkit - Kernel Parameters ===/,/=== End POSIX Hardening ===/d' /etc/sysctl.conf
+        fi
+    fi
+
     # Apply kernel parameters
     cat >> /etc/sysctl.conf <<'EOF'
 

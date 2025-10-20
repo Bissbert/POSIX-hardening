@@ -23,6 +23,14 @@ apply_sysctl_hardening() {
 
     backup_file /etc/sysctl.conf
 
+    # Remove old additional hardening section if it exists (for idempotency)
+    if [ -f /etc/sysctl.conf ]; then
+        if grep -q "# Additional POSIX Hardening" /etc/sysctl.conf; then
+            log "INFO" "Removing old additional sysctl section for update"
+            sed -i '/# Additional POSIX Hardening/,/^$/d' /etc/sysctl.conf
+        fi
+    fi
+
     cat >> /etc/sysctl.conf <<'EOF'
 
 # Additional POSIX Hardening
