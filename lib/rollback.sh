@@ -11,7 +11,8 @@ readonly ROLLBACK_LOG="$LOG_DIR/rollback.log"
 readonly TRANSACTION_ID_FILE="$STATE_DIR/current_transaction"
 
 # Global rollback state
-ROLLBACK_ENABLED="${ROLLBACK_ENABLED:-1}"
+# Read from config file only (no fallback)
+ROLLBACK_ENABLED="${ROLLBACK_ENABLED}"
 CURRENT_TRANSACTION=""
 ROLLBACK_PID=""
 

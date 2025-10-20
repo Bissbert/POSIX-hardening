@@ -1,109 +1,180 @@
 ---
-# POSIX Hardening - Global Variables
-# These variables apply to all hosts unless overridden
+# ==============================================================================
+# POSIX Hardening Toolkit - Master Configuration
+# ==============================================================================
+# This is the SINGLE SOURCE OF TRUTH for all configuration values.
+# All defaults are defined here. Override per-environment in inventory.ini.
+#
+# Variable precedence (highest to lowest):
+#   1. ansible/inventory.ini [environment:vars] sections
+#   2. This file (group_vars/all.yml)
+#
+# NEVER set defaults in:
+#   - inventory.ini (environment overrides only)
+#   - Jinja templates (no default filters)
+#   - Shell scripts (no ${VAR:-default} fallbacks)
+# ==============================================================================
 
-# Deployment settings
+# ==============================================================================
+# DEPLOYMENT PATHS
+# ==============================================================================
+# Where toolkit components are installed on target servers
 toolkit_path: "/opt/posix-hardening"
 backup_path: "/var/backups/hardening"
 log_path: "/var/log/hardening"
 state_path: "/var/lib/hardening"
 
-# Safety settings - NEVER disable these in production
-safety_mode: 1
-backup_before_change: 1
-rollback_enabled: 1
-fail_fast: 1
+# ==============================================================================
+# SAFETY SETTINGS
+# ==============================================================================
+# CRITICAL: Never disable these in production environments
+# These prevent accidental system lockout and enable recovery
 
-# Execution mode
-dry_run: 0  # Set to 1 for simulation
-verbose: 0  # Set to 1 for detailed output
-run_full_hardening: true  # Set to false for critical only
+safety_mode: 1              # Enable all safety checks (1=on, 0=off)
+backup_before_change: 1     # Backup configs before modification
+rollback_enabled: 1         # Auto-rollback on failure
+fail_fast: 1                # Stop on first error (recommended)
 
-# SSH Configuration
-ssh_port: 22
-admin_ip: ""  # YOUR MANAGEMENT IP - CRITICAL!
-ssh_allow_users: ""  # Space-separated list
-ssh_allow_groups: ""  # Space-separated list
-ssh_test_port: 2222
-ssh_rollback_timeout: 60
+# ==============================================================================
+# EXECUTION MODE
+# ==============================================================================
+dry_run: 0                  # 0=apply changes, 1=simulation only
+verbose: 0                  # 0=normal output, 1=detailed debug logs
+run_full_hardening: true    # true=all scripts, false=priority 1 only
 
-# Emergency Access
-enable_emergency_ssh: true
-emergency_ssh_port: 2222
-remove_emergency_ssh: false  # Set to true after verification
+# ==============================================================================
+# SSH CONFIGURATION
+# ==============================================================================
+# REQUIRED in inventory.ini per environment:
+#   - admin_ip: Your management IP address (firewall whitelist)
+#
+# CRITICAL: ssh_allow_users must be set to prevent lockout!
+# Root login is DISABLED by hardening. You must use a non-root user.
 
-# Firewall Configuration
-enable_firewall: true
-firewall_timeout: 300  # 5 minutes
-allowed_ports: []  # List of additional ports
-trusted_networks: []  # List of CIDR blocks
+ssh_port: 22                     # SSH daemon listening port
+admin_ip: ""                     # OVERRIDE THIS in inventory.ini!
+ssh_allow_users: "admin"         # Users allowed to SSH (space-separated)
+                                 # Default: "admin" user with sudo access
+                                 # WARNING: Do not leave empty!
+ssh_allow_groups: ""             # Groups allowed to SSH (space-separated)
+ssh_test_port: 2222              # Port for connectivity testing
+ssh_rollback_timeout: 60         # Seconds to wait before rollback
 
-# Kernel and System Hardening
-enable_kernel_hardening: true
-enable_network_hardening: true
-enable_process_limits: true
-max_user_processes: 1024
-core_dump_limit: 0
+# ==============================================================================
+# EMERGENCY ACCESS
+# ==============================================================================
+# Creates a temporary SSH port with password auth for emergency recovery
+# Recommended: Keep enabled during initial deployment, remove after verification
 
-# File Permissions
-enable_file_permissions: true
-system_umask: "027"
-user_umask: "077"
+enable_emergency_ssh: true       # Create emergency SSH on alternate port
+emergency_ssh_port: 2222         # Emergency SSH port number
+remove_emergency_ssh: false      # Auto-remove after successful deployment
+                                 # Set to true in inventory for staging/test
 
-# Password and Authentication
-password_min_length: 12
-password_max_age: 90
-password_warn_age: 14
-account_lockout_threshold: 5
-account_lockout_duration: 30
+# ==============================================================================
+# FIREWALL CONFIGURATION
+# ==============================================================================
+enable_firewall: true            # Enable iptables firewall rules
+firewall_timeout: 300            # Seconds before auto-rollback (5 minutes)
+allowed_ports: []                # Additional TCP ports to allow (list)
+                                 # Example: [80, 443, 3306]
+trusted_networks: []             # CIDR blocks with full access (list)
+                                 # Example: ["10.0.0.0/8", "192.168.1.0/24"]
 
-# Logging and Auditing
-enable_audit_logging: true
-log_retention_days: 90
+# ==============================================================================
+# KERNEL AND SYSTEM HARDENING
+# ==============================================================================
+enable_kernel_hardening: true    # Apply kernel security parameters
+enable_network_hardening: true   # Harden network stack
+enable_process_limits: true      # Set resource limits
+max_user_processes: 1024         # Max processes per user
+core_dump_limit: 0               # Disable core dumps (0=disabled)
+
+# ==============================================================================
+# FILE PERMISSIONS
+# ==============================================================================
+enable_file_permissions: true    # Fix critical file permissions
+system_umask: "027"              # Default umask for system (rwxr-x---)
+user_umask: "077"                # Default umask for users (rwx------)
+
+# ==============================================================================
+# PASSWORD AND AUTHENTICATION
+# ==============================================================================
+password_min_length: 12          # Minimum password length
+password_max_age: 90             # Days until password expires
+password_warn_age: 14            # Days before expiry to warn user
+account_lockout_threshold: 5     # Failed login attempts before lockout
+account_lockout_duration: 30     # Lockout duration in minutes
+
+# ==============================================================================
+# LOGGING AND AUDITING
+# ==============================================================================
+enable_audit_logging: true       # Enable auditd system auditing
+log_retention_days: 90           # Days to keep logs
 audit_log: "/var/log/audit/audit.log"
 
-# Service Hardening
+# ==============================================================================
+# SERVICE HARDENING
+# ==============================================================================
+# Services to disable (security risk if not needed)
 disable_services:
-  - bluetooth
-  - cups
-  - avahi-daemon
-  - rpcbind
-  - nfs-server
-  - snmpd
+  - bluetooth                    # Bluetooth daemon
+  - cups                         # Printing service
+  - avahi-daemon                 # mDNS/Bonjour
+  - rpcbind                      # RPC service
+  - nfs-server                   # NFS server
+  - snmpd                        # SNMP daemon
 
+# Services that must stay running
 required_services:
   - ssh
 
-# Mount Options
+# ==============================================================================
+# MOUNT OPTIONS
+# ==============================================================================
+# Apply security mount options to temporary filesystems
 enable_mount_hardening: true
-tmp_dirs:
+tmp_dirs:                        # Directories to harden
   - /tmp
   - /var/tmp
   - /dev/shm
-tmp_mount_options: "noexec,nosuid,nodev"
+tmp_mount_options: "noexec,nosuid,nodev"  # Security mount flags
 
-# Shell Configuration
-shell_timeout: 900  # 15 minutes
+# ==============================================================================
+# SHELL CONFIGURATION
+# ==============================================================================
+shell_timeout: 900               # Auto-logout after idle (seconds, 15 min)
 
-# Integrity Checking
+# ==============================================================================
+# INTEGRITY CHECKING
+# ==============================================================================
+# Create baseline checksums for critical system files
 enable_integrity_check: true
-integrity_dirs:
+integrity_dirs:                  # Directories to monitor
   - /etc
   - /bin
   - /sbin
   - /usr/bin
   - /usr/sbin
 
-# Ansible-specific settings
+# ==============================================================================
+# ANSIBLE RUNTIME SETTINGS
+# ==============================================================================
+# These affect how Ansible connects and executes tasks
 ansible_become_method: sudo
 ansible_python_interpreter: /usr/bin/python3
 
-# Validation settings
-run_validation: true
-test_mode: 0
+# ==============================================================================
+# VALIDATION AND TESTING
+# ==============================================================================
+run_validation: true             # Run validation tests after hardening
+test_mode: 0                     # Reserved for future testing features
 
-# Deployment tags
+# ==============================================================================
+# DEPLOYMENT CONTROL
+# ==============================================================================
+# Tags used to control which parts of playbook run
 deployment_tags:
-  - deploy
-  - harden
-  - validate
+  - deploy                       # Deploy toolkit files
+  - harden                       # Execute hardening scripts
+  - validate                     # Run validation tests
