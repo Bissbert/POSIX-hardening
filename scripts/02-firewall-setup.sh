@@ -33,13 +33,16 @@ SCRIPT_NAME="02-firewall-setup"
 # Check for iptables
 check_iptables() {
     if ! command -v iptables >/dev/null 2>&1; then
-        die "iptables not found - cannot configure firewall"
+        log "WARN" "iptables not found - skipping firewall configuration"
+        return 1
     fi
 
     # Check for iptables-save/restore
     if ! command -v iptables-save >/dev/null 2>&1; then
         log "WARN" "iptables-save not found - persistence may not work"
     fi
+
+    return 0
 }
 
 # Save current rules for rollback
@@ -267,7 +270,18 @@ main() {
     init_hardening_environment "$SCRIPT_NAME"
 
     # Check requirements
-    check_iptables
+    if ! check_iptables; then
+        show_warning "iptables not available - skipping firewall configuration"
+        log "INFO" "Firewall setup skipped (iptables not found)"
+        log "INFO" "This system may be using nftables, firewalld, or ufw instead"
+        log "INFO" "Please configure firewall manually if needed"
+
+        # Mark as completed even though skipped (don't block other scripts)
+        mark_completed "$SCRIPT_NAME"
+
+        # Exit successfully (not a failure, just skipped)
+        exit 0
+    fi
 
     # Start transaction
     begin_transaction "firewall_setup"
