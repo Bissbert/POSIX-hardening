@@ -1,8 +1,11 @@
 # POSIX Hardening Scripts Documentation
 
-This document provides comprehensive documentation for all 20 hardening scripts in the toolkit. Each script is designed to be safe for remote execution with multiple rollback mechanisms.
+This document provides comprehensive documentation for all 21 hardening scripts in the toolkit. Each script is designed to be safe for remote execution with multiple rollback mechanisms.
 
 ## Table of Contents
+
+### Priority 0 - Pre-Hardening Verification
+- [00. SSH Package Verification](#00-ssh-package-verification)
 
 ### Priority 1 - Critical (SSH & Network Access)
 - [01. SSH Hardening](#01-ssh-hardening)
@@ -52,6 +55,90 @@ Additional hardening that may require environment-specific configuration.
 
 ---
 
+## 00. SSH Package Verification
+
+**Script:** `scripts/00-ssh-verification.sh`
+**Priority:** CRITICAL (0) - Runs BEFORE all hardening
+**Risk Level:** Low (verification only, safe reinstall)
+
+### Purpose
+Verifies the integrity and authenticity of the OpenSSH server package before any hardening is applied. This ensures that the SSH daemon you're about to harden is from an official source and hasn't been compromised.
+
+### What It Does
+- Verifies package is from official Debian/Ubuntu repositories
+- Checks GPG signatures on package sources
+- Verifies binary integrity using debsums
+- Automatically reinstalls OpenSSH if integrity check fails
+- Creates emergency SSH access during reinstall
+
+### Safety Mechanisms
+1. **Package source verification** - Ensures package is from official repos
+2. **GPG signature checking** - Verifies repository authenticity
+3. **Binary integrity checking** - Compares installed files to package database
+4. **Emergency SSH access** - Creates fallback on port 2222 during reinstall
+5. **Automatic rollback** - 60-second timeout with automatic restoration
+6. **Configuration backup** - Preserves SSH config during reinstall
+
+### Verification Steps
+1. **Package Information** - Gathers current OpenSSH version and architecture
+2. **Source Verification** - Checks if package is from official Debian/Ubuntu repos
+3. **Signature Verification** - Validates GPG keys are present (optional)
+4. **Binary Integrity** - Uses debsums to verify all SSH binaries match package checksums
+5. **Reinstall if Needed** - If integrity check fails, safely reinstalls package
+
+### Configuration Options
+```bash
+FORCE_SSH_VERIFICATION=0      # Force reinstall even if verification passes
+EMERGENCY_SSH_PORT=2222       # Emergency SSH port during reinstall
+DRY_RUN=0                     # Test mode without making changes
+```
+
+### Modified Files
+- `/etc/ssh/sshd_config` - Backed up during reinstall
+- Installs: `debsums` package (if not present)
+- OpenSSH package reinstallation (only if integrity fails)
+
+### Prerequisites
+- Internet connectivity (for apt operations)
+- Root access
+- Sufficient disk space for package operations
+
+### When It Runs
+- **Automatically** before SSH hardening (01-ssh-hardening.sh)
+- Called by Ansible playbook before Priority 1 hardening
+- Can be run manually: `sh scripts/00-ssh-verification.sh`
+
+### Output Summary
+The script provides a comprehensive summary:
+```
+=================================
+SSH Package Verification Summary
+=================================
+Package Source: VERIFIED
+GPG Signatures: VERIFIED / SKIPPED
+Binary Integrity: VERIFIED / REINSTALLED
+Reinstall Performed: YES / NO
+=================================
+```
+
+### Dry-Run Support
+```bash
+export DRY_RUN=1
+sh scripts/00-ssh-verification.sh
+```
+In dry-run mode:
+- Shows what would be checked
+- Does not install debsums
+- Does not reinstall SSH
+- Does not modify any files
+
+### Exit Codes
+- `0` - Verification passed or reinstall successful
+- `1` - Verification failed and reinstall failed
+- `2` - Script error or missing prerequisites
+
+---
+
 ## 01. SSH Hardening
 
 **Script:** `scripts/01-ssh-hardening.sh`
@@ -62,6 +149,7 @@ Additional hardening that may require environment-specific configuration.
 Secures SSH daemon configuration while maintaining remote access. This is the most critical script as it affects your ability to manage the server remotely.
 
 ### What It Does
+- **Runs SSH package verification first** (00-ssh-verification.sh)
 - Disables root login via SSH
 - Enforces key-based authentication only
 - Disables password authentication
