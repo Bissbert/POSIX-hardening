@@ -79,6 +79,22 @@ pre_flight_checks() {
     # Initialize environment
     init_hardening_environment "$SCRIPT_NAME"
 
+    # Step 0: Verify SSH package integrity FIRST
+    local verification_script="$SCRIPT_DIR/00-ssh-verification.sh"
+    if [ -x "$verification_script" ]; then
+        log "INFO" "Running SSH package verification first..."
+        sh "$verification_script"
+
+        if [ $? -ne 0 ]; then
+            die "SSH package verification failed - cannot proceed with hardening"
+        fi
+
+        show_success "SSH package verified successfully"
+    else
+        log "WARN" "SSH verification script not found: $verification_script"
+        log "WARN" "Skipping package verification (not recommended)"
+    fi
+
     # Critical: Verify SSH connection
     if ! verify_ssh_connection; then
         die "SSH connection verification failed - cannot proceed"
