@@ -56,6 +56,28 @@
         fail_msg: "Insufficient disk space for backups"
         success_msg: "✓ Sufficient disk space available"
 
+    - name: Check if iptables is installed
+      command: which iptables
+      register: iptables_check
+      failed_when: false
+      changed_when: false
+
+    - name: Install iptables if not present
+      apt:
+        name: iptables
+        state: present
+        update_cache: yes
+      when: iptables_check.rc != 0
+
+    - name: Verify iptables installation
+      command: iptables --version
+      register: iptables_version
+      changed_when: false
+
+    - name: Display iptables version
+      debug:
+        msg: "✓ iptables installed: {{ iptables_version.stdout }}"
+
     - name: Create snapshot timestamp
       set_fact:
         snapshot_timestamp: "{{ ansible_date_time.epoch }}"
@@ -153,6 +175,7 @@
     - name: Create pre-deployment snapshot
       shell: |
         cd {{ toolkit_path }}
+        . ./config/defaults.conf
         . ./lib/common.sh
         . ./lib/backup.sh
         create_system_snapshot "ansible_deploy_{{ snapshot_timestamp }}"
@@ -334,6 +357,8 @@
     - name: Create emergency SSH access first
       shell: |
         cd {{ toolkit_path }}
+        . ./config/defaults.conf
+        . ./lib/common.sh
         . ./lib/ssh_safety.sh
         create_emergency_ssh_access {{ emergency_ssh_port | default(2222) }}
       when: enable_emergency_ssh | default(true) | bool
@@ -479,6 +504,8 @@
     - name: Remove emergency SSH if requested
       shell: |
         cd {{ toolkit_path }}
+        . ./config/defaults.conf
+        . ./lib/common.sh
         . ./lib/ssh_safety.sh
         kill_emergency_ssh
       when:
