@@ -356,11 +356,25 @@ ansible-vault encrypt_string 'admin,deploy' --name 'ssh_allow_users'
 
 **Problem**: "Found 0 hosts in zone"
 
-**Solutions**:
-1. Check subnet configuration is correct
-2. Verify network connectivity: `ping <subnet_gateway>`
-3. Check firewall rules allow ICMP
-4. Try with `--subnet` override to test different ranges
+**Root Cause**: The scanner uses ping/ARP for host discovery by default. If hosts don't respond to ping (ICMP blocked by firewall), they won't be discovered.
+
+**Automatic Fallback**: The scanner now automatically tries TCP SYN discovery on ports 22,80,443 if ping scan finds nothing.
+
+**Manual Solutions**:
+1. **Check subnet configuration** is correct
+2. **Verify network connectivity**: `ping <subnet_gateway>`
+3. **Check firewall rules** - ensure either ICMP or TCP ports are accessible
+4. **Test manually**:
+   ```bash
+   # Test ping discovery
+   nmap -sn -n -T4 192.168.1.0/24
+
+   # Test TCP discovery (if ping fails)
+   nmap -PS22,80,443 -sn -n -T4 192.168.1.0/24
+   ```
+5. **Try with different subnet** to test: `--subnet "10.0.0.0/24"`
+
+**Note**: The scanner automatically falls back to TCP SYN discovery if ping fails, so in most cases it should find hosts even with ICMP blocked.
 
 ### nmap Not Found
 

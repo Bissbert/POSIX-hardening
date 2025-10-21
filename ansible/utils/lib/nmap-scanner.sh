@@ -44,16 +44,28 @@ discover_hosts() {
 
     echo "Discovering hosts in $subnet..." >&2
 
-    # Use ping scan for host discovery (-sn = no port scan)
+    # Method 1: Standard ping/ARP scan (works for most networks)
+    # -sn = no port scan, just host discovery
     # -n = no DNS resolution (faster)
     # -T4 = aggressive timing
-    # -Pn = skip ping, treat all hosts as online (useful for Docker/filtered hosts)
-    nmap -sn -Pn -n -T4 "$subnet" 2>/dev/null | \
+    nmap -sn -n -T4 "$subnet" 2>/dev/null | \
         grep "Nmap scan report for" | \
         awk '{print $NF}' | \
         tr -d '()' > "$output_file"
 
     local count=$(wc -l < "$output_file")
+
+    # If no hosts found, try TCP SYN discovery (for firewalled networks)
+    if [ "$count" -eq 0 ]; then
+        echo "No hosts found via ping, trying TCP SYN discovery..." >&2
+        # Try common service ports (SSH, HTTP, HTTPS)
+        nmap -PS22,80,443 -sn -n -T4 "$subnet" 2>/dev/null | \
+            grep "Nmap scan report for" | \
+            awk '{print $NF}' | \
+            tr -d '()' > "$output_file"
+        count=$(wc -l < "$output_file")
+    fi
+
     echo "Discovered $count live hosts" >&2
 
     if [ "$count" -eq 0 ]; then
