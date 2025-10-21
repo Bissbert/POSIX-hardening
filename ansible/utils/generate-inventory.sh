@@ -273,7 +273,7 @@ scan_zone() {
         [ -z "$host" ] && continue
 
         log "  Scanning $host..."
-        local open_ports=$(VERBOSE=1 get_open_ports "$host" "$scan_ports" "basic")
+        local open_ports=$(get_open_ports "$host" "$scan_ports" "basic")
 
         if [ -n "$open_ports" ]; then
             log "    Found ports: $open_ports"

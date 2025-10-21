@@ -146,7 +146,7 @@ get_open_ports() {
     local scan_exit=$?
 
     # Debug: show what we're scanning
-    if [ -n "$VERBOSE" ] || [ "$scan_exit" -ne 0 ]; then
+    if [ -n "$VERBOSE" ]; then
         echo "DEBUG: Scanning $host on ports $ports (type: $scan_type)" >&2
         echo "DEBUG: Scan exit code: $scan_exit" >&2
     fi
