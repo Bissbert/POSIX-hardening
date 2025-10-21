@@ -432,6 +432,10 @@ show_summary() {
     local zone_list=$(echo "$ZONES" | tr ',' ' ')
     for zone in $zone_list; do
         local count=$(grep -c "^\[$zone\]" "$output" 2>/dev/null || echo "0")
+        # Ensure count is numeric, default to 0 if empty or non-numeric
+        case "$count" in
+            ''|*[!0-9]*) count=0 ;;
+        esac
         if [ "$count" -gt 0 ]; then
             local host_count=$(awk "/^\[$zone\]/,/^$/ {if (\$0 !~ /^#/ && \$0 !~ /^\[/ && \$0 != \"\") print}" "$output" | wc -l)
             echo "  $zone: $host_count hosts"
