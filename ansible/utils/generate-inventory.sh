@@ -4,6 +4,9 @@
 # ==============================================================================
 # Discovers hosts via nmap and generates Ansible inventory files
 # Usage: ./generate-inventory.sh [options]
+#
+# Debug mode: Set VERBOSE=1 environment variable for detailed output
+# Example: VERBOSE=1 ./generate-inventory.sh --zone production
 # ==============================================================================
 
 set -e
@@ -235,7 +238,14 @@ scan_zone() {
         return 1
     fi
 
+    # Validate scan_ports and provide fallback
+    if [ -z "$scan_ports" ]; then
+        warn "No scan_ports configured for zone: $zone, using defaults"
+        scan_ports="22,80,443,3306,5432"
+    fi
+
     log "Scanning zone: $zone ($subnet)"
+    log "Ports to scan: $scan_ports"
 
     # Use custom subnet if provided
     if [ -n "$CUSTOM_SUBNET" ]; then
@@ -263,9 +273,10 @@ scan_zone() {
         [ -z "$host" ] && continue
 
         log "  Scanning $host..."
-        local open_ports=$(get_open_ports "$host" "$scan_ports" "basic")
+        local open_ports=$(VERBOSE=1 get_open_ports "$host" "$scan_ports" "basic")
 
         if [ -n "$open_ports" ]; then
+            log "    Found ports: $open_ports"
             echo "$host|$open_ports" >> "$zone_dir/scan_results.txt"
 
             # Detect SSH port
@@ -275,6 +286,8 @@ scan_zone() {
             # Try hostname resolution
             local hostname=$(resolve_hostname "$host")
             echo "$host|$hostname" >> "$zone_dir/hostnames.txt"
+        else
+            log "    No open ports found on scanned ports ($scan_ports)"
         fi
     done < "$zone_dir/hosts.txt"
 

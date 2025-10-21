@@ -134,13 +134,44 @@ get_open_ports() {
     local ports="$2"
     local scan_type="${3:-basic}"
 
-    scan_ports "$host" "$ports" "$scan_type" 2>/dev/null | \
+    # Validate inputs
+    if [ -z "$host" ] || [ -z "$ports" ]; then
+        echo "DEBUG: get_open_ports called with empty host or ports" >&2
+        echo "DEBUG: host=$host, ports=$ports" >&2
+        return 1
+    fi
+
+    # Run scan and capture output (show errors during debug)
+    local scan_output=$(scan_ports "$host" "$ports" "$scan_type" 2>&1)
+    local scan_exit=$?
+
+    # Debug: show what we're scanning
+    if [ -n "$VERBOSE" ] || [ "$scan_exit" -ne 0 ]; then
+        echo "DEBUG: Scanning $host on ports $ports (type: $scan_type)" >&2
+        echo "DEBUG: Scan exit code: $scan_exit" >&2
+    fi
+
+    # Parse the output
+    local open_ports=$(echo "$scan_output" | \
         grep "^[0-9]" | \
         grep "/tcp.*open" | \
         awk '{print $1}' | \
         cut -d'/' -f1 | \
         tr '\n' ',' | \
-        sed 's/,$//'
+        sed 's/,$//')
+
+    # Debug: show results
+    if [ -n "$VERBOSE" ]; then
+        if [ -n "$open_ports" ]; then
+            echo "DEBUG: Found open ports: $open_ports" >&2
+        else
+            echo "DEBUG: No open ports found" >&2
+            echo "DEBUG: Raw scan output:" >&2
+            echo "$scan_output" | head -10 >&2
+        fi
+    fi
+
+    echo "$open_ports"
 }
 
 # Check if a specific port is open
