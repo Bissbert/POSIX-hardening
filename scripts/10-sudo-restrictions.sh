@@ -26,10 +26,15 @@ configure_sudo() {
     # Create sudoers.d directory if needed
     [ ! -d /etc/sudoers.d ] && mkdir -p /etc/sudoers.d
 
+    # Detect current user (typically the Ansible remote user)
+    local current_user="${SUDO_USER:-${USER}}"
+
     # Add hardening rules
-    cat > /etc/sudoers.d/hardening <<'EOF'
+    cat > /etc/sudoers.d/hardening <<EOF
 # POSIX Hardening Sudo Configuration
-Defaults requiretty
+# Note: requiretty is disabled for automation tools like Ansible
+# If you need requiretty for security, enable it only for specific users
+Defaults !requiretty
 Defaults !visiblepw
 Defaults always_set_home
 Defaults env_reset
@@ -37,9 +42,22 @@ Defaults secure_path="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/b
 Defaults timestamp_timeout=15
 Defaults lecture=always
 Defaults logfile="/var/log/sudo.log"
+
+# Allow automation user to run sudo without TTY (required for Ansible)
+# If you want to restrict this, uncomment and set specific user:
+# Defaults:${current_user} !requiretty
 EOF
 
     chmod 440 /etc/sudoers.d/hardening
+
+    # Validate sudoers configuration
+    if ! visudo -c -f /etc/sudoers.d/hardening >/dev/null 2>&1; then
+        log "ERROR" "Sudoers configuration validation failed!"
+        rm -f /etc/sudoers.d/hardening
+        restore_file /etc/sudoers
+        return 1
+    fi
+
     show_success "Sudo configured"
 }
 

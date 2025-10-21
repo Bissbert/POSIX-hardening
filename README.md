@@ -322,6 +322,16 @@ cat /var/lib/hardening/current_state
 - Check logs for specific error
 - Run with VERBOSE=1 for detailed output
 
+### Ansible "sorry, you must have a tty to run sudo"
+This error occurs when sudo's `requiretty` is enabled but Ansible runs non-interactively.
+
+**Solution**: The toolkit automatically sets `Defaults !requiretty` in `/etc/sudoers.d/hardening` to support Ansible and other automation tools.
+
+If you need `requiretty` for additional security:
+1. Edit `/etc/sudoers.d/hardening`
+2. Uncomment and customize: `Defaults:<your_ansible_user> !requiretty`
+3. This exempts only your automation user while enforcing TTY for others
+
 ## Security Features Implemented
 
 ### SSH Hardening
