@@ -86,7 +86,7 @@
   ansible.builtin.lineinfile:
     path: "{{ posix_ssh_config_file }}"
     regexp: '^#?PasswordAuthentication\s+'
-    line: "PasswordAuthentication {{ posix_ssh_password_authentication }}"
+    line: "PasswordAuthentication {{ posix_ssh_password_authentication | bool | ternary('yes', 'no') }}"
     state: present
     validate: '/usr/sbin/sshd -t -f %s'
   notify:
@@ -98,7 +98,7 @@
   ansible.builtin.lineinfile:
     path: "{{ posix_ssh_config_file }}"
     regexp: '^#?PubkeyAuthentication\s+'
-    line: "PubkeyAuthentication {{ posix_ssh_pubkey_authentication }}"
+    line: "PubkeyAuthentication {{ posix_ssh_pubkey_authentication | bool | ternary('yes', 'no') }}"
     state: present
     validate: '/usr/sbin/sshd -t -f %s'
   notify: reload sshd

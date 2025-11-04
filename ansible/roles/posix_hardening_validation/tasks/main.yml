@@ -124,7 +124,7 @@
 - name: Validate admin_ip format (basic IP check)
   assert:
     that:
-      - admin_ip | regex_search('^[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}$')
+      - admin_ip | regex_search('^[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}$') is not none
     fail_msg: "ERROR: admin_ip has invalid format: {{ admin_ip }}"
     success_msg: "admin_ip format valid"
   tags: [validation, variable_check]
