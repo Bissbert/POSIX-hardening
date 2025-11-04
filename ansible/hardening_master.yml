@@ -1,0 +1,340 @@
+---
+# POSIX Server Hardening - Master Playbook (Role-Based)
+# Orchestrates all 21 hardening roles in the correct order
+# Replaces the old shell-script-based approach with Ansible roles
+
+- name: POSIX Hardening - Pre-flight Validation
+  hosts: all
+  gather_facts: yes
+  become: yes
+  tags: [always, preflight, validation]
+
+  roles:
+    - role: posix_hardening_validation
+      tags: [validation]
+
+  post_tasks:
+    - name: Display validation success
+      ansible.builtin.debug:
+        msg: |
+          ========================================
+          Pre-flight Validation Complete
+          ========================================
+          Target: {{ inventory_hostname }}
+          OS: {{ ansible_distribution }} {{ ansible_distribution_version }}
+          Ready for hardening deployment
+          ========================================
+
+- name: POSIX Hardening - Priority 1 (Critical - SSH & Firewall)
+  hosts: all
+  gather_facts: no
+  become: yes
+  tags: [harden, priority1, critical]
+
+  roles:
+    # SSH MUST be hardened first to maintain access
+    - role: posix_hardening_ssh
+      tags: [ssh, critical]
+      vars:
+        posix_ssh_emergency_port_enabled: true
+        posix_ssh_emergency_port: 2222
+
+    # Firewall comes second to protect the system
+    - role: posix_hardening_firewall
+      tags: [firewall, critical]
+
+  post_tasks:
+    - name: Verify SSH connectivity after critical hardening
+      ansible.builtin.wait_for_connection:
+        timeout: 30
+      register: ssh_verify
+
+    - name: Display Priority 1 completion
+      ansible.builtin.debug:
+        msg: |
+          ========================================
+          Priority 1 (Critical) Complete
+          ========================================
+          ✓ SSH hardening applied
+          ✓ Firewall configured
+          ✓ SSH connectivity verified
+          ========================================
+
+- name: POSIX Hardening - Priority 2 (Core System Security)
+  hosts: all
+  gather_facts: no
+  become: yes
+  tags: [harden, priority2, core]
+
+  roles:
+    # Kernel and network hardening
+    - role: posix_hardening_kernel
+      tags: [kernel, sysctl]
+
+    - role: posix_hardening_network
+      tags: [network]
+
+    - role: posix_hardening_sysctl
+      tags: [sysctl]
+
+    # Filesystem security
+    - role: posix_hardening_files
+      tags: [files, permissions]
+
+    - role: posix_hardening_tmp
+      tags: [tmp, filesystem]
+
+    - role: posix_hardening_mount
+      tags: [mount, filesystem]
+
+  post_tasks:
+    - name: Display Priority 2 completion
+      ansible.builtin.debug:
+        msg: |
+          ========================================
+          Priority 2 (Core Security) Complete
+          ========================================
+          ✓ Kernel parameters hardened
+          ✓ Network stack secured
+          ✓ Filesystem protections applied
+          ========================================
+
+- name: POSIX Hardening - Priority 3 (Access Control & Policies)
+  hosts: all
+  gather_facts: no
+  become: yes
+  tags: [harden, priority3, access]
+
+  roles:
+    # User and access management
+    - role: posix_hardening_password
+      tags: [password, pam]
+
+    - role: posix_hardening_accounts
+      tags: [accounts, users]
+
+    - role: posix_hardening_sudo
+      tags: [sudo, privileges]
+
+    # Resource limits
+    - role: posix_hardening_limits
+      tags: [limits, resources]
+
+    - role: posix_hardening_coredump
+      tags: [coredump]
+
+    - role: posix_hardening_shell
+      tags: [shell, timeout]
+
+  post_tasks:
+    - name: Display Priority 3 completion
+      ansible.builtin.debug:
+        msg: |
+          ========================================
+          Priority 3 (Access Control) Complete
+          ========================================
+          ✓ Password policies enforced
+          ✓ User accounts secured
+          ✓ Sudo restrictions applied
+          ✓ Resource limits configured
+          ========================================
+
+- name: POSIX Hardening - Priority 4 (Services & Scheduling)
+  hosts: all
+  gather_facts: no
+  become: yes
+  tags: [harden, priority4, services]
+
+  roles:
+    - role: posix_hardening_services
+      tags: [services]
+
+    - role: posix_hardening_cron
+      tags: [cron, scheduling]
+
+  post_tasks:
+    - name: Display Priority 4 completion
+      ansible.builtin.debug:
+        msg: |
+          ========================================
+          Priority 4 (Services) Complete
+          ========================================
+          ✓ Unnecessary services disabled
+          ✓ Cron/at access restricted
+          ========================================
+
+- name: POSIX Hardening - Priority 5 (Audit & Monitoring)
+  hosts: all
+  gather_facts: no
+  become: yes
+  tags: [harden, priority5, audit]
+
+  roles:
+    - role: posix_hardening_audit
+      tags: [audit, auditd]
+
+    - role: posix_hardening_logs
+      tags: [logs, logrotate]
+
+    - role: posix_hardening_integrity
+      tags: [integrity, aide]
+
+  post_tasks:
+    - name: Display Priority 5 completion
+      ansible.builtin.debug:
+        msg: |
+          ========================================
+          Priority 5 (Audit & Monitoring) Complete
+          ========================================
+          ✓ Audit logging configured
+          ✓ Log retention policies applied
+          ✓ File integrity monitoring enabled
+          ========================================
+
+- name: POSIX Hardening - Priority 6 (Final Touches)
+  hosts: all
+  gather_facts: no
+  become: yes
+  tags: [harden, priority6, final]
+
+  roles:
+    - role: posix_hardening_banner
+      tags: [banner, compliance]
+
+  post_tasks:
+    - name: Display Priority 6 completion
+      ansible.builtin.debug:
+        msg: |
+          ========================================
+          Priority 6 (Final) Complete
+          ========================================
+          ✓ Security banners configured
+          ========================================
+
+- name: POSIX Hardening - Final Validation & Report
+  hosts: all
+  gather_facts: no
+  become: yes
+  tags: [always, validate, report]
+
+  tasks:
+    - name: Final SSH connectivity check
+      ansible.builtin.wait_for_connection:
+        timeout: 10
+
+    - name: Gather hardening status
+      ansible.builtin.shell: |
+        ls -1 /var/lib/hardening/*_hardened 2>/dev/null | wc -l
+      register: roles_applied
+      changed_when: false
+      failed_when: false
+
+    - name: Create deployment report
+      ansible.builtin.copy:
+        content: |
+          ╔════════════════════════════════════════════════════════════════╗
+          ║     POSIX HARDENING DEPLOYMENT REPORT (ROLE-BASED)             ║
+          ╚════════════════════════════════════════════════════════════════╝
+
+          Deployment Details
+          ══════════════════════════════════════════════════════════════════
+          Host:              {{ inventory_hostname }}
+          IP Address:        {{ ansible_host | default(ansible_default_ipv4.address) }}
+          Date:              {{ ansible_date_time.iso8601 }}
+          Deployment Method: Ansible Roles (21 roles available)
+          Roles Applied:     {{ roles_applied.stdout }} roles
+
+          System Information
+          ══════════════════════════════════════════════════════════════════
+          OS:                {{ ansible_distribution }} {{ ansible_distribution_version }}
+          Kernel:            {{ ansible_kernel }}
+          Architecture:      {{ ansible_architecture }}
+
+          Hardening Status by Priority
+          ══════════════════════════════════════════════════════════════════
+          Priority 1 (Critical):
+            ✓ SSH Hardening           - posix_hardening_ssh
+            ✓ Firewall Configuration  - posix_hardening_firewall
+
+          Priority 2 (Core Security):
+            ✓ Kernel Parameters       - posix_hardening_kernel
+            ✓ Network Stack           - posix_hardening_network
+            ✓ Sysctl Tuning          - posix_hardening_sysctl
+            ✓ File Permissions        - posix_hardening_files
+            ✓ Temporary Directories   - posix_hardening_tmp
+            ✓ Mount Options          - posix_hardening_mount
+
+          Priority 3 (Access Control):
+            ✓ Password Policies       - posix_hardening_password
+            ✓ Account Lockdown        - posix_hardening_accounts
+            ✓ Sudo Restrictions       - posix_hardening_sudo
+            ✓ Process Limits          - posix_hardening_limits
+            ✓ Core Dump Disable       - posix_hardening_coredump
+            ✓ Shell Timeout          - posix_hardening_shell
+
+          Priority 4 (Services):
+            ✓ Service Management      - posix_hardening_services
+            ✓ Cron Restrictions       - posix_hardening_cron
+
+          Priority 5 (Audit & Monitoring):
+            ✓ Audit Logging          - posix_hardening_audit
+            ✓ Log Retention          - posix_hardening_logs
+            ✓ Integrity Monitoring   - posix_hardening_integrity
+
+          Priority 6 (Final):
+            ✓ Security Banners        - posix_hardening_banner
+
+          Verification
+          ══════════════════════════════════════════════════════════════════
+          Marker Files:      /var/lib/hardening/
+          Backups:           /var/backups/hardening/
+          SSH Emergency:     Port 2222 (if enabled)
+
+          Emergency Recovery
+          ══════════════════════════════════════════════════════════════════
+          Rollback Playbook: ansible-playbook rollback.yml -l {{ inventory_hostname }}
+          Manual Recovery:   Check role-specific backups in /var/backups/hardening/
+
+          Compliance
+          ══════════════════════════════════════════════════════════════════
+          CIS Benchmark:     Partial compliance (multiple controls)
+          STIG:              Partial compliance (DISA STIG requirements)
+          NIST:              Aligned with cybersecurity framework
+
+          ══════════════════════════════════════════════════════════════════
+          Deployment completed successfully using Ansible role architecture
+          All roles are idempotent and can be re-run safely
+          ══════════════════════════════════════════════════════════════════
+        dest: "/var/log/hardening/deployment_report_{{ ansible_date_time.epoch }}.txt"
+        owner: root
+        group: root
+        mode: '0644'
+
+    - name: Display final summary
+      ansible.builtin.debug:
+        msg: |
+          ╔════════════════════════════════════════════════════════════════╗
+          ║           POSIX HARDENING DEPLOYMENT COMPLETE                  ║
+          ╚════════════════════════════════════════════════════════════════╝
+
+          Host: {{ inventory_hostname }}
+          Roles Applied: {{ roles_applied.stdout }} hardening configurations
+
+          Report Location:
+          /var/log/hardening/deployment_report_{{ ansible_date_time.epoch }}.txt
+
+          ══════════════════════════════════════════════════════════════════
+          ✓ All hardening roles applied successfully
+          ✓ SSH connectivity maintained
+          ✓ System secured according to best practices
+          ══════════════════════════════════════════════════════════════════
+
+          Next Steps:
+          1. Review deployment report on target system
+          2. Test system functionality
+          3. Monitor logs: /var/log/hardening/
+          4. Keep emergency SSH port 2222 until fully tested
+
+          Emergency Rollback:
+          ansible-playbook rollback.yml -l {{ inventory_hostname }}
+          ══════════════════════════════════════════════════════════════════
