@@ -2,7 +2,7 @@
 
 A comprehensive, safety-first server hardening toolkit written in pure POSIX shell for maximum compatibility with Debian-based systems accessed remotely via SSH.
 
-## 📚 Documentation
+## Documentation
 
 - **[Complete Documentation](docs/README.md)** - Full documentation index
 - **[Script Documentation](docs/SCRIPTS.md)** - Detailed documentation for all 21 hardening scripts (including SSH package verification)
@@ -42,9 +42,10 @@ A comprehensive, safety-first server hardening toolkit written in pure POSIX she
    - Automatic rollback on script failure
    - Checkpoint system for partial rollbacks
 
-## 🚀 Quick Start
+## Quick Start
 
-For detailed instructions, see the [Implementation Guide](docs/guides/IMPLEMENTATION_GUIDE.md).
+For detailed instructions, see the
+[Implementation Guide](docs/guides/IMPLEMENTATION_GUIDE.md).
 
 ### Prerequisites
 
@@ -53,13 +54,14 @@ For detailed instructions, see the [Implementation Guide](docs/guides/IMPLEMENTA
 - **SSH key authentication configured (REQUIRED for automated deployment)**
 - At least 100MB free space for backups
 
-### SSH Key Management (Important!)
+### SSH Key Management (Important)
 
-After SSH hardening, password authentication will be disabled. To prevent lockout:
+After SSH hardening, password authentication will be disabled. To prevent
+lockout:
 
 **Option 1: For Ansible Deployment (Recommended)**
 
-```sh
+```bash
 # Generate centralized SSH keys for team access
 cd ansible/team_keys
 ./generate_keys.sh
@@ -81,7 +83,7 @@ ssh root@server-hostname  # Works automatically, no -i flag needed!
 
 **Option 2: Manual SSH Key Setup**
 
-```sh
+```bash
 # On your local machine, generate an SSH key if you don't have one
 ssh-keygen -t ed25519 -C "your-email@example.com"
 
@@ -94,11 +96,12 @@ ssh -i ~/.ssh/id_ed25519 root@your-server
 # ONLY THEN proceed with hardening
 ```
 
-**Emergency Access**: Port 2222 provides emergency SSH access with password authentication if you get locked out.
+**Emergency Access**: Port 2222 provides emergency SSH access with password
+authentication if you get locked out.
 
 ### Interactive Setup (Recommended)
 
-```sh
+```bash
 # Run the interactive quick-start script
 sudo sh quick-start.sh
 ```
@@ -106,7 +109,8 @@ sudo sh quick-start.sh
 ### Manual Setup
 
 1. **Configure your settings**:
-```sh
+
+```bash
 # Edit config/defaults.conf
 vi config/defaults.conf
 
@@ -117,13 +121,15 @@ vi config/defaults.conf
 ```
 
 2. **Test in dry-run mode**:
-```sh
+
+```bash
 # Test without making changes
 DRY_RUN=1 sudo sh scripts/01-ssh-hardening.sh
 ```
 
 3. **Run individual scripts**:
-```sh
+
+```bash
 # Run SSH hardening (most critical)
 sudo sh scripts/01-ssh-hardening.sh
 
@@ -135,14 +141,15 @@ sudo sh scripts/03-kernel-params.sh
 ```
 
 4. **Run with orchestrator** (when available):
-```sh
+
+```bash
 # Run all hardening scripts in safe order
 sudo sh orchestrator.sh
 ```
 
 ## Directory Structure
 
-```
+```text
 /POSIX-hardening/
 ├── lib/                    # Core safety libraries
 │   ├── common.sh          # Logging, validation, utilities
@@ -161,21 +168,28 @@ sudo sh orchestrator.sh
 └── tests/                # Validation tests
 ```
 
-## 📋 Script Overview
+## Script Overview
 
-See [Script Documentation](docs/SCRIPTS.md) for detailed information about each script.
+See [Script Documentation](docs/SCRIPTS.md) for detailed information about
+each script.
 
 ### Critical Priority (Run First)
-1. **[01-ssh-hardening.sh](docs/SCRIPTS.md#01-ssh-hardening)** - SSH configuration (preserves access)
-2. **[02-firewall-setup.sh](docs/SCRIPTS.md#02-firewall-setup)** - Firewall rules (with SSH protection)
+
+1. **[01-ssh-hardening.sh](docs/SCRIPTS.md#01-ssh-hardening)** - SSH
+   configuration (preserves access)
+2. **[02-firewall-setup.sh](docs/SCRIPTS.md#02-firewall-setup)** - Firewall
+   rules (with SSH protection)
 
 ### High Priority
+
 3-5. Core system hardening (kernel, network, permissions)
 
 ### Standard Priority
+
 6-15. Service hardening and access controls
 
 ### Additional Security
+
 16-20. Optional hardening measures
 
 Full script listing and details in [SCRIPTS.md](docs/SCRIPTS.md).
@@ -195,9 +209,10 @@ Key settings in `config/defaults.conf`:
 
 ### Advanced Firewall Configuration (`config/firewall.conf`)
 
-For full control over iptables firewall rules, create a custom firewall configuration:
+For full control over iptables firewall rules, create a custom firewall
+configuration:
 
-```sh
+```bash
 # Copy the example configuration
 cp config/firewall.conf.example config/firewall.conf
 
@@ -206,6 +221,7 @@ vi config/firewall.conf
 ```
 
 Customize all firewall settings:
+
 - SSH brute-force protection thresholds
 - ICMP (ping) rules and rate limits
 - Firewall logging settings
@@ -214,7 +230,8 @@ Customize all firewall settings:
 - Custom iptables rules
 
 Example custom firewall rules:
-```sh
+
+```bash
 # In config/firewall.conf
 CUSTOM_RULES_IPV4="
 -A INPUT -p tcp --dport 8080 -j ACCEPT
@@ -222,25 +239,29 @@ CUSTOM_RULES_IPV4="
 "
 ```
 
-See `config/firewall.conf.example` for complete documentation and preset configurations (web server, database server, etc.).
+See `config/firewall.conf.example` for complete documentation and preset
+configurations (web server, database server, etc.).
 
 ## Emergency Recovery
 
-### If SSH access is lost:
+### If SSH access is lost
 
 1. **Wait 60 seconds** - Automatic rollback will trigger
 2. **Use emergency SSH port** (if enabled):
-   ```sh
+
+   ```bash
    ssh -p 2222 user@server
    ```
+
 3. **From console access**:
-   ```sh
+
+   ```bash
    sh emergency-rollback.sh
    ```
 
-### Restore from backup:
+### Restore from backup
 
-```sh
+```bash
 # List available snapshots
 ls -la /var/backups/hardening/snapshots/
 
@@ -248,9 +269,9 @@ ls -la /var/backups/hardening/snapshots/
 sh lib/backup.sh restore_system_snapshot 20240101-120000
 ```
 
-### Manual rollback:
+### Manual rollback
 
-```sh
+```bash
 # View rollback history
 cat /var/log/hardening/rollback.log
 
@@ -262,24 +283,28 @@ systemctl reload ssh
 ## Testing
 
 ### Dry Run Mode
-```sh
+
+```bash
 DRY_RUN=1 sudo sh scripts/01-ssh-hardening.sh
 ```
 
 ### Verbose Mode
-```sh
+
+```bash
 VERBOSE=1 sudo sh scripts/01-ssh-hardening.sh
 ```
 
 ### Test Mode (Extra Safety)
-```sh
+
+```bash
 TEST_MODE=1 VERBOSE=1 sudo sh scripts/01-ssh-hardening.sh
 ```
 
 ## Monitoring
 
-### Check logs:
-```sh
+### Check logs
+
+```bash
 # View latest hardening log
 tail -f /var/log/hardening/hardening-*.log
 
@@ -287,8 +312,9 @@ tail -f /var/log/hardening/hardening-*.log
 cat /var/log/hardening/rollback.log
 ```
 
-### Verify hardening status:
-```sh
+### Verify hardening status
+
+```bash
 # Check completed scripts
 cat /var/lib/hardening/completed
 
@@ -309,26 +335,33 @@ cat /var/lib/hardening/current_state
 ## Troubleshooting
 
 ### SSH Connection Issues
+
 - Script automatically rolls back after 60 seconds
 - Emergency SSH runs on port 2222 (if enabled)
 - Check `/var/log/hardening/` for detailed logs
 
 ### Firewall Blocks Access
+
 - Rules auto-reset after 5 minutes
 - SSH is explicitly allowed before DROP rules
 - Admin IP gets priority access
 
 ### Script Fails
+
 - Automatic rollback restores previous state
 - Check logs for specific error
 - Run with VERBOSE=1 for detailed output
 
 ### Ansible "sorry, you must have a tty to run sudo"
-This error occurs when sudo's `requiretty` is enabled but Ansible runs non-interactively.
 
-**Solution**: The toolkit automatically sets `Defaults !requiretty` in `/etc/sudoers.d/hardening` to support Ansible and other automation tools.
+This error occurs when sudo's `requiretty` is enabled but Ansible runs
+non-interactively.
+
+**Solution**: The toolkit automatically sets `Defaults !requiretty` in
+`/etc/sudoers.d/hardening` to support Ansible and other automation tools.
 
 If you need `requiretty` for additional security:
+
 1. Edit `/etc/sudoers.d/hardening`
 2. Uncomment and customize: `Defaults:<your_ansible_user> !requiretty`
 3. This exempts only your automation user while enforcing TTY for others
@@ -336,6 +369,7 @@ If you need `requiretty` for additional security:
 ## Security Features Implemented
 
 ### SSH Hardening
+
 - Disables root login
 - Disables password authentication
 - Enforces key-based authentication
@@ -344,33 +378,43 @@ If you need `requiretty` for additional security:
 - Configures timeouts
 
 ### Firewall Rules
+
 - Default deny with explicit allows
 - Rate limiting on connections
 - SSH brute-force protection
 - Stateful connection tracking
 
 ### Kernel Security
+
 - Enables SYN cookies
 - Disables IP forwarding
 - Prevents IP spoofing
 - Disables ICMP redirects
 
 ### File Permissions
+
 - Secures sensitive files
 - Sets appropriate umask
 - Restricts world-writable directories
 
-## ✨ Recent Improvements (v1.1.0)
+## Recent Improvements (v1.1.0)
 
-### 🔧 Full POSIX Compliance
-- **Removed all bash-isms**: All library files now use only POSIX sh constructs
-- **Eliminated `local` keyword**: 100+ instances replaced with function-scoped variables
-- **GNU/BSD command replacements**: Created `lib/posix_compat.sh` with portable alternatives
-- **Multi-shell tested**: Verified compatibility with dash, ash, BusyBox, and sh
+### Full POSIX Compliance
 
-**Impact**: Scripts now work on minimal Linux environments (Alpine, embedded systems, containers) without bash dependency.
+- **Removed all bash-isms**: All library files now use only POSIX sh
+  constructs
+- **Eliminated `local` keyword**: 100+ instances replaced with
+  function-scoped variables
+- **GNU/BSD command replacements**: Created `lib/posix_compat.sh` with
+  portable alternatives
+- **Multi-shell tested**: Verified compatibility with dash, ash, BusyBox,
+  and sh
 
-### 🤖 CI/CD & Automation
+**Impact**: Scripts now work on minimal Linux environments (Alpine, embedded
+systems, containers) without bash dependency.
+
+### CI/CD & Automation
+
 - **GitHub Actions workflows**: Automated testing for every commit
   - ShellCheck for code quality
   - checkbashisms for POSIX compliance
@@ -378,39 +422,59 @@ If you need `requiretty` for additional security:
   - Security scanning (Gitleaks, TruffleHog, CodeQL)
 - **Multi-shell testing**: Automatic validation on dash, bash, and BusyBox
 - **Pull request templates**: Comprehensive checklists for contributions
-- **Issue templates**: Structured bug reports, feature requests, and security vulnerabilities
+- **Issue templates**: Structured bug reports, feature requests, and security
+  vulnerabilities
 
-### 📚 Enhanced Documentation
-- **[Architecture Overview](docs/architecture/overview.md)** - Complete system design with diagrams
-- **[Configuration Reference](docs/reference/configuration.md)** - All 70+ variables documented
-- **[Troubleshooting Guide](docs/user-guide/troubleshooting.md)** - Common issues and solutions
-- **[Ansible Review](docs/ANSIBLE_REVIEW_AND_RECOMMENDATIONS.md)** - Comprehensive assessment and migration plan
-- **[Security Policy](SECURITY.md)** - Vulnerability reporting and response process
+### Enhanced Documentation
 
-### ⚙️ Configuration Management
-- **Configuration template**: `config/defaults.conf.template` with all variables documented
+- **[Architecture Overview](docs/architecture/overview.md)** - Complete
+  system design with diagrams
+- **[Configuration Reference](docs/reference/configuration.md)** - All 70+
+  variables documented
+- **[Troubleshooting Guide](docs/user-guide/troubleshooting.md)** - Common
+  issues and solutions
+- **[Ansible Review](docs/ANSIBLE_REVIEW_AND_RECOMMENDATIONS.md)** -
+  Comprehensive assessment and migration plan
+- **[Security Policy](SECURITY.md)** - Vulnerability reporting and response
+  process
+
+### Configuration Management
+
+- **Configuration template**: `config/defaults.conf.template` with all
+  variables documented
 - **Enhanced Ansible template**: Synchronized with all group_vars
 - **Better organization**: Clear precedence and override mechanisms
 
-### 🔒 Security Enhancements
-- **Security policy**: Defined vulnerability reporting process via GitHub Security Advisories
-- **Automated security scanning**: Continuous secret detection and vulnerability analysis
-- **Improved .gitignore**: Prevents accidental commit of generated files and secrets
+### Security Enhancements
 
-**Upgrade Note**: All changes are backward compatible. Existing configurations continue to work without modification.
+- **Security policy**: Defined vulnerability reporting process via GitHub
+  Security Advisories
+- **Automated security scanning**: Continuous secret detection and
+  vulnerability analysis
+- **Improved .gitignore**: Prevents accidental commit of generated files and
+  secrets
 
-## 📖 Additional Resources
+**Upgrade Note**: All changes are backward compatible. Existing
+configurations continue to work without modification.
 
-- **[Testing Framework](docs/guides/TESTING_FRAMEWORK.md)** - Comprehensive testing procedures
-- **[Hardening Requirements](docs/guides/HARDENING_REQUIREMENTS.md)** - Security standards and compliance
-- **[Quick Reference](docs/guides/QUICK_REFERENCE.md)** - Command reference and cheat sheet
-- **[Contributing](docs/development/CONTRIBUTING.md)** - How to contribute to the project
+## Additional Resources
+
+- **[Testing Framework](docs/guides/TESTING_FRAMEWORK.md)** - Comprehensive
+  testing procedures
+- **[Hardening Requirements](docs/guides/HARDENING_REQUIREMENTS.md)** -
+  Security standards and compliance
+- **[Quick Reference](docs/guides/QUICK_REFERENCE.md)** - Command reference
+  and cheat sheet
+- **[Contributing](docs/development/CONTRIBUTING.md)** - How to contribute to
+  the project
 
 ## Support
 
 For issues or questions:
+
 1. Check the **[Documentation Index](docs/README.md)**
-2. Review **[Script Documentation](docs/SCRIPTS.md)** for script-specific help
+2. Review **[Script Documentation](docs/SCRIPTS.md)** for script-specific
+   help
 3. Check logs in `/var/log/hardening/`
 4. Test with DRY_RUN=1 first
 
@@ -420,9 +484,11 @@ MIT License - See [LICENSE](LICENSE) file for details.
 
 ## Version
 
-Current Version: **1.1.0** - See [Changelog](docs/releases/CHANGELOG.md) for release history.
+Current Version: **1.1.0** - See [Changelog](docs/releases/CHANGELOG.md) for
+release history.
 
 **v1.1.0 Highlights:**
+
 - 100% POSIX sh compliance (no bash required)
 - Comprehensive documentation (architecture, configuration, troubleshooting)
 - Automated CI/CD with GitHub Actions

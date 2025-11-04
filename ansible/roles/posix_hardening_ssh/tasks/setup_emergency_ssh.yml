@@ -118,14 +118,14 @@
       sleep 1
     fi
   when: emergency_ssh_pid.stat.exists
-  changed_when: true
+  changed_when: emergency_ssh_pid.stat.exists
   tags: [ssh, emergency, service]
 
 - name: Start emergency SSH daemon
   ansible.builtin.shell: |
     /usr/sbin/sshd -f {{ posix_ssh_emergency_config_file }}
   register: emergency_ssh_start
-  changed_when: true
+  changed_when: emergency_config_created.changed or not emergency_ssh_pid.stat.exists
   tags: [ssh, emergency, service]
 
 - name: Wait for emergency SSH to start
@@ -214,10 +214,10 @@
       Emergency SSH Active
       Port: {{ posix_ssh_emergency_port }}
       PID: {{ (lookup('file', posix_ssh_emergency_pid_file, errors='ignore')) | default('unknown') }}
-      Started: {{ ansible_date_time.iso8601 }}
       Config: {{ posix_ssh_emergency_config_file }}
     dest: /var/lib/hardening/emergency_ssh_active
     mode: '0600'
+  changed_when: emergency_config_created.changed
   tags: [ssh, emergency, state]
 
 # ------------------------------------------------------------------------------

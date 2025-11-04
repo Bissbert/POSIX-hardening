@@ -189,7 +189,6 @@
     content: |
       SSH Hardening Completed
       ========================================
-      Date: {{ ansible_date_time.iso8601 }}
       Hostname: {{ ansible_hostname }}
       SSH Port: {{ posix_ssh_port }}
       AllowUsers: {{ posix_ssh_allow_users | join(', ') }}
@@ -229,6 +228,7 @@
     line: "{{ ansible_date_time.iso8601 }} - SSH hardening completed successfully on {{ ansible_hostname }}"
     create: true
     mode: '0600'
+  changed_when: false
   tags: [ssh, validation, logging]
 
 # ------------------------------------------------------------------------------

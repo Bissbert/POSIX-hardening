@@ -104,10 +104,10 @@
       tags: [ansible_user]
 
     - name: Create ansible user if it doesn't exist
-      user:
+      ansible.builtin.user:
         name: ansible
         comment: "Ansible automation user"
-        ansible.builtin.shell: /bin/bash
+        shell: /bin/bash
         create_home: true
         state: present
       when: ansible_user_check.failed

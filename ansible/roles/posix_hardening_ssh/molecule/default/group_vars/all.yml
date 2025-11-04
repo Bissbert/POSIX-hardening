@@ -41,3 +41,4 @@ posix_ssh_client_alive_count_max: 2
 skip_package_validation: false
 skip_disk_validation: true  # Containers may have limited disk
 skip_network_validation: false
+posix_validation_check_ssh_keys: false  # Skip SSH key check in test environment

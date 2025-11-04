@@ -22,6 +22,12 @@
 # BACKUP CURRENT CONFIGURATION
 # ------------------------------------------------------------------------------
 
+- name: Check if SSH hardening has been run before
+  ansible.builtin.stat:
+    path: "{{ posix_ssh_hardening_marker }}"
+  register: ssh_hardening_done
+  tags: [ssh, harden, backup]
+
 - name: Create timestamped backup of sshd_config
   ansible.builtin.copy:
     src: "{{ posix_ssh_config_file }}"
@@ -30,7 +36,9 @@
     mode: "{{ posix_ssh_config_mode }}"
     owner: root
     group: root
-  when: posix_ssh_backup_config | bool
+  when:
+    - posix_ssh_backup_config | bool
+    - not ssh_hardening_done.stat.exists
   register: ssh_config_backup
   tags: [ssh, harden, backup]
 
