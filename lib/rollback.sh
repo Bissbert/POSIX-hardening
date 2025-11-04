@@ -25,8 +25,8 @@ ROLLBACK_PID=""
 
 # Start a new transaction
 begin_transaction() {
-    local transaction_name="${1:-unnamed}"
-    CURRENT_TRANSACTION="$(date +%Y%m%d-%H%M%S)-$$-$transaction_name"
+    _transaction_name="${1:-unnamed}"
+    CURRENT_TRANSACTION="$(date +%Y%m%d-%H%M%S)-$$-$_transaction_name"
 
     # Clear previous rollback stack
     > "$ROLLBACK_STACK"
@@ -34,12 +34,13 @@ begin_transaction() {
     # Record transaction start
     echo "$CURRENT_TRANSACTION" > "$TRANSACTION_ID_FILE"
 
-    log "INFO" "Started transaction: $CURRENT_TRANSACTION ($transaction_name)"
-    echo "$(date)|BEGIN|$CURRENT_TRANSACTION|$transaction_name" >> "$ROLLBACK_LOG"
+    log "INFO" "Started transaction: $CURRENT_TRANSACTION ($_transaction_name)"
+    echo "$(date)|BEGIN|$CURRENT_TRANSACTION|$_transaction_name" >> "$ROLLBACK_LOG"
 
     # Set up exit trap for automatic rollback
     trap 'transaction_cleanup' EXIT INT TERM
 
+    unset _transaction_name
     return 0
 }
 
@@ -68,27 +69,29 @@ commit_transaction() {
 
 # Rollback current transaction
 rollback_transaction() {
-    local reason="${1:-manual rollback}"
+    _reason="${1:-manual rollback}"
 
     if [ -z "$CURRENT_TRANSACTION" ] && [ ! -f "$ROLLBACK_STACK" ]; then
         log "WARN" "No active transaction to rollback"
+        unset _reason
         return 1
     fi
 
-    log "WARN" "Rolling back transaction: $CURRENT_TRANSACTION (reason: $reason)"
-    echo "$(date)|ROLLBACK|$CURRENT_TRANSACTION|$reason" >> "$ROLLBACK_LOG"
+    log "WARN" "Rolling back transaction: $CURRENT_TRANSACTION (reason: $_reason)"
+    echo "$(date)|ROLLBACK|$CURRENT_TRANSACTION|$_reason" >> "$ROLLBACK_LOG"
 
     # Execute rollback actions in reverse order
     if [ -f "$ROLLBACK_STACK" ] && [ -s "$ROLLBACK_STACK" ]; then
-        local temp_stack="${ROLLBACK_STACK}.processing"
-        mv "$ROLLBACK_STACK" "$temp_stack"
+        _temp_stack="${ROLLBACK_STACK}.processing"
+        mv "$ROLLBACK_STACK" "$_temp_stack"
 
         # Read stack in reverse order
-        posix_reverse "$temp_stack" | while IFS='|' read -r action_type action_data; do
+        posix_reverse "$_temp_stack" | while IFS='|' read -r action_type action_data; do
             execute_rollback_action "$action_type" "$action_data"
         done
 
-        rm -f "$temp_stack"
+        rm -f "$_temp_stack"
+        unset _temp_stack
     fi
 
     # Clear transaction state
@@ -97,21 +100,24 @@ rollback_transaction() {
     CURRENT_TRANSACTION=""
 
     log "INFO" "Rollback completed"
+    unset _reason
     return 0
 }
 
 # Transaction cleanup (called on exit)
 transaction_cleanup() {
-    local exit_code=$?
+    _exit_code=$?
 
     if [ -n "$CURRENT_TRANSACTION" ]; then
-        if [ $exit_code -ne 0 ] && [ "$ROLLBACK_ENABLED" = "1" ]; then
-            log "ERROR" "Transaction failed with exit code $exit_code - initiating rollback"
-            rollback_transaction "exit_code_$exit_code"
-        elif [ $exit_code -eq 0 ]; then
+        if [ $_exit_code -ne 0 ] && [ "$ROLLBACK_ENABLED" = "1" ]; then
+            log "ERROR" "Transaction failed with exit code $_exit_code - initiating rollback"
+            rollback_transaction "exit_code_$_exit_code"
+        elif [ $_exit_code -eq 0 ]; then
             commit_transaction
         fi
     fi
+
+    unset _exit_code
 }
 
 # ============================================================================
@@ -120,56 +126,78 @@ transaction_cleanup() {
 
 # Register a rollback action
 register_rollback() {
-    local action_type="$1"
-    local action_data="$2"
+    _action_type="$1"
+    _action_data="$2"
 
-    if [ -z "$action_type" ] || [ -z "$action_data" ]; then
-        log "ERROR" "Invalid rollback registration: type=$action_type data=$action_data"
+    if [ -z "$_action_type" ] || [ -z "$_action_data" ]; then
+        log "ERROR" "Invalid rollback registration: type=$_action_type data=$_action_data"
+        unset _action_type _action_data
         return 1
     fi
 
-    echo "${action_type}|${action_data}" >> "$ROLLBACK_STACK"
-    log "DEBUG" "Registered rollback: $action_type - $action_data"
+    echo "${_action_type}|${_action_data}" >> "$ROLLBACK_STACK"
+    log "DEBUG" "Registered rollback: $_action_type - $_action_data"
 
+    unset _action_type _action_data
     return 0
 }
 
 # Register file restore action
 register_file_rollback() {
-    local original_file="$1"
-    local backup_file="$2"
+    _original_file="$1"
+    _backup_file="$2"
 
-    register_rollback "FILE_RESTORE" "${backup_file}:${original_file}"
+    register_rollback "FILE_RESTORE" "${_backup_file}:${_original_file}"
+    _result=$?
+
+    unset _original_file _backup_file
+    return $_result
 }
 
 # Register command rollback action
 register_command_rollback() {
-    local rollback_command="$1"
+    _rollback_command="$1"
 
-    register_rollback "COMMAND" "$rollback_command"
+    register_rollback "COMMAND" "$_rollback_command"
+    _result=$?
+
+    unset _rollback_command
+    return $_result
 }
 
 # Register service rollback action
 register_service_rollback() {
-    local service_name="$1"
-    local action="$2"  # start, stop, restart, reload
+    _service_name="$1"
+    _action="$2"  # start, stop, restart, reload
 
-    register_rollback "SERVICE" "${service_name}:${action}"
+    register_rollback "SERVICE" "${_service_name}:${_action}"
+    _result=$?
+
+    unset _service_name _action
+    return $_result
 }
 
 # Register firewall rule rollback
 register_firewall_rollback() {
-    local rule="$1"
+    _rule="$1"
 
-    register_rollback "FIREWALL" "$rule"
+    register_rollback "FIREWALL" "$_rule"
+    _result=$?
+
+    unset _rule
+    return $_result
 }
 
 # Register sysctl rollback
 register_sysctl_rollback() {
-    local parameter="$1"
-    local original_value="$2"
+    _parameter="$1"
+    _original_value="$2"
 
-    register_rollback "SYSCTL" "${parameter}:${original_value}"
+    register_rollback "SYSCTL" "${_parameter}:${_original_value}"
+    _result=$?
+
+    unset _parameter _original_value
+    return $_result
 }
 
 # ============================================================================
@@ -178,69 +206,74 @@ register_sysctl_rollback() {
 
 # Execute a rollback action
 execute_rollback_action() {
-    local action_type="$1"
-    local action_data="$2"
+    _action_type="$1"
+    _action_data="$2"
 
-    log "DEBUG" "Executing rollback action: $action_type"
+    log "DEBUG" "Executing rollback action: $_action_type"
 
-    case "$action_type" in
+    case "$_action_type" in
         FILE_RESTORE)
             # Restore file from backup
-            local backup_file="${action_data%:*}"
-            local original_file="${action_data#*:}"
+            _backup_file="${_action_data%:*}"
+            _original_file="${_action_data#*:}"
 
-            if [ -f "$backup_file" ]; then
-                cp -p "$backup_file" "$original_file" && \
-                    log "INFO" "Restored file: $original_file"
+            if [ -f "$_backup_file" ]; then
+                cp -p "$_backup_file" "$_original_file" && \
+                    log "INFO" "Restored file: $_original_file"
             else
-                log "ERROR" "Backup file not found: $backup_file"
+                log "ERROR" "Backup file not found: $_backup_file"
             fi
+            unset _backup_file _original_file
             ;;
 
         COMMAND)
             # Execute rollback command
-            log "DEBUG" "Executing rollback command: $action_data"
-            eval "$action_data" || \
-                log "ERROR" "Rollback command failed: $action_data"
+            log "DEBUG" "Executing rollback command: $_action_data"
+            eval "$_action_data" || \
+                log "ERROR" "Rollback command failed: $_action_data"
             ;;
 
         SERVICE)
             # Manage service
-            local service_name="${action_data%:*}"
-            local action="${action_data#*:}"
+            _service_name="${_action_data%:*}"
+            _action="${_action_data#*:}"
 
-            case "$action" in
+            case "$_action" in
                 start|stop|restart|reload)
-                    safe_service_${action} "$service_name" || \
-                        log "ERROR" "Failed to $action service: $service_name"
+                    safe_service_${_action} "$_service_name" || \
+                        log "ERROR" "Failed to $_action service: $_service_name"
                     ;;
                 *)
-                    log "ERROR" "Unknown service action: $action"
+                    log "ERROR" "Unknown service action: $_action"
                     ;;
             esac
+            unset _service_name _action
             ;;
 
         FIREWALL)
             # Restore firewall rule
             if command -v iptables >/dev/null 2>&1; then
-                eval "$action_data" || \
+                eval "$_action_data" || \
                     log "ERROR" "Failed to restore firewall rule"
             fi
             ;;
 
         SYSCTL)
             # Restore sysctl parameter
-            local parameter="${action_data%:*}"
-            local value="${action_data#*:}"
+            _parameter="${_action_data%:*}"
+            _value="${_action_data#*:}"
 
-            sysctl -w "$parameter=$value" >/dev/null 2>&1 || \
-                log "ERROR" "Failed to restore sysctl: $parameter=$value"
+            sysctl -w "$_parameter=$_value" >/dev/null 2>&1 || \
+                log "ERROR" "Failed to restore sysctl: $_parameter=$_value"
+            unset _parameter _value
             ;;
 
         *)
-            log "ERROR" "Unknown rollback action type: $action_type"
+            log "ERROR" "Unknown rollback action type: $_action_type"
             ;;
     esac
+
+    unset _action_type _action_data
 }
 
 # ============================================================================
@@ -249,70 +282,75 @@ execute_rollback_action() {
 
 # Execute operation with automatic rollback on failure
 atomic_operation() {
-    local operation="$1"
-    local rollback="$2"
-    local description="${3:-operation}"
+    _operation="$1"
+    _rollback="$2"
+    _description="${3:-operation}"
 
-    log "DEBUG" "Atomic operation: $description"
+    log "DEBUG" "Atomic operation: $_description"
 
     # Register rollback first
-    if [ -n "$rollback" ]; then
-        register_command_rollback "$rollback"
+    if [ -n "$_rollback" ]; then
+        register_command_rollback "$_rollback"
     fi
 
     # Execute operation
-    if eval "$operation"; then
-        log "DEBUG" "Operation succeeded: $description"
+    if eval "$_operation"; then
+        log "DEBUG" "Operation succeeded: $_description"
+        unset _operation _rollback _description
         return 0
     else
-        log "ERROR" "Operation failed: $description"
+        log "ERROR" "Operation failed: $_description"
 
         # Execute rollback if not in transaction
-        if [ -z "$CURRENT_TRANSACTION" ] && [ -n "$rollback" ]; then
+        if [ -z "$CURRENT_TRANSACTION" ] && [ -n "$_rollback" ]; then
             log "INFO" "Executing immediate rollback"
-            eval "$rollback"
+            eval "$_rollback"
         fi
 
+        unset _operation _rollback _description
         return 1
     fi
 }
 
 # Atomic file update
 atomic_file_update() {
-    local target_file="$1"
-    local update_function="$2"
+    _target_file="$1"
+    _update_function="$2"
 
-    if [ ! -f "$target_file" ]; then
-        log "ERROR" "Target file does not exist: $target_file"
+    if [ ! -f "$_target_file" ]; then
+        log "ERROR" "Target file does not exist: $_target_file"
+        unset _target_file _update_function
         return 1
     fi
 
     # Create backup
-    local backup_file
-    backup_file=$(safe_backup_file "$target_file")
+    _backup_file=$(safe_backup_file "$_target_file")
 
-    if [ -z "$backup_file" ]; then
-        log "ERROR" "Failed to backup file: $target_file"
+    if [ -z "$_backup_file" ]; then
+        log "ERROR" "Failed to backup file: $_target_file"
+        unset _target_file _update_function _backup_file
         return 1
     fi
 
     # Register rollback
-    register_file_rollback "$target_file" "$backup_file"
+    register_file_rollback "$_target_file" "$_backup_file"
 
     # Create working copy
-    local work_file="${target_file}.work"
-    cp -p "$target_file" "$work_file"
+    _work_file="${_target_file}.work"
+    cp -p "$_target_file" "$_work_file"
 
     # Apply updates to working copy
-    if $update_function "$work_file"; then
+    if $_update_function "$_work_file"; then
         # Move working copy to target
-        mv "$work_file" "$target_file"
-        log "INFO" "Updated file: $target_file"
+        mv "$_work_file" "$_target_file"
+        log "INFO" "Updated file: $_target_file"
+        unset _target_file _update_function _backup_file _work_file
         return 0
     else
         # Clean up working copy
-        rm -f "$work_file"
-        log "ERROR" "Failed to update file: $target_file"
+        rm -f "$_work_file"
+        log "ERROR" "Failed to update file: $_target_file"
+        unset _target_file _update_function _backup_file _work_file
         return 1
     fi
 }
@@ -323,47 +361,51 @@ atomic_file_update() {
 
 # Create a checkpoint in the current transaction
 create_checkpoint() {
-    local checkpoint_name="${1:-checkpoint}"
-    local checkpoint_file="$STATE_DIR/checkpoint_${CURRENT_TRANSACTION}_${checkpoint_name}"
+    _checkpoint_name="${1:-checkpoint}"
+    _checkpoint_file="$STATE_DIR/checkpoint_${CURRENT_TRANSACTION}_${_checkpoint_name}"
 
     if [ -z "$CURRENT_TRANSACTION" ]; then
         log "ERROR" "No active transaction for checkpoint"
+        unset _checkpoint_name _checkpoint_file
         return 1
     fi
 
     # Save current rollback stack
-    cp "$ROLLBACK_STACK" "$checkpoint_file"
+    cp "$ROLLBACK_STACK" "$_checkpoint_file"
 
-    log "DEBUG" "Created checkpoint: $checkpoint_name"
+    log "DEBUG" "Created checkpoint: $_checkpoint_name"
+    unset _checkpoint_name _checkpoint_file
     return 0
 }
 
 # Rollback to a checkpoint
 rollback_to_checkpoint() {
-    local checkpoint_name="${1:-checkpoint}"
-    local checkpoint_file="$STATE_DIR/checkpoint_${CURRENT_TRANSACTION}_${checkpoint_name}"
+    _checkpoint_name="${1:-checkpoint}"
+    _checkpoint_file="$STATE_DIR/checkpoint_${CURRENT_TRANSACTION}_${_checkpoint_name}"
 
-    if [ ! -f "$checkpoint_file" ]; then
-        log "ERROR" "Checkpoint not found: $checkpoint_name"
+    if [ ! -f "$_checkpoint_file" ]; then
+        log "ERROR" "Checkpoint not found: $_checkpoint_name"
+        unset _checkpoint_name _checkpoint_file
         return 1
     fi
 
     # Get actions added after checkpoint
-    local temp_actions="${ROLLBACK_STACK}.temp"
-    comm -13 "$checkpoint_file" "$ROLLBACK_STACK" > "$temp_actions" 2>/dev/null
+    _temp_actions="${ROLLBACK_STACK}.temp"
+    comm -13 "$_checkpoint_file" "$ROLLBACK_STACK" > "$_temp_actions" 2>/dev/null
 
     # Execute rollback for actions after checkpoint
-    if [ -s "$temp_actions" ]; then
-        tac "$temp_actions" 2>/dev/null || tail -r "$temp_actions" 2>/dev/null | while IFS='|' read -r action_type action_data; do
+    if [ -s "$_temp_actions" ]; then
+        tac "$_temp_actions" 2>/dev/null || tail -r "$_temp_actions" 2>/dev/null | while IFS='|' read -r action_type action_data; do
             execute_rollback_action "$action_type" "$action_data"
         done
     fi
 
     # Restore checkpoint stack
-    cp "$checkpoint_file" "$ROLLBACK_STACK"
+    cp "$_checkpoint_file" "$ROLLBACK_STACK"
 
-    rm -f "$temp_actions"
-    log "INFO" "Rolled back to checkpoint: $checkpoint_name"
+    rm -f "$_temp_actions"
+    log "INFO" "Rolled back to checkpoint: $_checkpoint_name"
+    unset _checkpoint_name _checkpoint_file _temp_actions
     return 0
 }
 
@@ -373,47 +415,51 @@ rollback_to_checkpoint() {
 
 # Wrapper for file modifications with rollback
 safe_file_operation() {
-    local file="$1"
-    local operation="$2"
+    _file="$1"
+    _operation="$2"
 
-    begin_transaction "file_${file}"
+    begin_transaction "file_${_file}"
 
-    if atomic_file_update "$file" "$operation"; then
+    if atomic_file_update "$_file" "$_operation"; then
         commit_transaction
+        unset _file _operation
         return 0
     else
         rollback_transaction "file_operation_failed"
+        unset _file _operation
         return 1
     fi
 }
 
 # Wrapper for service changes with rollback
 safe_service_operation() {
-    local service="$1"
-    local operation="$2"
+    _service="$1"
+    _operation="$2"
 
-    begin_transaction "service_${service}"
+    begin_transaction "service_${_service}"
 
     # Get current service state
-    local current_state="stopped"
-    if systemctl is-active "$service" >/dev/null 2>&1 || \
-       service "$service" status >/dev/null 2>&1; then
-        current_state="running"
+    _current_state="stopped"
+    if systemctl is-active "$_service" >/dev/null 2>&1 || \
+       service "$_service" status >/dev/null 2>&1; then
+        _current_state="running"
     fi
 
     # Register rollback to restore original state
-    if [ "$current_state" = "running" ]; then
-        register_service_rollback "$service" "start"
+    if [ "$_current_state" = "running" ]; then
+        register_service_rollback "$_service" "start"
     else
-        register_service_rollback "$service" "stop"
+        register_service_rollback "$_service" "stop"
     fi
 
     # Execute operation
-    if eval "$operation"; then
+    if eval "$_operation"; then
         commit_transaction
+        unset _service _operation _current_state
         return 0
     else
         rollback_transaction "service_operation_failed"
+        unset _service _operation _current_state
         return 1
     fi
 }
@@ -424,48 +470,54 @@ safe_service_operation() {
 
 # Show rollback history
 show_rollback_history() {
-    local limit="${1:-20}"
+    _limit="${1:-20}"
 
     if [ ! -f "$ROLLBACK_LOG" ]; then
         log "INFO" "No rollback history found"
+        unset _limit
         return 0
     fi
 
     echo "Recent Rollback History:"
     echo "========================"
-    tail -n "$limit" "$ROLLBACK_LOG" | while IFS='|' read -r date action transaction reason; do
+    tail -n "$_limit" "$ROLLBACK_LOG" | while IFS='|' read -r date action transaction reason; do
         printf "%s | %-8s | %s\n" "$date" "$action" "$transaction"
         if [ -n "$reason" ]; then
             printf "    Reason: %s\n" "$reason"
         fi
     done
+
+    unset _limit
 }
 
 # Clean up old transaction files
 cleanup_transactions() {
-    local days="${1:-7}"
+    _days="${1:-7}"
 
-    log "INFO" "Cleaning up transaction files older than $days days"
+    log "INFO" "Cleaning up transaction files older than $_days days"
 
     # Clean checkpoint files
-    find "$STATE_DIR" -name "checkpoint_*" -mtime +"$days" -exec rm {} \; 2>/dev/null
+    find "$STATE_DIR" -name "checkpoint_*" -mtime +"$_days" -exec rm {} \; 2>/dev/null
 
     # Clean old rollback logs
     if [ -f "$ROLLBACK_LOG" ]; then
-        local temp_log="${ROLLBACK_LOG}.tmp"
-        local cutoff_date=$(date -d "$days days ago" +%Y-%m-%d 2>/dev/null || \
-                           date -v -"$days"d +%Y-%m-%d 2>/dev/null)
+        _temp_log="${ROLLBACK_LOG}.tmp"
+        _cutoff_date=$(date -d "$_days days ago" +%Y-%m-%d 2>/dev/null || \
+                       date -v -"$_days"d +%Y-%m-%d 2>/dev/null)
 
-        if [ -n "$cutoff_date" ]; then
+        if [ -n "$_cutoff_date" ]; then
             while IFS='|' read -r date action transaction reason; do
-                if [ "$(echo "$date" | cut -d' ' -f1)" \> "$cutoff_date" ]; then
-                    echo "${date}|${action}|${transaction}|${reason}" >> "$temp_log"
+                if [ "$(echo "$date" | cut -d' ' -f1)" \> "$_cutoff_date" ]; then
+                    echo "${date}|${action}|${transaction}|${reason}" >> "$_temp_log"
                 fi
             done < "$ROLLBACK_LOG"
 
-            mv "$temp_log" "$ROLLBACK_LOG"
+            mv "$_temp_log" "$ROLLBACK_LOG"
         fi
+        unset _temp_log _cutoff_date
     fi
+
+    unset _days
 }
 
 # ============================================================================

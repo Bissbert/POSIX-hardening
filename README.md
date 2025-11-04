@@ -13,9 +13,10 @@ A comprehensive, safety-first server hardening toolkit written in pure POSIX she
 
 - **Remote-Safe**: Never locks out SSH access with multiple safety mechanisms
 - **Automatic Rollback**: Transaction-based operations with automatic rollback on failure
-- **POSIX Compliant**: Works with minimal shell environments (sh, not bash)
+- **100% POSIX Compliant**: Works on dash, ash, BusyBox, and any POSIX sh - no bash required
 - **Comprehensive Backup**: Every change is backed up with easy restoration
 - **Idempotent**: Scripts can be run multiple times safely
+- **CI/CD Tested**: Automated quality assurance on every commit
 
 ## Safety Mechanisms
 
@@ -359,6 +360,45 @@ If you need `requiretty` for additional security:
 - Sets appropriate umask
 - Restricts world-writable directories
 
+## ✨ Recent Improvements (v1.1.0)
+
+### 🔧 Full POSIX Compliance
+- **Removed all bash-isms**: All library files now use only POSIX sh constructs
+- **Eliminated `local` keyword**: 100+ instances replaced with function-scoped variables
+- **GNU/BSD command replacements**: Created `lib/posix_compat.sh` with portable alternatives
+- **Multi-shell tested**: Verified compatibility with dash, ash, BusyBox, and sh
+
+**Impact**: Scripts now work on minimal Linux environments (Alpine, embedded systems, containers) without bash dependency.
+
+### 🤖 CI/CD & Automation
+- **GitHub Actions workflows**: Automated testing for every commit
+  - ShellCheck for code quality
+  - checkbashisms for POSIX compliance
+  - ansible-lint for playbook validation
+  - Security scanning (Gitleaks, TruffleHog, CodeQL)
+- **Multi-shell testing**: Automatic validation on dash, bash, and BusyBox
+- **Pull request templates**: Comprehensive checklists for contributions
+- **Issue templates**: Structured bug reports, feature requests, and security vulnerabilities
+
+### 📚 Enhanced Documentation
+- **[Architecture Overview](docs/architecture/overview.md)** - Complete system design with diagrams
+- **[Configuration Reference](docs/reference/configuration.md)** - All 70+ variables documented
+- **[Troubleshooting Guide](docs/user-guide/troubleshooting.md)** - Common issues and solutions
+- **[Ansible Review](docs/ANSIBLE_REVIEW_AND_RECOMMENDATIONS.md)** - Comprehensive assessment and migration plan
+- **[Security Policy](SECURITY.md)** - Vulnerability reporting and response process
+
+### ⚙️ Configuration Management
+- **Configuration template**: `config/defaults.conf.template` with all variables documented
+- **Enhanced Ansible template**: Synchronized with all group_vars
+- **Better organization**: Clear precedence and override mechanisms
+
+### 🔒 Security Enhancements
+- **Security policy**: Defined vulnerability reporting process via GitHub Security Advisories
+- **Automated security scanning**: Continuous secret detection and vulnerability analysis
+- **Improved .gitignore**: Prevents accidental commit of generated files and secrets
+
+**Upgrade Note**: All changes are backward compatible. Existing configurations continue to work without modification.
+
 ## 📖 Additional Resources
 
 - **[Testing Framework](docs/guides/TESTING_FRAMEWORK.md)** - Comprehensive testing procedures
@@ -380,4 +420,10 @@ MIT License - See [LICENSE](LICENSE) file for details.
 
 ## Version
 
-Current Version: **1.0.0** - See [Changelog](docs/releases/CHANGELOG.md) for release history.
+Current Version: **1.1.0** - See [Changelog](docs/releases/CHANGELOG.md) for release history.
+
+**v1.1.0 Highlights:**
+- 100% POSIX sh compliance (no bash required)
+- Comprehensive documentation (architecture, configuration, troubleshooting)
+- Automated CI/CD with GitHub Actions
+- Enhanced security scanning and quality assurance

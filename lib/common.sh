@@ -486,42 +486,48 @@ cleanup_on_exit() {
 # Check if a port is listening (with multiple fallback methods)
 # Usage: check_port_listening <host> <port> [timeout]
 check_port_listening() {
-    local host="${1:-localhost}"
-    local port="$2"
-    local timeout_sec="${3:-5}"
+    _host="${1:-localhost}"
+    _port="$2"
+    _timeout_sec="${3:-5}"
 
-    if [ -z "$port" ]; then
+    if [ -z "$_port" ]; then
         log "ERROR" "Port number required for check_port_listening"
+        unset _host _port _timeout_sec
         return 1
     fi
 
     # Method 1: nc (netcat) - most reliable
     if command -v nc >/dev/null 2>&1; then
-        if timeout "$timeout_sec" nc -z "$host" "$port" 2>/dev/null; then
+        if timeout "$_timeout_sec" nc -z "$_host" "$_port" 2>/dev/null; then
+            unset _host _port _timeout_sec
             return 0
         fi
     fi
 
     # Method 2: ss (modern alternative)
     if command -v ss >/dev/null 2>&1; then
-        if ss -ltn 2>/dev/null | grep -q ":$port "; then
+        if ss -ltn 2>/dev/null | grep -q ":$_port "; then
+            unset _host _port _timeout_sec
             return 0
         fi
     fi
 
     # Method 3: netstat (legacy fallback)
     if command -v netstat >/dev/null 2>&1; then
-        if netstat -ltn 2>/dev/null | grep -q ":$port "; then
+        if netstat -ltn 2>/dev/null | grep -q ":$_port "; then
+            unset _host _port _timeout_sec
             return 0
         fi
     fi
 
     # Method 4: Try direct connection with timeout (last resort)
     # Use /dev/tcp if available (bash feature, but works in some sh)
-    if timeout "$timeout_sec" sh -c "echo '' | telnet $host $port" >/dev/null 2>&1; then
+    if timeout "$_timeout_sec" sh -c "echo '' | telnet $_host $_port" >/dev/null 2>&1; then
+        unset _host _port _timeout_sec
         return 0
     fi
 
+    unset _host _port _timeout_sec
     return 1
 }
 
