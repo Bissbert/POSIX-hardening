@@ -1,0 +1,157 @@
+name: Security Scan
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  schedule:
+    # Run weekly on Mondays at 00:00 UTC
+    - cron: '0 0 * * 1'
+
+jobs:
+  gitleaks:
+    name: Gitleaks - Secret Scanning
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Full history for comprehensive scanning
+
+      - name: Run Gitleaks
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITLEAKS_LICENSE: ${{ secrets.GITLEAKS_LICENSE }}
+
+  trufflehog:
+    name: TruffleHog - Credential Scanning
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: TruffleHog OSS
+        uses: trufflesecurity/trufflehog@main
+        with:
+          path: ./
+          base: ${{ github.event.repository.default_branch }}
+          head: HEAD
+          extra_args: --debug --only-verified
+
+  codeql:
+    name: CodeQL Analysis
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      contents: read
+      security-events: write
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v3
+        with:
+          languages: 'python'  # For Python utilities in ansible/utils/lib
+          queries: security-extended
+
+      - name: Autobuild
+        uses: github/codeql-action/autobuild@v3
+
+      - name: Perform CodeQL Analysis
+        uses: github/codeql-action/analyze@v3
+
+  shellcheck-security:
+    name: ShellCheck Security Issues
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Run ShellCheck (security severity only)
+        uses: ludeeus/action-shellcheck@master
+        with:
+          scandir: './lib ./scripts'
+          severity: error  # Only fail on errors
+          check_together: 'yes'
+
+  dependency-review:
+    name: Dependency Review
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Dependency Review
+        uses: actions/dependency-review-action@v4
+        with:
+          fail-on-severity: moderate
+
+  ansible-security:
+    name: Ansible Security Check
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+
+      - name: Install Ansible and security tools
+        run: |
+          pip install ansible ansible-lint
+
+      - name: Check for sensitive data in playbooks
+        run: |
+          echo "Checking for potential secrets in Ansible files..."
+          ! grep -r "password\|secret\|token\|key" ansible/*.yml ansible/group_vars/ ansible/host_vars/ || {
+            echo "WARNING: Found potential sensitive data. Review manually."
+            exit 1
+          }
+
+      - name: Verify vault files are encrypted
+        run: |
+          for vault_file in $(find ansible -name "*vault*" -type f); do
+            if [ -f "$vault_file" ] && ! head -1 "$vault_file" | grep -q '$ANSIBLE_VAULT'; then
+              echo "ERROR: Vault file not encrypted: $vault_file"
+              exit 1
+            fi
+          done
+
+  permissions-check:
+    name: File Permissions Check
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Check for executable permissions
+        run: |
+          echo "Checking for incorrectly executable files..."
+          find . -type f -name "*.md" -executable -print
+          find . -type f -name "*.yml" -executable -print
+          find . -type f -name "*.yaml" -executable -print
+          find . -type f -name "*.conf" -executable -print
+
+          # Fail if any are found
+          if [ -n "$(find . -type f \( -name "*.md" -o -name "*.yml" -o -name "*.yaml" -o -name "*.conf" \) -executable)" ]; then
+            echo "ERROR: Found non-script files with executable permissions"
+            exit 1
+          fi
+
+      - name: Verify shell scripts are executable
+        run: |
+          for script in lib/*.sh scripts/*.sh *.sh; do
+            [ -f "$script" ] || continue
+            if [ ! -x "$script" ]; then
+              echo "WARNING: Shell script not executable: $script"
+            fi
+          done

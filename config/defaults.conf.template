@@ -1,0 +1,201 @@
+# ==============================================================================
+# POSIX Hardening Toolkit - Default Configuration Template
+# ==============================================================================
+# This is a template file. Copy to defaults.conf and customize for your environment.
+#
+# Usage:
+#   cp config/defaults.conf.template config/defaults.conf
+#   vim config/defaults.conf  # Edit to suit your environment
+#
+# Or let Ansible generate it from group_vars/all.yml:
+#   ansible-playbook site.yml --tags deploy
+#
+# ==============================================================================
+
+# ==============================================================================
+# DEPLOYMENT PATHS
+# ==============================================================================
+# Where toolkit components and runtime data are stored
+TOOLKIT_PATH="/opt/posix-hardening"
+BACKUP_DIR="/var/backups/hardening"
+LOG_DIR="/var/log/hardening"
+STATE_DIR="/var/lib/hardening"
+
+# ==============================================================================
+# SAFETY SETTINGS
+# ==============================================================================
+# CRITICAL: Never disable these in production environments
+# These prevent accidental system lockout and enable recovery
+
+SAFETY_MODE=1                # Enable all safety checks (1=on, 0=off)
+BACKUP_BEFORE_CHANGE=1       # Backup configs before modification (1=on, 0=off)
+ROLLBACK_ENABLED=1           # Auto-rollback on failure (1=on, 0=off)
+FAIL_FAST=1                  # Stop on first error (1=on, 0=off)
+
+# ==============================================================================
+# EXECUTION MODE
+# ==============================================================================
+DRY_RUN=0                    # 0=apply changes, 1=simulation only
+VERBOSE=0                    # 0=normal output, 1=detailed debug logs
+RUN_FULL_HARDENING=1         # 1=all scripts, 0=priority 1 only
+
+# ==============================================================================
+# SSH CONFIGURATION
+# ==============================================================================
+# REQUIRED: Set admin_ip to your management IP address!
+# CRITICAL: Set ssh_allow_users to prevent lockout!
+# Root login is DISABLED by hardening. You must use a non-root user.
+
+SSH_PORT=22                  # SSH daemon listening port
+ADMIN_IP=""                  # YOUR MANAGEMENT IP - REQUIRED! Example: "203.0.113.10"
+SSH_ALLOW_USERS="admin"      # Users allowed to SSH (space-separated)
+                             # WARNING: Do not leave empty!
+SSH_ALLOW_GROUPS=""          # Groups allowed to SSH (space-separated)
+SSH_TEST_PORT=2222           # Port for connectivity testing
+SSH_ROLLBACK_TIMEOUT=60      # Seconds to wait before auto-rollback
+
+# ==============================================================================
+# EMERGENCY ACCESS
+# ==============================================================================
+# Creates a temporary SSH port with password auth for emergency recovery
+# Recommended: Keep enabled during initial deployment, remove after verification
+
+ENABLE_EMERGENCY_SSH=1       # Create emergency SSH on alternate port (1=on, 0=off)
+EMERGENCY_SSH_PORT=2222      # Emergency SSH port number
+REMOVE_EMERGENCY_SSH=0       # Auto-remove after successful deployment (1=on, 0=off)
+                             # Set to 1 for staging/test environments
+
+# ==============================================================================
+# FIREWALL CONFIGURATION
+# ==============================================================================
+ENABLE_FIREWALL=1            # Enable iptables firewall rules (1=on, 0=off)
+FIREWALL_TIMEOUT=300         # Seconds before auto-rollback (5 minutes)
+ALLOWED_PORTS=""             # Additional TCP ports to allow (space-separated)
+                             # Example: "80 443 3306"
+TRUSTED_NETWORKS=""          # CIDR blocks with full access (space-separated)
+                             # Example: "10.0.0.0/8 192.168.1.0/24"
+
+# ==============================================================================
+# KERNEL AND SYSTEM HARDENING
+# ==============================================================================
+ENABLE_KERNEL_HARDENING=1    # Apply kernel security parameters (1=on, 0=off)
+ENABLE_NETWORK_HARDENING=1   # Harden network stack (1=on, 0=off)
+ENABLE_PROCESS_LIMITS=1      # Set resource limits (1=on, 0=off)
+MAX_USER_PROCESSES=1024      # Max processes per user
+CORE_DUMP_LIMIT=0            # Disable core dumps (0=disabled)
+
+# ==============================================================================
+# FILE PERMISSIONS
+# ==============================================================================
+ENABLE_FILE_PERMISSIONS=1    # Fix critical file permissions (1=on, 0=off)
+SYSTEM_UMASK="027"           # Default umask for system (rwxr-x---)
+USER_UMASK="077"             # Default umask for users (rwx------)
+
+# ==============================================================================
+# PASSWORD AND AUTHENTICATION
+# ==============================================================================
+PASSWORD_MIN_LENGTH=12       # Minimum password length
+PASSWORD_MAX_AGE=90          # Days until password expires
+PASSWORD_WARN_AGE=14         # Days before expiry to warn user
+ACCOUNT_LOCKOUT_THRESHOLD=5  # Failed login attempts before lockout
+ACCOUNT_LOCKOUT_DURATION=30  # Lockout duration in minutes
+
+# ==============================================================================
+# LOGGING AND AUDITING
+# ==============================================================================
+ENABLE_AUDIT_LOGGING=1       # Enable auditd system auditing (1=on, 0=off)
+LOG_RETENTION_DAYS=90        # Days to keep logs
+AUDIT_LOG="/var/log/audit/audit.log"
+
+# ==============================================================================
+# SERVICE HARDENING
+# ==============================================================================
+# Services to disable (space-separated list)
+# Only disable if you're sure you don't need them!
+DISABLE_SERVICES="bluetooth cups avahi-daemon rpcbind nfs-server snmpd"
+
+# ==============================================================================
+# MOUNT OPTIONS
+# ==============================================================================
+# Apply security mount options to temporary filesystems
+ENABLE_MOUNT_HARDENING=1     # 1=on, 0=off
+TMP_DIRS="/tmp /var/tmp /dev/shm"         # Directories to harden
+TMP_MOUNT_OPTIONS="noexec,nosuid,nodev"   # Security mount flags
+
+# ==============================================================================
+# SHELL CONFIGURATION
+# ==============================================================================
+SHELL_TIMEOUT=900            # Auto-logout after idle (seconds, 15 min)
+
+# ==============================================================================
+# INTEGRITY CHECKING
+# ==============================================================================
+# Create baseline checksums for critical system files
+ENABLE_INTEGRITY_CHECK=1     # 1=on, 0=off
+INTEGRITY_DIRS="/etc /bin /sbin /usr/bin /usr/sbin"  # Directories to monitor
+
+# ==============================================================================
+# VALIDATION AND TESTING
+# ==============================================================================
+RUN_VALIDATION=1             # Run validation tests after hardening (1=on, 0=off)
+TEST_MODE=0                  # Reserved for future testing features
+
+# ==============================================================================
+# BACKUP CONFIGURATION
+# ==============================================================================
+BACKUP_RETENTION_DAYS=30     # Days to keep backup files
+MAX_BACKUPS=100              # Maximum number of backup files to keep
+
+# ==============================================================================
+# SSHD CONFIGURATION
+# ==============================================================================
+# These control the SSH daemon hardening settings
+SSHD_CONFIG="/etc/ssh/sshd_config"
+SSHD_PERMIT_ROOT_LOGIN="no"
+SSHD_PASSWORD_AUTHENTICATION="no"
+SSHD_PUBKEY_AUTHENTICATION="yes"
+SSHD_PERMIT_EMPTY_PASSWORDS="no"
+SSHD_MAX_AUTH_TRIES=3
+SSHD_MAX_SESSIONS=10
+SSHD_CLIENT_ALIVE_INTERVAL=300
+SSHD_CLIENT_ALIVE_COUNT_MAX=0
+SSHD_LOGIN_GRACE_TIME=30
+
+# ==============================================================================
+# ADVANCED OPTIONS
+# ==============================================================================
+# Only modify these if you understand the implications
+
+# Firewall logging
+LOG_DROPPED_PACKETS=1        # Log dropped packets (1=on, 0=off)
+
+# ICMP (ping) settings
+ICMP_ENABLED=1               # Allow ping (1=on, 0=off)
+ICMP_RATE_LIMIT="1/s"        # Rate limit for ICMP
+
+# SSH brute-force protection
+SSH_RATE_LIMIT_HITS=4        # Connection attempts
+SSH_RATE_LIMIT_SECONDS=60    # Within this time window
+
+# Performance tuning
+PARALLEL_EXECUTION=0         # Run hardening scripts in parallel (experimental)
+
+# ==============================================================================
+# ENVIRONMENT DETECTION
+# ==============================================================================
+# Leave these empty for auto-detection
+OS_TYPE=""                   # Auto-detected: debian, ubuntu, etc.
+OS_VERSION=""                # Auto-detected: 11, 12, 20.04, 22.04, etc.
+
+# ==============================================================================
+# NOTES
+# ==============================================================================
+# 1. ADMIN_IP is REQUIRED - set this to your management workstation IP
+# 2. SSH_ALLOW_USERS is CRITICAL - ensure your user account is listed
+# 3. Test in a sandbox environment first (use DRY_RUN=1)
+# 4. Keep SAFETY_MODE=1 for production deployments
+# 5. Review logs in /var/log/hardening/ after execution
+# 6. Emergency access: ssh -p 2222 user@host (if ENABLE_EMERGENCY_SSH=1)
+#
+# Documentation: See README.md and docs/
+# Support: https://github.com/Bissbert/POSIX-hardening

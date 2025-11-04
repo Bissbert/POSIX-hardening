@@ -1,0 +1,148 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  shellcheck:
+    name: ShellCheck - POSIX Compliance
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Run ShellCheck on library files
+        uses: ludeeus/action-shellcheck@master
+        with:
+          scandir: './lib'
+          severity: warning
+          additional_files: 'orchestrator.sh quick-start.sh emergency-rollback.sh'
+
+      - name: Run ShellCheck on hardening scripts
+        uses: ludeeus/action-shellcheck@master
+        with:
+          scandir: './scripts'
+          severity: warning
+
+      - name: Run ShellCheck on Ansible utilities
+        uses: ludeeus/action-shellcheck@master
+        with:
+          scandir: './ansible/utils'
+          severity: warning
+
+  checkbashisms:
+    name: Check for Bashisms
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install devscripts
+        run: sudo apt-get update && sudo apt-get install -y devscripts
+
+      - name: Check library files for bashisms
+        run: |
+          for file in lib/*.sh; do
+            echo "Checking $file..."
+            checkbashisms "$file" || exit 1
+          done
+
+      - name: Check main scripts for bashisms
+        run: |
+          for file in orchestrator.sh quick-start.sh emergency-rollback.sh; do
+            echo "Checking $file..."
+            checkbashisms "$file" || exit 1
+          done
+
+      - name: Check hardening scripts for bashisms
+        run: |
+          for file in scripts/*.sh; do
+            [ -f "$file" ] || continue
+            echo "Checking $file..."
+            checkbashisms "$file" || exit 1
+          done
+
+  ansible-lint:
+    name: Ansible Lint
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+
+      - name: Install Ansible and ansible-lint
+        run: |
+          pip install ansible ansible-lint
+
+      - name: Run ansible-lint
+        run: |
+          cd ansible
+          ansible-lint site.yml preflight.yml rollback.yml deploy_team_keys.yml validate_config.yml
+
+  syntax-check:
+    name: POSIX Shell Syntax Check
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install dash (POSIX shell)
+        run: sudo apt-get update && sudo apt-get install -y dash
+
+      - name: Syntax check with dash
+        run: |
+          for file in lib/*.sh scripts/*.sh orchestrator.sh quick-start.sh emergency-rollback.sh; do
+            [ -f "$file" ] || continue
+            echo "Syntax checking $file with dash..."
+            dash -n "$file" || exit 1
+          done
+
+  markdown-lint:
+    name: Markdown Lint
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Run markdownlint
+        uses: nosborn/github-action-markdown-cli@v3.3.0
+        with:
+          files: .
+          config_file: .markdownlint.json
+          ignore_files: 'node_modules/**'
+          rules: '~MD013,~MD033,~MD041'
+
+  test-compatibility:
+    name: Test Shell Compatibility
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        shell: [dash, bash, busybox]
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install shells
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y dash bash busybox-static
+
+      - name: Test syntax with ${{ matrix.shell }}
+        run: |
+          if [ "${{ matrix.shell }}" = "busybox" ]; then
+            SHELL_CMD="busybox sh"
+          else
+            SHELL_CMD="${{ matrix.shell }}"
+          fi
+
+          for file in lib/*.sh; do
+            echo "Testing $file with $SHELL_CMD..."
+            $SHELL_CMD -n "$file" || exit 1
+          done

@@ -19,6 +19,7 @@ BACKUP_BEFORE_CHANGE={{ backup_before_change }}
 ROLLBACK_ENABLED={{ rollback_enabled }}
 FAIL_FAST={{ fail_fast }}
 VERBOSE={{ verbose }}
+RUN_FULL_HARDENING={{ run_full_hardening | int }}
 
 # ==============================================================================
 # SSH CONFIGURATION
@@ -45,6 +46,7 @@ TRUSTED_NETWORKS="{{ trusted_networks | join(' ') }}"
 # SYSTEM PATHS
 # ==============================================================================
 
+TOOLKIT_PATH="{{ toolkit_path }}"
 BACKUP_DIR="{{ backup_path }}"
 LOG_DIR="{{ log_path }}"
 STATE_DIR="{{ state_path }}"
@@ -126,6 +128,38 @@ ENABLE_EMERGENCY_ACCESS={{ enable_emergency_ssh | int }}
 
 RUN_VALIDATION={{ run_validation | int }}
 TEST_MODE={{ test_mode }}
+
+# ==============================================================================
+# BACKUP CONFIGURATION
+# ==============================================================================
+
+BACKUP_RETENTION_DAYS=30
+MAX_BACKUPS=100
+
+# ==============================================================================
+# SSHD CONFIGURATION
+# ==============================================================================
+
+SSHD_CONFIG="/etc/ssh/sshd_config"
+SSHD_PERMIT_ROOT_LOGIN="no"
+SSHD_PASSWORD_AUTHENTICATION="no"
+SSHD_PUBKEY_AUTHENTICATION="yes"
+SSHD_PERMIT_EMPTY_PASSWORDS="no"
+SSHD_MAX_AUTH_TRIES=3
+SSHD_MAX_SESSIONS=10
+SSHD_CLIENT_ALIVE_INTERVAL=300
+SSHD_CLIENT_ALIVE_COUNT_MAX=0
+SSHD_LOGIN_GRACE_TIME=30
+
+# ==============================================================================
+# ADVANCED FIREWALL OPTIONS
+# ==============================================================================
+
+LOG_DROPPED_PACKETS=1
+ICMP_ENABLED=1
+ICMP_RATE_LIMIT="1/s"
+SSH_RATE_LIMIT_HITS=4
+SSH_RATE_LIMIT_SECONDS=60
 
 # ==============================================================================
 # ANSIBLE DEPLOYMENT INFO
