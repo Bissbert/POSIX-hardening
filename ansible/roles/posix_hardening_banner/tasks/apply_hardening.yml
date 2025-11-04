@@ -1,0 +1,98 @@
+---
+# ==============================================================================
+# POSIX Banner Hardening Role - Apply Hardening Tasks
+# ==============================================================================
+# This file contains tasks to configure login banners
+# ==============================================================================
+
+- name: Backup existing banner files
+  block:
+    - name: Check if issue file exists
+      ansible.builtin.stat:
+        path: "{{ posix_banner_issue_file }}"
+      register: existing_issue
+
+    - name: Check if issue.net file exists
+      ansible.builtin.stat:
+        path: "{{ posix_banner_issue_net_file }}"
+      register: existing_issue_net
+
+    - name: Check if motd file exists
+      ansible.builtin.stat:
+        path: "{{ posix_banner_motd_file }}"
+      register: existing_motd
+
+    - name: Backup existing issue file
+      ansible.builtin.copy:
+        src: "{{ posix_banner_issue_file }}"
+        dest: "{{ posix_banner_backup_dir }}/issue.backup.{{ ansible_date_time.epoch }}"
+        remote_src: true
+        mode: preserve
+      when:
+        - posix_banner_backup_existing | bool
+        - existing_issue.stat.exists
+
+    - name: Backup existing issue.net file
+      ansible.builtin.copy:
+        src: "{{ posix_banner_issue_net_file }}"
+        dest: "{{ posix_banner_backup_dir }}/issue.net.backup.{{ ansible_date_time.epoch }}"
+        remote_src: true
+        mode: preserve
+      when:
+        - posix_banner_backup_existing | bool
+        - existing_issue_net.stat.exists
+
+    - name: Backup existing motd file
+      ansible.builtin.copy:
+        src: "{{ posix_banner_motd_file }}"
+        dest: "{{ posix_banner_backup_dir }}/motd.backup.{{ ansible_date_time.epoch }}"
+        remote_src: true
+        mode: preserve
+      when:
+        - posix_banner_backup_existing | bool
+        - existing_motd.stat.exists
+
+  when: posix_banner_backup_before_changes | bool
+  tags: [banner, backup]
+
+- name: Configure console login banner (issue)
+  ansible.builtin.template:
+    src: issue.j2
+    dest: "{{ posix_banner_issue_file }}"
+    owner: "{{ posix_banner_file_owner }}"
+    group: "{{ posix_banner_file_group }}"
+    mode: "{{ posix_banner_file_mode }}"
+    backup: false
+  when: posix_banner_enable_issue | bool
+  tags: [banner, issue]
+
+- name: Configure network login banner (issue.net)
+  ansible.builtin.template:
+    src: issue.net.j2
+    dest: "{{ posix_banner_issue_net_file }}"
+    owner: "{{ posix_banner_file_owner }}"
+    group: "{{ posix_banner_file_group }}"
+    mode: "{{ posix_banner_file_mode }}"
+    backup: false
+  when: posix_banner_enable_issue_net | bool
+  tags: [banner, issue_net]
+
+- name: Configure message of the day (motd)
+  ansible.builtin.template:
+    src: motd.j2
+    dest: "{{ posix_banner_motd_file }}"
+    owner: "{{ posix_banner_file_owner }}"
+    group: "{{ posix_banner_file_group }}"
+    mode: "{{ posix_banner_file_mode }}"
+    backup: false
+  when: posix_banner_enable_motd | bool
+  tags: [banner, motd]
+
+- name: Log banner hardening actions
+  ansible.builtin.lineinfile:
+    path: "{{ posix_banner_log_dir }}/banner-hardening.log"
+    line: "{{ ansible_date_time.iso8601 }} - Banner hardening applied by {{ ansible_user_id }} on {{ ansible_hostname }}"
+    create: true
+    mode: '0644'
+  when: posix_banner_enable_logging | bool
+  tags: [banner, logging]

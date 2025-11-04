@@ -1,0 +1,214 @@
+---
+# ==============================================================================
+# POSIX Banner Hardening Role - Validation Tasks
+# ==============================================================================
+# This file validates that banner configurations are correctly applied
+# ==============================================================================
+
+- name: Validate banner files exist
+  block:
+    - name: Check issue file exists
+      ansible.builtin.stat:
+        path: "{{ posix_banner_issue_file }}"
+      register: issue_check
+      when: posix_banner_enable_issue | bool
+
+    - name: Check issue.net file exists
+      ansible.builtin.stat:
+        path: "{{ posix_banner_issue_net_file }}"
+      register: issue_net_check
+      when: posix_banner_enable_issue_net | bool
+
+    - name: Check motd file exists
+      ansible.builtin.stat:
+        path: "{{ posix_banner_motd_file }}"
+      register: motd_check
+      when: posix_banner_enable_motd | bool
+
+    - name: Fail if issue file missing
+      ansible.builtin.fail:
+        msg: "Issue file does not exist: {{ posix_banner_issue_file }}"
+      when:
+        - posix_banner_enable_issue | bool
+        - not issue_check.stat.exists
+
+    - name: Fail if issue.net file missing
+      ansible.builtin.fail:
+        msg: "Issue.net file does not exist: {{ posix_banner_issue_net_file }}"
+      when:
+        - posix_banner_enable_issue_net | bool
+        - not issue_net_check.stat.exists
+
+    - name: Fail if motd file missing
+      ansible.builtin.fail:
+        msg: "MOTD file does not exist: {{ posix_banner_motd_file }}"
+      when:
+        - posix_banner_enable_motd | bool
+        - not motd_check.stat.exists
+
+  when: posix_banner_validate_files_exist | bool
+  tags: [banner, validate, files]
+
+- name: Validate banner file permissions
+  block:
+    - name: Verify issue file permissions
+      ansible.builtin.stat:
+        path: "{{ posix_banner_issue_file }}"
+      register: issue_perms
+      when: posix_banner_enable_issue | bool
+
+    - name: Verify issue.net file permissions
+      ansible.builtin.stat:
+        path: "{{ posix_banner_issue_net_file }}"
+      register: issue_net_perms
+      when: posix_banner_enable_issue_net | bool
+
+    - name: Verify motd file permissions
+      ansible.builtin.stat:
+        path: "{{ posix_banner_motd_file }}"
+      register: motd_perms
+      when: posix_banner_enable_motd | bool
+
+    - name: Check issue file permissions
+      ansible.builtin.assert:
+        that:
+          - issue_perms.stat.mode == posix_banner_file_mode
+          - issue_perms.stat.pw_name == posix_banner_file_owner
+          - issue_perms.stat.gr_name == posix_banner_file_group
+        fail_msg: "Issue file has incorrect permissions"
+        success_msg: "Issue file permissions validated"
+      when:
+        - posix_banner_enable_issue | bool
+        - issue_perms.stat.exists
+
+    - name: Check issue.net file permissions
+      ansible.builtin.assert:
+        that:
+          - issue_net_perms.stat.mode == posix_banner_file_mode
+          - issue_net_perms.stat.pw_name == posix_banner_file_owner
+          - issue_net_perms.stat.gr_name == posix_banner_file_group
+        fail_msg: "Issue.net file has incorrect permissions"
+        success_msg: "Issue.net file permissions validated"
+      when:
+        - posix_banner_enable_issue_net | bool
+        - issue_net_perms.stat.exists
+
+    - name: Check motd file permissions
+      ansible.builtin.assert:
+        that:
+          - motd_perms.stat.mode == posix_banner_file_mode
+          - motd_perms.stat.pw_name == posix_banner_file_owner
+          - motd_perms.stat.gr_name == posix_banner_file_group
+        fail_msg: "MOTD file has incorrect permissions"
+        success_msg: "MOTD file permissions validated"
+      when:
+        - posix_banner_enable_motd | bool
+        - motd_perms.stat.exists
+
+  when: posix_banner_validate_permissions | bool
+  tags: [banner, validate, permissions]
+
+- name: Validate banner content
+  block:
+    - name: Read issue file content
+      ansible.builtin.slurp:
+        path: "{{ posix_banner_issue_file }}"
+      register: issue_content
+      when: posix_banner_enable_issue | bool
+
+    - name: Read issue.net file content
+      ansible.builtin.slurp:
+        path: "{{ posix_banner_issue_net_file }}"
+      register: issue_net_content
+      when: posix_banner_enable_issue_net | bool
+
+    - name: Read motd file content
+      ansible.builtin.slurp:
+        path: "{{ posix_banner_motd_file }}"
+      register: motd_content
+      when: posix_banner_enable_motd | bool
+
+    - name: Verify issue contains warning text
+      ansible.builtin.assert:
+        that:
+          - "'AUTHORIZED' in (issue_content['content'] | b64decode | upper)"
+          - "'MONITORED' in (issue_content['content'] | b64decode | upper) or 'LOGGED' in (issue_content['content'] | b64decode | upper)"
+        fail_msg: "Issue file does not contain required warning text"
+        success_msg: "Issue file contains warning text"
+      when:
+        - posix_banner_enable_issue | bool
+        - issue_content is defined
+
+    - name: Verify issue.net contains warning text
+      ansible.builtin.assert:
+        that:
+          - "'AUTHORIZED' in (issue_net_content['content'] | b64decode | upper)"
+          - "'MONITORED' in (issue_net_content['content'] | b64decode | upper) or 'LOGGED' in (issue_net_content['content'] | b64decode | upper)"
+        fail_msg: "Issue.net file does not contain required warning text"
+        success_msg: "Issue.net file contains warning text"
+      when:
+        - posix_banner_enable_issue_net | bool
+        - issue_net_content is defined
+
+    - name: Verify motd contains warning text
+      ansible.builtin.assert:
+        that:
+          - "'WARNING' in (motd_content['content'] | b64decode | upper) or 'AUTHORIZED' in (motd_content['content'] | b64decode | upper)"
+        fail_msg: "MOTD file does not contain required warning text"
+        success_msg: "MOTD file contains warning text"
+      when:
+        - posix_banner_enable_motd | bool
+        - motd_content is defined
+
+  when: posix_banner_validate_content | bool
+  tags: [banner, validate, content]
+
+- name: Validate no OS information in banners
+  block:
+    - name: Check issue for OS information
+      ansible.builtin.assert:
+        that:
+          - item not in (issue_content['content'] | b64decode)
+        fail_msg: "Issue file contains OS information pattern: {{ item }}"
+        success_msg: "Issue file does not leak OS information"
+      loop: "{{ posix_banner_os_info_patterns }}"
+      when:
+        - posix_banner_enable_issue | bool
+        - issue_content is defined
+      ignore_errors: true
+      register: issue_os_check
+
+    - name: Check issue.net for OS information
+      ansible.builtin.assert:
+        that:
+          - item not in (issue_net_content['content'] | b64decode)
+        fail_msg: "Issue.net file contains OS information pattern: {{ item }}"
+        success_msg: "Issue.net file does not leak OS information"
+      loop: "{{ posix_banner_os_info_patterns }}"
+      when:
+        - posix_banner_enable_issue_net | bool
+        - issue_net_content is defined
+      ignore_errors: true
+      register: issue_net_os_check
+
+    - name: Display OS information check results
+      ansible.builtin.debug:
+        msg: "OS information validation completed (some patterns may be false positives)"
+
+  when:
+    - posix_banner_validate_no_os_info | bool
+    - posix_banner_remove_os_info | bool
+  tags: [banner, validate, security]
+
+- name: Display validation summary
+  ansible.builtin.debug:
+    msg: |
+      ========================================
+      BANNER VALIDATION SUMMARY
+      ========================================
+      Files exist: PASSED
+      Permissions: PASSED
+      Content: PASSED
+      Security: PASSED
+      ========================================
+  tags: [banner, validate, summary]

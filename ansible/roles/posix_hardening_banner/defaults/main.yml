@@ -1,0 +1,149 @@
+---
+# ==============================================================================
+# POSIX Banner Warnings Hardening Role - Default Variables
+# ==============================================================================
+# These variables control login banner configuration
+# Override in group_vars/all.yml or host_vars/
+# ==============================================================================
+
+# ------------------------------------------------------------------------------
+# CONTROL FLAGS
+# ------------------------------------------------------------------------------
+posix_banner_force_reharden: false  # Force re-hardening even if already completed
+posix_banner_backup_before_changes: true  # Create backup before modifying
+posix_banner_validate_after_apply: true  # Validate settings after applying
+
+# ------------------------------------------------------------------------------
+# STATE TRACKING
+# ------------------------------------------------------------------------------
+posix_banner_hardening_marker: "/var/lib/hardening/banner_hardened"
+
+# ------------------------------------------------------------------------------
+# FILE PATHS
+# ------------------------------------------------------------------------------
+posix_banner_backup_dir: "/var/backups/hardening"
+posix_banner_log_dir: "/var/log/hardening"
+
+# Banner file locations
+posix_banner_issue_file: "/etc/issue"
+posix_banner_issue_net_file: "/etc/issue.net"
+posix_banner_motd_file: "/etc/motd"
+
+# ------------------------------------------------------------------------------
+# BANNER CONTROL
+# ------------------------------------------------------------------------------
+# Enable/disable specific banners
+posix_banner_enable_issue: true  # Console login banner
+posix_banner_enable_issue_net: true  # Network login banner (SSH, telnet)
+posix_banner_enable_motd: true  # Message of the day (post-login)
+
+# ------------------------------------------------------------------------------
+# BANNER CONTENT - ORGANIZATION INFO
+# ------------------------------------------------------------------------------
+# Customize these for your organization
+posix_banner_organization: "Your Organization"
+posix_banner_contact: "security@example.com"
+
+# ------------------------------------------------------------------------------
+# BANNER CONTENT - WARNING TEXT
+# ------------------------------------------------------------------------------
+# Main warning message (used in all banners)
+posix_banner_warning_title: "AUTHORIZED ACCESS ONLY"
+
+posix_banner_warning_text: |
+  Unauthorized access to this system is strictly prohibited.
+  All activities are monitored and logged.
+
+posix_banner_warning_footer: |
+  By continuing to use this system you indicate your awareness of and
+  consent to these terms and conditions of use. LOG OFF IMMEDIATELY if
+  you do not agree to the conditions stated in this warning.
+
+# MOTD-specific message (more friendly, shown after login)
+posix_banner_motd_text: |
+  WARNING: This system is for authorized use only.
+  All activities are subject to monitoring and logging.
+  Disconnect immediately if you are not an authorized user.
+
+# ------------------------------------------------------------------------------
+# BANNER CONTENT - CUSTOM ADDITIONS
+# ------------------------------------------------------------------------------
+# Optional custom text to append to banners (empty by default)
+# Set this to add site-specific information
+posix_banner_custom_text: ""
+
+# Optional custom MOTD text (overrides default if set)
+posix_banner_custom_motd: ""
+
+# ------------------------------------------------------------------------------
+# BANNER APPEARANCE
+# ------------------------------------------------------------------------------
+# Use decorative borders in issue/issue.net banners
+posix_banner_use_decorations: true
+
+# Banner decoration style
+posix_banner_decoration_char: "#"
+posix_banner_decoration_width: 63
+
+# Include organization and contact info in banners
+posix_banner_include_org_info: true
+
+# ------------------------------------------------------------------------------
+# SECURITY SETTINGS
+# ------------------------------------------------------------------------------
+# Remove OS/version information from banners (security best practice)
+# When true, banners will NOT contain OS name, version, kernel, or hostname
+posix_banner_remove_os_info: true
+
+# File permissions for banner files
+posix_banner_file_mode: "0644"
+posix_banner_file_owner: root
+posix_banner_file_group: root
+
+# ------------------------------------------------------------------------------
+# VALIDATION SETTINGS
+# ------------------------------------------------------------------------------
+# Verify banner files exist
+posix_banner_validate_files_exist: true
+
+# Verify banner files have correct permissions
+posix_banner_validate_permissions: true
+
+# Verify banner files contain warning text
+posix_banner_validate_content: true
+
+# Verify banner files do NOT contain OS information (if remove_os_info=true)
+posix_banner_validate_no_os_info: true
+
+# Patterns to check for (should NOT be in banners when remove_os_info=true)
+posix_banner_os_info_patterns:
+  - "\\\\S"  # Kernel name
+  - "\\\\n"  # Nodename
+  - "\\\\r"  # Kernel release
+  - "\\\\v"  # Kernel version
+  - "\\\\m"  # Machine hardware
+  - "\\\\o"  # Domain name
+  - "Debian"
+  - "Ubuntu"
+  - "CentOS"
+  - "RedHat"
+  - "Rocky"
+  - "AlmaLinux"
+  - "Kali"
+  - "Linux"
+  - "kernel"
+
+# ------------------------------------------------------------------------------
+# BEHAVIOR SETTINGS
+# ------------------------------------------------------------------------------
+# Create backup directory if it doesn't exist
+posix_banner_create_backup_dir: true
+
+# Backup existing banner files before modification
+posix_banner_backup_existing: true
+
+# ------------------------------------------------------------------------------
+# LOGGING
+# ------------------------------------------------------------------------------
+# Log all banner hardening operations
+posix_banner_enable_logging: true

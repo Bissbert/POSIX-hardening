@@ -1,0 +1,30 @@
+{% if posix_banner_use_decorations %}
+{{ posix_banner_decoration_char * posix_banner_decoration_width }}
+{% endif %}
+{% if posix_banner_use_decorations %}
+{{ posix_banner_decoration_char }}{{ (' ' * ((posix_banner_decoration_width - posix_banner_warning_title | length - 2) // 2)) }}{{ posix_banner_warning_title }}{{ (' ' * ((posix_banner_decoration_width - posix_banner_warning_title | length - 2) // 2)) }}{{ posix_banner_decoration_char }}
+{% else %}
+{{ posix_banner_warning_title }}
+{% endif %}
+{% if posix_banner_use_decorations %}
+{{ posix_banner_decoration_char * posix_banner_decoration_width }}
+{% else %}
+{{ '=' * posix_banner_warning_title | length }}
+{% endif %}
+
+{{ posix_banner_warning_text | trim }}
+
+{{ posix_banner_warning_footer | trim }}
+{% if posix_banner_include_org_info %}
+
+Organization: {{ posix_banner_organization }}
+Contact: {{ posix_banner_contact }}
+{% endif %}
+{% if posix_banner_custom_text %}
+
+{{ posix_banner_custom_text | trim }}
+{% endif %}
+{% if posix_banner_use_decorations %}
+
+{{ posix_banner_decoration_char * posix_banner_decoration_width }}
+{% endif %}

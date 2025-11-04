@@ -1,0 +1,123 @@
+---
+# ==============================================================================
+# POSIX Banner Warnings Hardening Role - Main Tasks
+# ==============================================================================
+# CRITICAL: This role configures login banners for security compliance
+# Converted from: scripts/18-banner-warnings.sh
+# ==============================================================================
+
+- name: Display banner hardening warning
+  ansible.builtin.debug:
+    msg: |
+      ========================================
+      BANNER CONFIGURATION IN PROGRESS
+      ========================================
+      This role will configure security warning banners
+
+      Applied hardening:
+        - Console login banner (/etc/issue): {{ posix_banner_enable_issue }}
+        - Network login banner (/etc/issue.net): {{ posix_banner_enable_issue_net }}
+        - Message of the day (/etc/motd): {{ posix_banner_enable_motd }}
+        - Remove OS information: {{ posix_banner_remove_os_info }}
+
+      Warning text includes:
+        - Authorized access only notice
+        - Monitoring and logging warning
+        - Legal disclaimer
+        - Organization: {{ posix_banner_organization }}
+        - Contact: {{ posix_banner_contact }}
+
+      Backup location: {{ posix_banner_backup_dir }}
+      Marker file: {{ posix_banner_hardening_marker }}
+      ========================================
+  tags: [banner, warning]
+
+- name: Check if banner hardening already applied
+  ansible.builtin.stat:
+    path: "{{ posix_banner_hardening_marker }}"
+  register: banner_hardening_marker_stat
+  tags: [banner, check]
+
+- name: Display skip message if already hardened
+  ansible.builtin.debug:
+    msg: |
+      Banner hardening already applied (marker exists).
+      Set posix_banner_force_reharden=true to re-apply.
+  when:
+    - banner_hardening_marker_stat.stat.exists
+    - not posix_banner_force_reharden | bool
+  tags: [banner, check]
+
+- name: Phase 1 - Preparation
+  block:
+    - name: Ensure backup directory exists
+      ansible.builtin.file:
+        path: "{{ posix_banner_backup_dir }}"
+        state: directory
+        mode: '0700'
+        owner: root
+        group: root
+
+    - name: Ensure log directory exists
+      ansible.builtin.file:
+        path: "{{ posix_banner_log_dir }}"
+        state: directory
+        mode: '0755'
+        owner: root
+        group: root
+
+    - name: Ensure marker directory exists
+      ansible.builtin.file:
+        path: "{{ posix_banner_hardening_marker | dirname }}"
+        state: directory
+        mode: '0755'
+        owner: root
+        group: root
+
+  when:
+    - not banner_hardening_marker_stat.stat.exists or posix_banner_force_reharden | bool
+  tags: [banner, preparation, phase1]
+
+- name: Phase 2 - Apply banner hardening
+  ansible.builtin.include_tasks: apply_hardening.yml
+  when:
+    - not banner_hardening_marker_stat.stat.exists or posix_banner_force_reharden | bool
+  tags: [banner, apply, phase2]
+
+- name: Phase 3 - Validate settings
+  ansible.builtin.include_tasks: validate_hardening.yml
+  when:
+    - not banner_hardening_marker_stat.stat.exists or posix_banner_force_reharden | bool
+    - posix_banner_validate_after_apply | bool
+  tags: [banner, validate, phase3]
+
+- name: Phase 4 - Finalization
+  block:
+    - name: Create hardening marker file
+      ansible.builtin.copy:
+        content: |
+          Banner hardening applied on: {{ ansible_date_time.iso8601 }}
+          Applied by: Ansible role posix_hardening_banner
+          Hostname: {{ ansible_hostname }}
+          Backup location: {{ posix_banner_backup_dir }}
+          Issue banner: {{ posix_banner_enable_issue }}
+          Issue.net banner: {{ posix_banner_enable_issue_net }}
+          MOTD banner: {{ posix_banner_enable_motd }}
+          Organization: {{ posix_banner_organization }}
+        dest: "{{ posix_banner_hardening_marker }}"
+        mode: '0644'
+        owner: root
+        group: root
+
+    - name: Display banner hardening success
+      ansible.builtin.debug:
+        msg: |
+          ========================================
+          BANNER HARDENING COMPLETED
+          ========================================
+          Security warning banners configured successfully
+          ========================================
+
+  when:
+    - not banner_hardening_marker_stat.stat.exists or posix_banner_force_reharden | bool
+  tags: [banner, finalization, phase4]

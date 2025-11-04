@@ -1,0 +1,49 @@
+---
+# ==============================================================================
+# POSIX Banner Hardening Role - Metadata
+# ==============================================================================
+
+galaxy_info:
+  role_name: posix_hardening_banner
+  namespace: posix_hardening
+  author: POSIX Hardening Team
+  description: Configure security warning banners for console and network logins
+  company: Security Operations
+
+  license: MIT
+
+  min_ansible_version: "2.9"
+
+  platforms:
+    - name: Debian
+      versions:
+        - bullseye
+        - bookworm
+        - buster
+    - name: Ubuntu
+      versions:
+        - focal
+        - jammy
+        - noble
+    - name: EL
+      versions:
+        - 7
+        - 8
+        - 9
+    - name: Kali
+      versions:
+        - all
+
+  galaxy_tags:
+    - security
+    - hardening
+    - posix
+    - banner
+    - login
+    - warning
+    - compliance
+    - cis
+    - stig
+    - authorization
+
+dependencies: []

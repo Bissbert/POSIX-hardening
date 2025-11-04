@@ -1,0 +1,17 @@
+---
+# ==============================================================================
+# POSIX Banner Hardening Role - Handlers
+# ==============================================================================
+# Handlers for banner configuration changes
+# ==============================================================================
+
+# Note: Banner changes typically don't require service restarts
+# Changes take effect immediately on next login
+
+- name: log banner change
+  ansible.builtin.lineinfile:
+    path: "{{ posix_banner_log_dir }}/banner-changes.log"
+    line: "{{ ansible_date_time.iso8601 }} - Banner configuration changed on {{ ansible_hostname }}"
+    create: true
+    mode: '0644'
+  when: posix_banner_enable_logging | bool

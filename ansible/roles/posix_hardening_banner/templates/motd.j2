@@ -1,0 +1,14 @@
+{% if posix_banner_custom_motd %}
+{{ posix_banner_custom_motd | trim }}
+{% else %}
+{{ posix_banner_motd_text | trim }}
+{% if posix_banner_include_org_info %}
+
+Organization: {{ posix_banner_organization }}
+Contact: {{ posix_banner_contact }}
+{% endif %}
+{% if posix_banner_custom_text %}
+
+{{ posix_banner_custom_text | trim }}
+{% endif %}
+{% endif %}
