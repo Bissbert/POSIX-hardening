@@ -10,12 +10,13 @@ in a safe environment with console/KVM access available.
 ## Overview
 
 Comprehensive firewall hardening role converted from the POSIX hardening shell script
-(`02-firewall-setup.sh`). Implements production-grade iptables/ip6tables firewall configuration
-with extensive safety mechanisms to prevent lockout.
+(`02-firewall-setup.sh`). Implements production-grade iptables/ip6tables firewall
+configuration with extensive safety mechanisms to prevent lockout.
 
 **Source Script:** `scripts/02-firewall-setup.sh`
 
 **Key Features:**
+
 - IPv4 and IPv6 firewall configuration
 - SSH rate limiting (brute-force protection)
 - ICMP with rate limiting

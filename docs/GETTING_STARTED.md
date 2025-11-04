@@ -1,6 +1,6 @@
 # Getting Started with POSIX Hardening
 
-**5-minute guide to hardening your Linux servers**
+5-minute guide to hardening your Linux servers
 
 ## What is POSIX Hardening?
 
@@ -17,7 +17,7 @@ Covers: SSH, firewall, kernel, filesystem, access control, audit logging, and mo
 
 ### 1. Install Prerequisites (1 minute)
 
-```bash
+```shell
 # Install Ansible
 pip install -r ansible/requirements.txt
 
@@ -29,12 +29,14 @@ brew install ansible # macOS
 ### 2. Configure (2 minutes)
 
 **Edit `ansible/inventory.ini`:**
+
 ```ini
 [production]
 server1.example.com ansible_host=192.168.1.10 ansible_user=admin
 ```
 
 **Edit `ansible/group_vars/all.yml`:**
+
 ```yaml
 admin_ip: "YOUR_IP_HERE"        # CRITICAL - your management IP
 ssh_allow_users: "admin deploy" # Users who can SSH
@@ -43,7 +45,7 @@ enable_emergency_ssh: true      # Safety port 2222
 
 ### 3. Deploy (2 minutes)
 
-```bash
+```shell
 cd ansible/
 
 # Pre-flight check
@@ -61,7 +63,7 @@ ansible-playbook hardening_master.yml
 
 For systems without Ansible or for manual execution:
 
-```bash
+```shell
 # 1. Clone repository
 git clone https://github.com/Bissbert/POSIX-hardening
 cd POSIX-hardening
@@ -81,7 +83,7 @@ See [`docs/SCRIPTS.md`](SCRIPTS.md) for detailed script usage.
 
 ### Deploy by Priority
 
-```bash
+```shell
 # Critical only (SSH + Firewall) - 5-10 min
 ansible-playbook hardening_master.yml --tags priority1
 
@@ -94,7 +96,7 @@ ansible-playbook hardening_master.yml
 
 ### Test Before Deploying
 
-```bash
+```shell
 # Dry run - see what would change
 ansible-playbook hardening_master.yml --check --diff
 
@@ -106,7 +108,7 @@ ansible-playbook hardening_master.yml -l staging-server
 
 If you lose SSH access:
 
-```bash
+```shell
 # Option 1: Emergency SSH port
 ssh -p 2222 user@server
 
@@ -122,20 +124,24 @@ sudo /opt/posix-hardening/emergency-rollback.sh --force
 ## What Gets Hardened?
 
 ### Priority 1: Critical (5-10 min)
+
 - **SSH:** Key-only auth, no root login, emergency port 2222
 - **Firewall:** iptables/ip6tables, stateful filtering
 
 ### Priority 2: Core System (5-7 min)
+
 - **Kernel:** 40+ sysctl parameters (ASLR, TCP hardening)
 - **Network:** Interface-level security
 - **Filesystem:** Permissions, /tmp nosuid/noexec, mount options
 
 ### Priority 3: Access Control (5-7 min)
+
 - **Password Policies:** PAM pwquality, aging, history
 - **Account Security:** Lock system accounts, sudo restrictions
 - **Limits:** Process/file limits, core dump disable
 
 ### Priority 4-6: Additional (10-15 min)
+
 - Services, cron restrictions, audit logging, log retention, integrity monitoring, banners
 
 ---
@@ -160,16 +166,19 @@ All settings have sane defaults. Key variables to customize:
 ## Documentation Map
 
 ### New Users
+
 - **This file** - Quick start
 - [`ansible/QUICK_START_ROLES.md`](../ansible/QUICK_START_ROLES.md) - Quick command reference
 - [`ansible/README.md`](../ansible/README.md) - Ansible deployment guide
 
 ### Reference
+
 - [`SCRIPTS.md`](SCRIPTS.md) - Shell script documentation (22 scripts)
 - [`reference/configuration.md`](reference/configuration.md) - Configuration options
 - [`ROLE_EXECUTION_ORDER.md`](ROLE_EXECUTION_ORDER.md) - Role dependencies & order
 
 ### Advanced
+
 - [`architecture/overview.md`](architecture/overview.md) - System architecture
 - [`guides/IMPLEMENTATION_GUIDE.md`](guides/IMPLEMENTATION_GUIDE.md) - Detailed implementation
 - [`ansible/TESTING.md`](../ansible/TESTING.md) - Testing with Molecule
@@ -204,7 +213,7 @@ All settings have sane defaults. Key variables to customize:
 
 ### Deployment Issues
 
-```bash
+```shell
 # Verbose output
 ansible-playbook hardening_master.yml -vvv
 
@@ -217,7 +226,7 @@ ssh user@server 'cat /var/log/hardening/*.log'
 
 ### Connection Issues
 
-```bash
+```shell
 # Test connectivity
 ansible all -m ping
 
@@ -234,15 +243,15 @@ ssh -p 2222 user@server
 
 ## Support & Contributing
 
-- **Issues:** https://github.com/Bissbert/POSIX-hardening/issues
+- **Issues:** <https://github.com/Bissbert/POSIX-hardening/issues>
 - **Documentation:** This `docs/` directory
-- **Repository:** https://github.com/Bissbert/POSIX-hardening
+- **Repository:** <https://github.com/Bissbert/POSIX-hardening>
 
 ---
 
 ## Project Structure
 
-```
+```text
 POSIX-hardening/
 ├── ansible/                    # Ansible deployment (recommended)
 │   ├── hardening_master.yml   # Main playbook - all 21 roles
@@ -263,17 +272,20 @@ POSIX-hardening/
 ## Next Steps
 
 1. **Deploy to test environment:**
-   ```bash
+
+   ```shell
    ansible-playbook hardening_master.yml -l test-server
    ```
 
 2. **Review deployment report:**
-   ```bash
+
+   ```shell
    ssh user@server 'cat /var/log/hardening/deployment_report_*.txt'
    ```
 
 3. **Verify hardening:**
-   ```bash
+
+   ```shell
    # Check applied roles
    ansible all -m shell -a "ls -1 /var/lib/hardening/*_hardened"
 

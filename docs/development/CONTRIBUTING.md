@@ -1,6 +1,8 @@
 # Contributing to POSIX Shell Server Hardening Toolkit
 
-Thank you for your interest in contributing to this security toolkit! We welcome contributions that improve server security while maintaining our core principle: **Never lose SSH access**.
+Thank you for your interest in contributing to this security toolkit! We welcome
+contributions that improve server security while maintaining our core principle:
+**Never lose SSH access**.
 
 ## Code of Conduct
 
@@ -51,7 +53,7 @@ This project prioritizes:
 
 ### POSIX Compliance
 
-```bash
+```shell
 # Good - POSIX compliant
 if [ -f "/etc/ssh/sshd_config" ]; then
     echo "File exists"
@@ -72,7 +74,7 @@ fi
 
 ### Script Structure
 
-```bash
+```shell
 #!/bin/sh
 # Script: XX-feature-name.sh
 # Priority: [1-4]
@@ -112,7 +114,7 @@ main "$@"
 
 2. **Test Commands**
 
-   ```bash
+   ```shell
    # Run validation suite
    cd tests/
    sudo sh validation_suite.sh
@@ -126,7 +128,7 @@ main "$@"
 
 3. **Ansible Testing**
 
-   ```bash
+   ```shell
    # Test deployment
    cd ansible/
    ansible-playbook site.yml -e "dry_run=1"
@@ -166,6 +168,7 @@ prevent disk space issues.
 
 Fixes: #42
 ```
+
 #### Pull Request Process
 
 1. **Update Documentation**
@@ -193,13 +196,15 @@ Fixes: #42
 ### Adding New Hardening Scripts
 
 New scripts should follow the naming convention:
-```
+
+```text
 scripts/XX-feature-name.sh
 ```
 
 Where XX is the priority number (01-99).
 
 Required elements:
+
 1. Safety checks (never lose SSH!)
 2. Backup mechanisms
 3. Rollback capability
@@ -208,7 +213,8 @@ Required elements:
 6. POSIX compliance
 
 Template for new scripts:
-```bash
+
+```shell
 #!/bin/sh
 # Script: XX-new-feature.sh
 # Priority: X
@@ -232,6 +238,7 @@ set -e
 ### Questions?
 
 Open an issue with `[Question]` prefix or check existing documentation:
+
 - README.md - General usage
 - ansible/README.md - Deployment guide
 - docs/ - Additional documentation

@@ -12,7 +12,8 @@ This document tracks planned enhancements and feature requests for future releas
 
 ### Overview
 
-Enhance the firewall setup script (02-firewall-setup.sh) to automatically detect and use alternative firewall management tools when iptables is not available.
+Enhance the firewall setup script (02-firewall-setup.sh) to automatically detect and
+use alternative firewall management tools when iptables is not available.
 
 ### Current Behavior
 
@@ -124,7 +125,9 @@ nft list ruleset > /etc/nftables.conf
 systemctl enable nftables
 ```
 
-**Safety timeout:** `nft flush ruleset && nft add table inet filter && nft add chain inet filter input { type filter hook input priority 0 \; policy accept \; }`
+**Safety timeout:**
+`nft flush ruleset && nft add table inet filter &&
+nft add chain inet filter input { type filter hook input priority 0 \; policy accept \; }`
 
 #### 5. Unified Interface
 
@@ -251,7 +254,8 @@ Critical for preventing lockout:
 
 ### Contributors Welcome
 
-This is a great feature for community contribution! If you have experience with UFW, firewalld, or nftables, please consider contributing.
+This is a great feature for community contribution! If you have experience with UFW,
+firewalld, or nftables, please consider contributing.
 
 ---
 
@@ -295,5 +299,5 @@ Coordinate with fail2ban for enhanced brute-force protection.
 ---
 
 **Last Updated:** 2025-10-20
-**Maintainer:** POSIX Hardening Team
 
+**Maintainer:** POSIX Hardening Team

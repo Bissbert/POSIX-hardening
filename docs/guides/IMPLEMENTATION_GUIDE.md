@@ -3,6 +3,7 @@
 ## Script Development Principles
 
 ### POSIX Compliance Rules
+
 ```sh
 # ALLOWED in POSIX:
 - test or [ ]  (single brackets only)
@@ -24,6 +25,7 @@
 ## Detailed Implementation for Each Script
 
 ### 01_ssh_config_hardening.sh
+
 ```sh
 #!/bin/sh
 # Harden SSH daemon configuration
@@ -67,6 +69,7 @@ apply_ssh_hardening() {
 ```
 
 ### 02_ssh_key_management.sh
+
 ```sh
 #!/bin/sh
 # Manage and harden SSH keys
@@ -97,6 +100,7 @@ check_ssh_keys() {
 ```
 
 ### 03_firewall_ssh_protection.sh
+
 ```sh
 #!/bin/sh
 # Implement SSH brute force protection with iptables
@@ -128,6 +132,7 @@ setup_ssh_firewall() {
 ```
 
 ### 04_user_account_hardening.sh
+
 ```sh
 #!/bin/sh
 # Harden user accounts and remove unnecessary users
@@ -155,6 +160,7 @@ harden_user_accounts() {
 ```
 
 ### 05_sudo_configuration.sh
+
 ```sh
 #!/bin/sh
 # Harden sudo configuration
@@ -191,6 +197,7 @@ EOF
 ```
 
 ### 06_file_permissions.sh
+
 ```sh
 #!/bin/sh
 # Set secure file permissions on critical system files
@@ -224,6 +231,7 @@ secure_file_permissions() {
 ```
 
 ### 07_kernel_parameters.sh
+
 ```sh
 #!/bin/sh
 # Harden kernel parameters via sysctl
@@ -273,6 +281,7 @@ EOF
 ```
 
 ### 08_process_limits.sh
+
 ```sh
 #!/bin/sh
 # Configure process and resource limits
@@ -305,6 +314,7 @@ EOF
 ```
 
 ### 09_audit_logging.sh
+
 ```sh
 #!/bin/sh
 # Configure comprehensive audit logging
@@ -342,6 +352,7 @@ EOF
 ```
 
 ### 10_network_services.sh
+
 ```sh
 #!/bin/sh
 # Disable unnecessary network services
@@ -370,6 +381,7 @@ disable_network_services() {
 ```
 
 ### 11_tcp_wrappers.sh
+
 ```sh
 #!/bin/sh
 # Configure TCP wrappers for additional access control
@@ -398,6 +410,7 @@ EOF
 ```
 
 ### 12_cron_hardening.sh
+
 ```sh
 #!/bin/sh
 # Restrict cron access to authorized users
@@ -423,6 +436,7 @@ harden_cron() {
 ```
 
 ### 13_mount_hardening.sh
+
 ```sh
 #!/bin/sh
 # Harden mount points with restrictive options
@@ -451,6 +465,7 @@ secure_mount_points() {
 ```
 
 ### 14_core_dump_disable.sh
+
 ```sh
 #!/bin/sh
 # Disable core dumps system-wide
@@ -473,6 +488,7 @@ disable_core_dumps() {
 ```
 
 ### 15_login_banner.sh
+
 ```sh
 #!/bin/sh
 # Configure login warning banners
@@ -505,6 +521,7 @@ and will be prosecuted to the fullest extent of the law.
 ```
 
 ### 16_session_timeout.sh
+
 ```sh
 #!/bin/sh
 # Configure session timeout for idle connections
@@ -530,6 +547,7 @@ EOF
 ```
 
 ### 17_password_aging.sh
+
 ```sh
 #!/bin/sh
 # Configure password aging policies
@@ -557,6 +575,7 @@ set_password_policies() {
 ```
 
 ### 18_shared_memory_security.sh
+
 ```sh
 #!/bin/sh
 # Secure shared memory
@@ -584,6 +603,7 @@ secure_shared_memory() {
 ```
 
 ### 19_kernel_module_blacklist.sh
+
 ```sh
 #!/bin/sh
 # Blacklist unnecessary kernel modules
@@ -624,6 +644,7 @@ EOF
 ```
 
 ### 20_log_rotation_hardening.sh
+
 ```sh
 #!/bin/sh
 # Configure secure log rotation
@@ -670,6 +691,7 @@ EOF
 ## Master Orchestration Script
 
 ### run_hardening.sh
+
 ```sh
 #!/bin/sh
 # Master script to run all hardening scripts
