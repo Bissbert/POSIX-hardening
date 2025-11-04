@@ -281,7 +281,14 @@ scan_zone() {
 
             # Detect SSH port
             local ssh_port=$(detect_ssh_port "$host")
-            echo "$host|${ssh_port:-22}" >> "$zone_dir/ssh_ports.txt"
+            if [ -n "$ssh_port" ]; then
+                echo "$host|$ssh_port" >> "$zone_dir/ssh_ports.txt"
+                log "    SSH found on port $ssh_port"
+            else
+                # Track hosts without SSH for documentation
+                echo "$host|$open_ports" >> "$zone_dir/no_ssh_hosts.txt"
+                warn "No SSH found on $host (has ports: $open_ports)"
+            fi
 
             # Try hostname resolution
             local hostname=$(resolve_hostname "$host")
@@ -330,29 +337,43 @@ generate_inventory() {
         echo "[$zone]" >> "$output"
         echo "# $description" >> "$output"
 
-        # Add hosts
+        # Document hosts without SSH
+        if [ -f "$zone_dir/no_ssh_hosts.txt" ]; then
+            echo "#" >> "$output"
+            echo "# Hosts discovered but excluded (no SSH access):" >> "$output"
+            while IFS='|' read -r ip ports; do
+                [ -z "$ip" ] && continue
+                local hostname=$(grep "^$ip|" "$zone_dir/hostnames.txt" 2>/dev/null | cut -d'|' -f2)
+                hostname="${hostname:-$ip}"
+                echo "# - $hostname ($ip) - ports: $ports" >> "$output"
+            done < "$zone_dir/no_ssh_hosts.txt"
+            echo "#" >> "$output"
+        fi
+
+        # Add SSH-accessible hosts only
         local host_index=1
-        while IFS='|' read -r ip ports; do
-            [ -z "$ip" ] && continue
+        if [ -f "$zone_dir/ssh_ports.txt" ]; then
+            while IFS='|' read -r ip ssh_port; do
+                [ -z "$ip" ] && continue
 
-            # Get hostname
-            local hostname=$(grep "^$ip|" "$zone_dir/hostnames.txt" 2>/dev/null | cut -d'|' -f2)
-            if [ -z "$hostname" ] || [ "$hostname" = "$ip" ]; then
-                hostname="${zone}$(printf '%02d' $host_index).local"
-            fi
+                # Get ports from scan_results
+                local ports=$(grep "^$ip|" "$zone_dir/scan_results.txt" 2>/dev/null | cut -d'|' -f2)
 
-            # Get SSH port
-            local ssh_port=$(grep "^$ip|" "$zone_dir/ssh_ports.txt" 2>/dev/null | cut -d'|' -f2)
-            ssh_port="${ssh_port:-22}"
+                # Get hostname
+                local hostname=$(grep "^$ip|" "$zone_dir/hostnames.txt" 2>/dev/null | cut -d'|' -f2)
+                if [ -z "$hostname" ] || [ "$hostname" = "$ip" ]; then
+                    hostname="${zone}$(printf '%02d' $host_index).local"
+                fi
 
-            # Add host entry
-            echo "$hostname ansible_host=$ip ansible_port=$ssh_port ansible_user=$ANSIBLE_USER" >> "$output"
+                # Add host entry
+                echo "$hostname ansible_host=$ip ansible_port=$ssh_port ansible_user=$ANSIBLE_USER" >> "$output"
 
-            # Store ports for later analysis
-            echo "$zone|$ip|$ports" >> "$TEMP_DIR/all_ports.txt"
+                # Store ports for later analysis
+                echo "$zone|$ip|$ports" >> "$TEMP_DIR/all_ports.txt"
 
-            host_index=$((host_index + 1))
-        done < "$zone_dir/scan_results.txt"
+                host_index=$((host_index + 1))
+            done < "$zone_dir/ssh_ports.txt"
+        fi
     done
 
     # Create group hierarchy

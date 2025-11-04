@@ -1,63 +1,36 @@
 # ==============================================================================
-# Inventory Generator Configuration
+# Inventory Generator Configuration - Docker Testing
 # ==============================================================================
-# Define network zones to scan and generate Ansible inventory from
-# Each zone becomes a group in the inventory with appropriate variables
+# Test configuration for Docker environment scanning
 # ==============================================================================
 
 # ==============================================================================
 # SCANNING ZONES
 # ==============================================================================
-# Define your network zones here. Each zone will be scanned separately
-# and hosts will be grouped accordingly in the generated inventory.
 
 zones:
-  production:
-    subnet: "192.168.1.0/24"
-    description: "Production servers - full hardening"
-    # Ports to scan - common production services
-    scan_ports: "22,80,443,3306,5432,6379,8080,9200,27017"
-    # Variables specific to this zone
+  docker-test:
+    subnet: "127.0.0.1/32"
+    description: "Docker test environment"
+    # Ports to scan - Docker container exposes these on host
+    scan_ports: "2222,2223,8080,8443"
     vars:
-      # Staging auto-removes emergency SSH after deployment
       remove_emergency_ssh: false
-      # Run full hardening suite
-      run_full_hardening: true
-      dry_run: 0
-
-  staging:
-    subnet: "192.168.2.0/24"
-    description: "Staging servers - test hardening first"
-    scan_ports: "22,80,443,3306,5432"
-    vars:
-      remove_emergency_ssh: true  # Auto-cleanup after verification
-      run_full_hardening: true
-      dry_run: 0
-
-  test:
-    subnet: "192.168.3.0/24"
-    description: "Test servers - dry run testing"
-    scan_ports: "22,80,443"
-    vars:
-      dry_run: 1                  # Simulation mode only
-      run_full_hardening: false   # Priority 1 scripts only
-      remove_emergency_ssh: true
+      run_full_hardening: false
+      dry_run: 1
 
 # ==============================================================================
 # SCAN SETTINGS
 # ==============================================================================
 scan_settings:
-  # Scan type: basic|full|fast
-  # basic: TCP connect scan (no root required, safe, slower)
-  # full:  SYN scan with version/OS detection (requires root, comprehensive)
-  # fast:  Quick scan with aggressive timing (faster, less accurate)
+  # Use basic scan (no root required)
   type: "basic"
 
   # Timeout for each host (seconds)
-  host_timeout: 300
+  host_timeout: 60
 
   # Parallel hosts to scan simultaneously
-  parallel: 10
+  parallel: 5
 
   # Retry failed hosts
   max_retries: 1
@@ -81,11 +54,10 @@ ssh_test:
 # ==============================================================================
 # DEFAULT ANSIBLE VARIABLES
 # ==============================================================================
-# These are suggested defaults - can be overridden interactively
 
 defaults:
   # Default SSH user for all hosts
-  ansible_user: "admin"
+  ansible_user: "testuser"
 
   # Default SSH port (will be auto-detected if different)
   ansible_port: 22
@@ -99,24 +71,18 @@ defaults:
   # SSH connection timeout
   ansible_timeout: 30
 
-  # Admin IP for firewall whitelist
-  # Special values:
-  #   "auto" - Auto-detect from scanner's IP
-  #   "prompt" - Ask user interactively
-  #   "<IP>" - Use specific IP address
+  # Admin IP - auto-detect from scanner
   admin_ip: "auto"
 
-  # Users allowed to SSH (space-separated)
-  # CRITICAL: Must be set to prevent lockout
-  ssh_allow_users: ""  # Leave empty to prompt
+  # Users allowed to SSH
+  ssh_allow_users: "testuser"
 
-  # Groups allowed to SSH (space-separated)
+  # Groups allowed to SSH
   ssh_allow_groups: ""
 
 # ==============================================================================
 # SERVICE DETECTION
 # ==============================================================================
-# Map detected ports to services and suggest firewall configuration
 
 service_detection:
   # Enable intelligent port suggestion
@@ -142,26 +108,11 @@ service_detection:
       suggest_allow: true
       description: "Secure web server"
 
-    3306:
-      name: "MySQL"
-      category: "database"
-      suggest_allow: false
-      warn: "Consider using trusted_networks instead of public access"
-      description: "MySQL database"
-
-    5432:
-      name: "PostgreSQL"
-      category: "database"
-      suggest_allow: false
-      warn: "Consider using trusted_networks instead of public access"
-      description: "PostgreSQL database"
-
-    6379:
-      name: "Redis"
-      category: "cache"
-      suggest_allow: false
-      warn: "Redis should not be exposed publicly"
-      description: "Redis cache"
+    2222:
+      name: "SSH-Alt"
+      category: "management"
+      always_allow: true
+      description: "Alternate SSH port"
 
     8080:
       name: "HTTP-Alt"
@@ -169,19 +120,11 @@ service_detection:
       suggest_allow: true
       description: "Alternate HTTP port"
 
-    9200:
-      name: "Elasticsearch"
-      category: "search"
-      suggest_allow: false
-      warn: "Elasticsearch should be on private network"
-      description: "Elasticsearch"
-
-    27017:
-      name: "MongoDB"
-      category: "database"
-      suggest_allow: false
-      warn: "MongoDB should not be exposed publicly"
-      description: "MongoDB database"
+    8443:
+      name: "HTTPS-Alt"
+      category: "web"
+      suggest_allow: true
+      description: "Alternate HTTPS port"
 
 # ==============================================================================
 # HOSTNAME RESOLUTION
@@ -191,7 +134,6 @@ hostname_resolution:
   enabled: true
 
   # Fallback hostname pattern if DNS fails
-  # Available placeholders: {zone}, {ip}, {index}
   fallback_pattern: "{zone}{index}"
 
   # Domain suffix to append
@@ -202,7 +144,7 @@ hostname_resolution:
 # ==============================================================================
 output:
   # Default output file
-  default_file: "../inventory-generated.ini"
+  default_file: "../inventory-docker-generated.ini"
 
   # Backup existing inventory before overwriting
   backup_existing: true

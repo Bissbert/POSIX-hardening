@@ -61,6 +61,20 @@ ansible/host_vars/*
 !ansible/host_vars/.gitkeep
 ansible/group_vars/*/vault.yml
 
+# Ansible logs
+ansible/ansible.log
+
+# Inventory backups
+ansible/inventory-generated.ini.backup.*
+ansible/inventories/**/hosts.yml.backup.*
+
+# Fact cache
+/tmp/ansible_facts
+
+# Vault password (never commit!)
+.vault_pass
+.vault_pass.txt
+
 # Ansible team keys - NEVER commit private keys!
 ansible/team_keys/*_ed25519
 ansible/team_keys/*_rsa

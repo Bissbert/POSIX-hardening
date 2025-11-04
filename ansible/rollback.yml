@@ -57,6 +57,7 @@
         - name: Find SSH backup
           shell: ls -t {{ toolkit_path }}/backups/sshd_config.*.bak 2>/dev/null | head -1
           register: ssh_backup
+          changed_when: false
           failed_when: false
 
         - name: Restore SSH configuration
@@ -135,6 +136,7 @@
         - name: List available snapshots
           shell: ls -dt /var/backups/hardening/snapshots/* 2>/dev/null | head -5
           register: snapshots
+          changed_when: false
           failed_when: false
 
         - name: Display available snapshots
