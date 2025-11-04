@@ -5,9 +5,10 @@ Welcome to the comprehensive documentation for the POSIX Shell Server Hardening 
 ## 📚 Documentation Structure
 
 ### Getting Started
-- [Main README](../README.md) - Quick start guide and overview
-- [Quick Reference](guides/QUICK_REFERENCE.md) - Command reference and cheat sheet
-- [Script Documentation](SCRIPTS.md) - Detailed documentation for all 20 hardening scripts
+- **[Getting Started Guide](GETTING_STARTED.md)** - **START HERE** - 5-minute quick start
+- [Main README](../README.md) - Project overview
+- [Ansible Quick Start](../ansible/QUICK_START_ROLES.md) - Ansible command reference
+- [Script Documentation](SCRIPTS.md) - Shell script documentation (22 scripts)
 
 ### Implementation Guides
 - [Hardening Requirements](guides/HARDENING_REQUIREMENTS.md) - Security requirements and compliance standards
@@ -26,12 +27,13 @@ Welcome to the comprehensive documentation for the POSIX Shell Server Hardening 
 ### By Task
 
 #### I want to...
-- **Harden my server quickly** → [Quick Start](../README.md#quick-start)
-- **Understand what each script does** → [Scripts Documentation](SCRIPTS.md)
+- **Get started quickly** → [Getting Started Guide](GETTING_STARTED.md) - **5-minute start**
+- **Deploy with Ansible** → [Ansible Quick Start](../ansible/QUICK_START_ROLES.md)
+- **Use shell scripts** → [Scripts Documentation](SCRIPTS.md)
+- **Understand dependencies** → [Role Execution Order](ROLE_EXECUTION_ORDER.md)
+- **Configure settings** → [Configuration Reference](reference/configuration.md)
 - **Test before deploying** → [Testing Framework](guides/TESTING_FRAMEWORK.md)
-- **Deploy with Ansible** → [Ansible Guide](../ansible/README.md)
-- **Contribute to the project** → [Contributing Guide](development/CONTRIBUTING.md)
-- **Troubleshoot issues** → [Troubleshooting](../README.md#troubleshooting)
+- **Troubleshoot issues** → [Ansible Troubleshooting](../ansible/README.md#-troubleshooting)
 
 ### By Priority
 
