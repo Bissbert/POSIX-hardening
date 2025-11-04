@@ -127,63 +127,53 @@ ansible-playbook playbooks/firewall_hardening.yml -e "posix_firewall_force_rehar
 ### Critical Rules (Always Applied)
 
 1. **Established/Related Connections** (FIRST)
-
    - Always allow existing connections
    - Prevents disruption of active sessions
 
 2. **Admin IP Priority** (if configured)
-
    - Full access for admin IP
    - First rule, bypasses all restrictions
    - Supports IPv4 and IPv6
 
 3. **SSH Protection**
-
    - Always allowed on configured port
    - Optional rate limiting (4 attempts per 60 seconds)
    - Applied before any DROP rules
 
 4. **Loopback Interface**
-
    - Full access for localhost (127.0.0.1)
    - Required for many system services
 
 5. **Invalid Packets Dropped**
-
    - Security: Drop packets with INVALID state
    - Prevents certain types of attacks
 
 ### Optional Rules
 
-6. **ICMP (Ping)**
-
+1. **ICMP (Ping)**
    - Enabled by default with rate limiting
    - Supports multiple ICMP types
    - Rate: 1 per second (configurable)
 
-7. **Additional TCP Ports**
-
+2. **Additional TCP Ports**
    - Add ports via `posix_firewall_allowed_ports`
    - Example: HTTP (80), HTTPS (443)
 
-8. **Trusted Networks**
-
+3. **Trusted Networks**
    - Full access from trusted CIDR blocks
    - Useful for internal networks
 
-9. **Outbound Services**
-
+4. **Outbound Services**
    - DNS (53): Enabled by default
    - NTP (123): Enabled by default
    - HTTP (80): Enabled by default
    - HTTPS (443): Enabled by default
    - Custom ports supported
 
-10. **Logging Chain** (if enabled)
-
-    - Logs all dropped packets
-    - Rate limited to prevent log spam
-    - Custom prefix for easy filtering
+5. **Logging Chain** (if enabled)
+   - Logs all dropped packets
+   - Rate limited to prevent log spam
+   - Custom prefix for easy filtering
 
 ## Requirements
 

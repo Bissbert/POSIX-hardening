@@ -5,6 +5,7 @@ Thank you for your interest in contributing to this security toolkit! We welcome
 ## Code of Conduct
 
 This project prioritizes:
+
 1. **Safety** - Never lock administrators out of systems
 2. **Security** - Improve system hardening without compromising access
 3. **Simplicity** - Keep scripts small, focused, and POSIX-compliant
@@ -48,7 +49,8 @@ This project prioritizes:
 
 #### Development Guidelines
 
-**POSIX Compliance**
+### POSIX Compliance
+
 ```bash
 # Good - POSIX compliant
 if [ -f "/etc/ssh/sshd_config" ]; then
@@ -61,13 +63,15 @@ if [[ -f /etc/ssh/sshd_config ]]; then
 fi
 ```
 
-**Safety First**
+### Safety First
+
 - Every script MUST preserve SSH access
 - Include rollback mechanisms for risky changes
 - Test on non-production systems first
 - Add safety checks before destructive operations
 
-**Script Structure**
+### Script Structure
+
 ```bash
 #!/bin/sh
 # Script: XX-feature-name.sh
@@ -107,6 +111,7 @@ main "$@"
    - Run validation suite
 
 2. **Test Commands**
+
    ```bash
    # Run validation suite
    cd tests/
@@ -120,6 +125,7 @@ main "$@"
    ```
 
 3. **Ansible Testing**
+
    ```bash
    # Test deployment
    cd ansible/
@@ -128,8 +134,9 @@ main "$@"
 
 #### Commit Guidelines
 
-**Commit Message Format**
-```
+### Commit Message Format
+
+```text
 type: brief description (max 50 chars)
 
 Longer explanation if needed (wrap at 72 chars).
@@ -138,7 +145,8 @@ Explain the problem and solution.
 Fixes: #issue-number (if applicable)
 ```
 
-**Types:**
+### Types
+
 - `feat`: New hardening feature
 - `fix`: Bug fix
 - `sec`: Security improvement
@@ -147,8 +155,9 @@ Fixes: #issue-number (if applicable)
 - `ansible`: Ansible playbook changes
 - `refactor`: Code restructuring
 
-**Examples:**
-```
+### Examples
+
+```text
 feat: add process accounting hardening
 
 Implements process accounting to track system calls
@@ -157,7 +166,6 @@ prevent disk space issues.
 
 Fixes: #42
 ```
-
 #### Pull Request Process
 
 1. **Update Documentation**

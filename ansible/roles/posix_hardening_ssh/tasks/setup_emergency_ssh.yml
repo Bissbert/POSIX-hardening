@@ -135,7 +135,7 @@
     fi
   register: emergency_ssh_stop
   when: emergency_ssh_pid.stat.exists
-  changed_when: emergency_ssh_stop.stdout == "STOPPED"
+  changed_when: false
   tags: [ssh, emergency, service]
 
 - name: Start emergency SSH daemon
@@ -230,6 +230,7 @@
     - ansible_os_family == "Debian"
     - fw_rule_check.rc != 0
   failed_when: false
+  changed_when: false
   tags: [ssh, emergency, firewall]
 
 # ------------------------------------------------------------------------------
