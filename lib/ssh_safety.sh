@@ -4,6 +4,9 @@
 # Critical: Prevents lockout on remote servers
 
 # Note: common.sh should be sourced before this file
+# Source POSIX compatibility layer
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+. "${SCRIPT_DIR}/posix_compat.sh"
 
 # SSH-specific configuration
 readonly SSHD_CONFIG="${SSHD_CONFIG:-/etc/ssh/sshd_config}"
@@ -69,16 +72,14 @@ create_ssh_test_config() {
 
     # Modify to use test port
     if grep -q "^Port " "$test_config" 2>/dev/null; then
-        sed -i.bak "s/^Port .*/Port $test_port/" "$test_config"
-        rm -f "$test_config.bak"
+        posix_sed_inplace "s/^Port .*/Port $test_port/" "$test_config"
     else
         echo "Port $test_port" >> "$test_config"
     fi
 
     # Add PID file for test instance
     if grep -q "^PidFile " "$test_config" 2>/dev/null; then
-        sed -i.bak "s|^PidFile .*|PidFile /var/run/sshd_test.pid|" "$test_config"
-        rm -f "$test_config.bak"
+        posix_sed_inplace "s|^PidFile .*|PidFile /var/run/sshd_test.pid|" "$test_config"
     else
         echo "PidFile /var/run/sshd_test.pid" >> "$test_config"
     fi
@@ -288,7 +289,7 @@ update_ssh_setting() {
     # Check if setting exists (commented or not)
     if grep -q "^#*$setting " "$config"; then
         # Update existing setting (use | as delimiter to handle paths with /)
-        sed -i "s|^#*$setting .*|$setting $value|" "$config"
+        posix_sed_inplace "s|^#*$setting .*|$setting $value|" "$config"
         log "DEBUG" "Updated: $setting $value"
     else
         # Add new setting

@@ -4,6 +4,9 @@
 # Provides atomic operations with automatic rollback on failure
 
 # Note: common.sh should be sourced before this file
+# Source POSIX compatibility layer
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+. "${SCRIPT_DIR}/posix_compat.sh"
 
 # Rollback configuration
 readonly ROLLBACK_STACK="$STATE_DIR/rollback_stack"
@@ -81,7 +84,7 @@ rollback_transaction() {
         mv "$ROLLBACK_STACK" "$temp_stack"
 
         # Read stack in reverse order
-        tac "$temp_stack" 2>/dev/null || tail -r "$temp_stack" 2>/dev/null | while IFS='|' read -r action_type action_data; do
+        posix_reverse "$temp_stack" | while IFS='|' read -r action_type action_data; do
             execute_rollback_action "$action_type" "$action_data"
         done
 
