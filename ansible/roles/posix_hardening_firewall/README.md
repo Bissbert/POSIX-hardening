@@ -4,11 +4,14 @@
 
 **This role modifies firewall rules with HIGH LOCKOUT RISK.**
 
-Incorrect configuration can prevent SSH access and lock you out of remote systems. Always test in a safe environment with console/KVM access available.
+Incorrect configuration can prevent SSH access and lock you out of remote systems. Always test
+in a safe environment with console/KVM access available.
 
 ## Overview
 
-Comprehensive firewall hardening role converted from the POSIX hardening shell script (`02-firewall-setup.sh`). Implements production-grade iptables/ip6tables firewall configuration with extensive safety mechanisms to prevent lockout.
+Comprehensive firewall hardening role converted from the POSIX hardening shell script
+(`02-firewall-setup.sh`). Implements production-grade iptables/ip6tables firewall configuration
+with extensive safety mechanisms to prevent lockout.
 
 **Source Script:** `scripts/02-firewall-setup.sh`
 
@@ -504,8 +507,8 @@ posix_firewall_custom_chains:
 
 ### Custom IPv4 Rules (Advanced)
 
-For complex rules not covered by the role's built-in options, you can use raw iptables commands, but this is NOT
-recommended. Instead, request new features or use the trusted networks option.
+For complex rules not covered by the role's built-in options, you can use raw iptables commands,
+but this is NOT recommended. Instead, request new features or use the trusted networks option.
 
 ### Fail2ban Integration
 
@@ -629,8 +632,8 @@ systemctl enable iptables
 
 #### Issue: Container environment warnings
 
-**Solution:** Firewall in containers may have limitations. Consider using host-level firewall instead or skip
-firewall role for containers.
+**Solution:** Firewall in containers may have limitations. Consider using host-level firewall
+instead or skip firewall role for containers.
 
 #### Issue: IPv6 rules fail
 

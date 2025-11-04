@@ -10,6 +10,7 @@ cd ansible/testing
 ```
 
 This runs the complete test cycle:
+
 1. Generate SSH keys
 2. Start containers
 3. Test SSH connectivity

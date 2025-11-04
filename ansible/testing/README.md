@@ -1,10 +1,12 @@
 # Ansible Testing with Docker
 
-This directory contains a complete Docker-based testing environment for the POSIX Hardening Ansible playbooks.
+This directory contains a complete Docker-based testing environment for the POSIX Hardening
+Ansible playbooks.
 
 ## Overview
 
-The testing setup simulates a realistic multi-host environment where you can safely test hardening playbooks without affecting production systems.
+The testing setup simulates a realistic multi-host environment where you can safely test
+hardening playbooks without affecting production systems.
 
 ### Components
 
@@ -29,6 +31,7 @@ cd ansible/testing
 ```
 
 This will:
+
 1. Generate SSH keys
 2. Start Docker containers
 3. Test SSH connectivity
@@ -56,6 +59,7 @@ Launch all Docker containers:
 ```
 
 This creates:
+
 - `posix-hardening-target1` - First target host (172.20.0.10)
 - `posix-hardening-target2` - Second target host (172.20.0.11)
 - `posix-hardening-controller` - Ansible control node (172.20.0.2)
@@ -161,7 +165,7 @@ docker exec -it posix-hardening-controller ssh -i /root/.ssh/id_rsa ansible@172.
 
 ## Architecture
 
-```
+```text
 ┌─────────────────────────────────────────────────────────────┐
 │                     Docker Network: 172.20.0.0/16            │
 │                                                               │
@@ -249,16 +253,19 @@ lsof -i :2202
 ### SSH Connection Fails
 
 1. Verify containers are running:
+
    ```bash
    docker ps
    ```
 
 2. Check SSH service in target:
+
    ```bash
    docker exec posix-hardening-target1 systemctl status ssh
    ```
 
 3. Test SSH from controller:
+
    ```bash
    docker exec posix-hardening-controller \
      ssh -v -i /root/.ssh/id_rsa ansible@172.20.0.10
@@ -267,17 +274,20 @@ lsof -i :2202
 ### Playbook Fails
 
 1. Check target system state:
+
    ```bash
    docker exec posix-hardening-target1 /bin/bash
    ```
 
 2. Review logs:
+
    ```bash
    docker logs posix-hardening-target1
    docker logs posix-hardening-controller
    ```
 
 3. Reset environment:
+
    ```bash
    ./test-runner.sh clean
    ./test-runner.sh start

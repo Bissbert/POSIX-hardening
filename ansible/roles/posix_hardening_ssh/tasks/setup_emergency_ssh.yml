@@ -120,12 +120,22 @@
 - name: Stop existing emergency SSH if running
   ansible.builtin.shell: |
     if [ -f {{ posix_ssh_emergency_pid_file }} ]; then
-      kill $(cat {{ posix_ssh_emergency_pid_file }}) 2>/dev/null || true
-      rm -f {{ posix_ssh_emergency_pid_file }}
-      sleep 1
+      PID=$(cat {{ posix_ssh_emergency_pid_file }})
+      if kill -0 "$PID" 2>/dev/null; then
+        kill "$PID" 2>/dev/null || true
+        rm -f {{ posix_ssh_emergency_pid_file }}
+        sleep 1
+        echo "STOPPED"
+      else
+        rm -f {{ posix_ssh_emergency_pid_file }}
+        echo "NOT_RUNNING"
+      fi
+    else
+      echo "NO_PID_FILE"
     fi
+  register: emergency_ssh_stop
   when: emergency_ssh_pid.stat.exists
-  changed_when: emergency_ssh_pid.stat.exists
+  changed_when: emergency_ssh_stop.stdout == "STOPPED"
   tags: [ssh, emergency, service]
 
 - name: Start emergency SSH daemon
@@ -195,6 +205,17 @@
 # FIREWALL CONFIGURATION FOR EMERGENCY PORT
 # ------------------------------------------------------------------------------
 
+- name: Check if emergency SSH firewall rule exists
+  ansible.builtin.shell: |
+    iptables -C INPUT -p tcp --dport {{ posix_ssh_emergency_port }} -m conntrack --ctstate NEW,ESTABLISHED -j ACCEPT -m comment --comment "Emergency SSH access port" 2>/dev/null
+  register: fw_rule_check
+  failed_when: false
+  changed_when: false
+  when:
+    - posix_ssh_ensure_firewall_rule | bool
+    - ansible_os_family == "Debian"
+  tags: [ssh, emergency, firewall]
+
 - name: Add firewall rule for emergency SSH port
   ansible.builtin.iptables:
     chain: INPUT
@@ -202,12 +223,12 @@
     destination_port: "{{ posix_ssh_emergency_port }}"
     ctstate: NEW,ESTABLISHED
     jump: ACCEPT
-    action: insert
-    rule_num: 1
+    action: append
     comment: "Emergency SSH access port"
   when:
     - posix_ssh_ensure_firewall_rule | bool
     - ansible_os_family == "Debian"
+    - fw_rule_check.rc != 0
   failed_when: false
   tags: [ssh, emergency, firewall]
 

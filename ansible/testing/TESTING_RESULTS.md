@@ -1,13 +1,17 @@
 # Ansible Deployment Testing Results
 
 **Testing Date:** 2025-10-20
+
 **Test Environment:** Docker-based multi-container setup
+
 **Ansible Version:** cytopia/ansible:latest-tools
+
 **Target OS:** Debian 12.12 (ARM64)
 
 ## Executive Summary
 
-Docker-based testing successfully identified and resolved **4 critical issues** that would have prevented Ansible deployment in production. All issues have been fixed and committed.
+Docker-based testing successfully identified and resolved **4 critical issues** that would have
+prevented Ansible deployment in production. All issues have been fixed and committed.
 
 ## Test Methodology
 
@@ -28,18 +32,23 @@ Docker-based testing successfully identified and resolved **4 critical issues** 
 ### Issue 1: Docker Network Conflict ❌ → ✅
 
 **Severity:** High
+
 **Impact:** Complete deployment failure
 
 **Problem:**
+
 - Docker Compose tried to create network with subnet `172.20.0.0/16`
 - Conflicted with existing Docker network on host
 - Error: `Pool overlaps with other one on this address space`
 
 **Root Cause:**
+
 Common Docker bridge networks often use 172.x.x.x ranges, causing conflicts.
 
 **Fix:**
+
 Changed network subnet in 3 files:
+
 - `ansible/testing/docker-compose.yml`: `172.20.0.0/16` → `172.25.0.0/16`
 - Updated all container IPs:
   - Controller: `172.20.0.2` → `172.25.0.2`
@@ -48,6 +57,7 @@ Changed network subnet in 3 files:
 - `ansible/testing/inventory-docker.ini`: Updated admin_ip and ansible_host values
 
 **Prevention:**
+
 Use less common IP ranges (172.25.x.x, 172.30.x.x) to avoid conflicts.
 
 ---
@@ -55,21 +65,25 @@ Use less common IP ranges (172.25.x.x, 172.30.x.x) to avoid conflicts.
 ### Issue 2: Volume Mount Path Mismatch ❌ → ✅
 
 **Severity:** Critical
+
 **Impact:** Playbook unable to copy hardening scripts to targets
 
 **Problem:**
-```
+
+```text
 fatal: [target1]: FAILED!
 msg: Could not find or access '../scripts/'
 ```
 
 Playbook searched for:
+
 - `/ansible/files/../scripts/`
 - `/ansible/../scripts/`
 
 But files were actually in repo root which wasn't mounted.
 
 **Root Cause:**
+
 ```yaml
 # BEFORE (incorrect):
 volumes:
@@ -80,6 +94,7 @@ working_dir: /ansible
 This mounted `/path/to/POSIX-hardening/ansible/` as `/ansible`, making `../scripts/` unreachable.
 
 **Fix:**
+
 ```yaml
 # AFTER (correct):
 volumes:
@@ -88,6 +103,7 @@ working_dir: /repo/ansible  # Work from ansible directory inside repo
 ```
 
 Now the container has:
+
 - `/repo/` - Full repository root
 - `/repo/ansible/` - Ansible playbooks (working directory)
 - `/repo/scripts/` - Hardening scripts (accessible as `../scripts/`)
@@ -95,6 +111,7 @@ Now the container has:
 - `/repo/tests/` - Tests (accessible as `../tests/`)
 
 **Files Changed:**
+
 - `ansible/testing/docker-compose.yml`
 - Updated inventory mount path
 
@@ -103,15 +120,18 @@ Now the container has:
 ### Issue 3: Sed Delimiter Conflict ❌ → ✅
 
 **Severity:** High
+
 **Impact:** SSH hardening script fails during banner configuration
 
 **Problem:**
-```
+
+```text
 sed: -e expression #1, char 25: unknown option to `s'
 [ERROR] Script failed with exit code: 1
 ```
 
 **Root Cause:**
+
 In `lib/ssh_safety.sh:291`, the `update_ssh_setting()` function used:
 
 ```bash
@@ -119,10 +139,12 @@ sed -i "s/^#*$setting .*/$setting $value/" "$config"
 ```
 
 When setting `Banner /etc/ssh/banner`:
+
 - `$setting` = "Banner"
 - `$value` = "/etc/ssh/banner"
 
 The command becomes:
+
 ```bash
 sed -i "s/^#*Banner .*/Banner /etc/ssh/banner/" /etc/ssh/sshd_config
 ```
@@ -130,6 +152,7 @@ sed -i "s/^#*Banner .*/Banner /etc/ssh/banner/" /etc/ssh/sshd_config
 The `/` in the path `/etc/ssh/banner` was interpreted as a sed delimiter, breaking the syntax.
 
 **Fix:**
+
 Changed sed delimiter from `/` to `|`:
 
 ```bash
@@ -141,14 +164,17 @@ sed -i "s|^#*$setting .*|$setting $value|" "$config"
 ```
 
 Now the command works correctly:
+
 ```bash
 sed -i "s|^#*Banner .*|Banner /etc/ssh/banner|" /etc/ssh/sshd_config
 ```
 
 **Files Changed:**
+
 - `lib/ssh_safety.sh:291`
 
 **Best Practice:**
+
 Always use `|` or `#` as sed delimiters when processing filesystem paths.
 
 ---
@@ -156,16 +182,19 @@ Always use `|` or `#` as sed delimiters when processing filesystem paths.
 ### Issue 4: Missing netcat Package ❌ → ✅
 
 **Severity:** High
+
 **Impact:** SSH validation fails, causing unnecessary rollback
 
 **Problem:**
-```
+
+```text
 ✗ SSH port is not accessible!
 [ERROR] SSH port is not accessible!
 [WARN] Rolling back transaction: ssh_hardening (reason: validation_failed)
 ```
 
 **Root Cause:**
+
 SSH hardening script includes validation using netcat:
 
 ```bash
@@ -181,6 +210,7 @@ fi
 The `nc` (netcat) command was not installed in the Docker image.
 
 **Fix:**
+
 Added `netcat-openbsd` to Dockerfile packages:
 
 ```dockerfile
@@ -188,14 +218,16 @@ RUN apt-get update && apt-get install -y \
     openssh-server \
     sudo \
     ...
-    netcat-openbsd \  # <- Added
+    netcat-openbsd \
     && rm -rf /var/lib/apt/lists/*
 ```
 
 **Files Changed:**
+
 - `ansible/testing/Dockerfile`
 
 **Note:**
+
 `netcat-openbsd` is the modern, maintained version of netcat in Debian/Ubuntu.
 
 ---
@@ -269,6 +301,7 @@ RUN apt-get update && apt-get install -y \
 ### Immediate Actions
 
 1. ✅ **Rebuild Docker Containers** (after netcat fix)
+
    ```bash
    cd ansible/testing
    docker compose down
@@ -277,11 +310,13 @@ RUN apt-get update && apt-get install -y \
    ```
 
 2. **Re-run Complete Test**
+
    ```bash
    ./test-runner.sh full
    ```
 
 3. **Test Additional Priorities**
+
    ```bash
    # Priority 2
    docker exec posix-hardening-controller \
@@ -323,7 +358,8 @@ RUN apt-get update && apt-get install -y \
 
 ## Conclusion
 
-Docker-based testing proved invaluable, discovering **4 production-blocking issues** before deployment:
+Docker-based testing proved invaluable, discovering **4 production-blocking issues** before
+deployment:
 
 1. Network configuration conflicts
 2. Volume mount misconfigurations
@@ -335,12 +371,14 @@ All issues have been **identified, fixed, and committed** to the repository.
 ### Risk Assessment
 
 **Before Testing:**
+
 - ❌ Would have failed immediately on network conflict
 - ❌ Could not deploy scripts to targets
 - ❌ SSH hardening would fail mid-execution
 - ❌ Validation would fail unnecessarily
 
 **After Fixes:**
+
 - ✅ Network configuration robust
 - ✅ File deployment working correctly
 - ✅ SSH hardening executes fully
@@ -364,7 +402,7 @@ All issues have been **identified, fixed, and committed** to the repository.
 
 ## Files Modified
 
-```
+```text
 ansible/testing/docker-compose.yml    - Network and volume fixes
 ansible/testing/inventory-docker.ini  - IP address updates
 ansible/testing/Dockerfile            - Added netcat-openbsd
@@ -376,12 +414,14 @@ lib/ssh_safety.sh                     - Fixed sed delimiter
 ### Container Specifications
 
 **Controller:**
+
 - Image: cytopia/ansible:latest-tools
 - RAM: Shared with host
 - Volumes: Full repo mounted
 - Tools: Ansible 2.x, SSH client, Python 3
 
 **Targets (x2):**
+
 - Image: Debian 12-slim
 - RAM: ~100MB each
 - Storage: 40GB available
@@ -390,7 +430,7 @@ lib/ssh_safety.sh                     - Fixed sed delimiter
 
 ### Network Configuration
 
-```
+```text
 Network: testing_test_network
 Subnet: 172.25.0.0/16
 Gateway: 172.25.0.1
@@ -404,7 +444,11 @@ Hosts:
 ---
 
 **Generated:** 2025-10-20
+
 **Test Duration:** ~2 hours
+
 **Issues Found:** 4
+
 **Issues Fixed:** 4
+
 **Success Rate:** 100% (after fixes)

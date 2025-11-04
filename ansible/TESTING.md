@@ -52,6 +52,7 @@ Currently implemented:
    ```
 
 3. **Git**
+
    ```bash
    git --version
    ```
@@ -76,7 +77,7 @@ molecule --version
 
 Expected output:
 
-```
+```text
 molecule 25.9.0 using python 3.11
     ansible:2.19.3
     docker:25.8.12 from molecule_plugins requiring collections: community.docker>=3.10.2 ansible.posix>=1.4.0
@@ -167,7 +168,7 @@ pytest molecule/default/tests/test_default.py -m ssh -v
 
 Molecule provides detailed output:
 
-```
+```text
 ============================= test session starts ==============================
 tests/test_default.py::TestSSHConfigurationFiles::test_sshd_config_exists PASSED
 tests/test_default.py::TestSSHSecuritySettings::test_root_login_disabled PASSED

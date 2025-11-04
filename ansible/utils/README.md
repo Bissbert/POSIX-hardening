@@ -1,10 +1,12 @@
 # Automatic Inventory Generator
 
-Intelligent network scanning utility that automatically discovers hosts and generates Ansible inventory files with suggested security configurations.
+Intelligent network scanning utility that automatically discovers hosts and generates Ansible
+inventory files with suggested security configurations.
 
 ## Features
 
-- **Multi-Zone Support**: Scan different network zones (production, staging, test) with zone-specific configurations
+- **Multi-Zone Support**: Scan different network zones (production, staging, test) with
+  zone-specific configurations
 - **Host Discovery**: Automatic nmap-based host discovery in configured subnets
 - **Service Detection**: Identifies running services and suggests appropriate firewall rules
 - **SSH Port Detection**: Handles non-standard SSH ports automatically
@@ -16,11 +18,13 @@ Intelligent network scanning utility that automatically discovers hosts and gene
 ## Requirements
 
 ### System Requirements
+
 - POSIX-compliant shell (sh, dash, bash)
 - nmap (network scanning)
 - Standard utilities: awk, sed, grep, nc (optional but recommended)
 
 ### Installation
+
 ```bash
 # Debian/Ubuntu
 sudo apt-get update
@@ -59,6 +63,7 @@ cd ansible/utils
 ```
 
 Follow the prompts to:
+
 1. Select zones to scan
 2. Configure Ansible user
 3. Specify SSH allowed users
@@ -176,6 +181,7 @@ scan_settings:
 ```
 
 **Scan Types:**
+
 - **basic**: TCP connect scan, no root required, safe, slower
 - **full**: SYN scan with version/OS detection, requires root, comprehensive
 - **fast**: Quick scan with aggressive timing, faster but less accurate
@@ -281,11 +287,13 @@ Scans specified ports on each discovered host.
 
 ### 3. SSH Detection
 
-Checks common SSH ports (22, 2222, 2200, 22000) and identifies the actual SSH port using version detection.
+Checks common SSH ports (22, 2222, 2200, 22000) and identifies the actual SSH port using
+version detection.
 
 ### 4. Service Identification
 
 Maps discovered ports to known services:
+
 - Port 22 → SSH
 - Port 80 → HTTP
 - Port 443 → HTTPS
@@ -297,9 +305,11 @@ Maps discovered ports to known services:
 ### 5. Intelligent Suggestions
 
 **Auto-Allow Ports:**
+
 - Web services (80, 443, 8080, 8443) are suggested for `allowed_ports`
 
 **Security Warnings:**
+
 - Database ports (3306, 5432, 27017) get warnings to use `trusted_networks`
 - Cache services (6379) warned against public exposure
 - Search engines (9200) recommended for private networks only
@@ -316,6 +326,7 @@ Maps discovered ports to known services:
 ### Network Access
 
 The scanner needs network access to target subnets:
+
 - Ensure firewall rules allow nmap traffic from scanner
 - Some scan types require root privileges
 - Consider scanning from a trusted management network
@@ -331,6 +342,7 @@ The scanner needs network access to target subnets:
 ### Credential Safety
 
 The generator does **NOT**:
+
 - Store passwords
 - Perform authentication
 - Access systems (only scans externally visible ports)
@@ -340,12 +352,14 @@ It only discovers network topology and suggests configurations.
 ### Generated File Security
 
 The inventory file contains sensitive information:
+
 ```bash
 # Secure the generated inventory
 chmod 600 inventory-generated.ini
 ```
 
 Consider using Ansible Vault for sensitive variables:
+
 ```bash
 ansible-vault encrypt_string 'admin,deploy' --name 'ssh_allow_users'
 ```
@@ -356,15 +370,19 @@ ansible-vault encrypt_string 'admin,deploy' --name 'ssh_allow_users'
 
 **Problem**: "Found 0 hosts in zone"
 
-**Root Cause**: The scanner uses ping/ARP for host discovery by default. If hosts don't respond to ping (ICMP blocked by firewall), they won't be discovered.
+**Root Cause**: The scanner uses ping/ARP for host discovery by default. If hosts don't respond
+to ping (ICMP blocked by firewall), they won't be discovered.
 
-**Automatic Fallback**: The scanner now automatically tries TCP SYN discovery on ports 22,80,443 if ping scan finds nothing.
+**Automatic Fallback**: The scanner now automatically tries TCP SYN discovery on ports
+22,80,443 if ping scan finds nothing.
 
-**Manual Solutions**:
+**Manual Solutions:**
+
 1. **Check subnet configuration** is correct
 2. **Verify network connectivity**: `ping <subnet_gateway>`
 3. **Check firewall rules** - ensure either ICMP or TCP ports are accessible
 4. **Test manually**:
+
    ```bash
    # Test ping discovery
    nmap -sn -n -T4 192.168.1.0/24
@@ -372,15 +390,18 @@ ansible-vault encrypt_string 'admin,deploy' --name 'ssh_allow_users'
    # Test TCP discovery (if ping fails)
    nmap -PS22,80,443 -sn -n -T4 192.168.1.0/24
    ```
+
 5. **Try with different subnet** to test: `--subnet "10.0.0.0/24"`
 
-**Note**: The scanner automatically falls back to TCP SYN discovery if ping fails, so in most cases it should find hosts even with ICMP blocked.
+**Note**: The scanner automatically falls back to TCP SYN discovery if ping fails, so in most
+cases it should find hosts even with ICMP blocked.
 
 ### nmap Not Found
 
 **Problem**: "nmap is required but not installed"
 
 **Solution**:
+
 ```bash
 sudo apt-get install nmap  # Debian/Ubuntu
 sudo yum install nmap      # RHEL/CentOS
@@ -392,6 +413,7 @@ brew install nmap          # macOS
 **Problem**: Some scan types require root
 
 **Solution**:
+
 ```bash
 # Use basic scan type (no root required)
 # Edit inventory-config.yml:
@@ -406,21 +428,25 @@ sudo ./generate-inventory.sh --zone production
 
 **Problem**: Hosts added but SSH port wrong
 
-**Solution**:
+**Solution:**
+
 1. Manually verify SSH port: `nmap -p 22,2222 <host>`
 2. Add custom SSH ports to config:
+
    ```yaml
    zones:
      production:
        scan_ports: "22,2222,2200,22000,80,443"
    ```
+
 3. Manually edit generated inventory afterwards
 
 ### Duplicate Hosts
 
 **Problem**: Same host appears multiple times
 
-**Solution**:
+**Solution:**
+
 - Check that zone subnets don't overlap
 - Review `inventory-config.yml` for duplicate subnet definitions
 - The generator includes `fail_on_duplicates` validation by default
@@ -429,25 +455,30 @@ sudo ./generate-inventory.sh --zone production
 
 **Problem**: Scans take too long
 
-**Solutions**:
+**Solutions:**
+
 1. Use fast scan type:
+
    ```yaml
    scan_settings:
      type: "fast"
    ```
 
 2. Reduce scan ports:
+
    ```yaml
    scan_ports: "22,80,443"  # Instead of many ports
    ```
 
 3. Increase parallel jobs:
+
    ```yaml
    scan_settings:
      parallel: 20
    ```
 
 4. Reduce host timeout:
+
    ```yaml
    scan_settings:
      host_timeout: 60
@@ -503,7 +534,8 @@ ansible-playbook -i inventory-generated.ini site.yml --diff
 
 ```bash
 # Crontab entry for nightly discovery
-0 2 * * * cd /path/to/POSIX-hardening/ansible/utils && ./generate-inventory.sh --zone all --no-confirm
+0 2 * * * cd /path/to/POSIX-hardening/ansible/utils && \
+  ./generate-inventory.sh --zone all --no-confirm
 ```
 
 ## Advanced Usage
@@ -536,7 +568,7 @@ zones:
     description: "Production web servers"
     scan_ports: "22,80,443"
     vars:
-      remove_emergency_ssh: false
+      remove_emergency_ssh: true
       run_full_hardening: true
 ```
 
@@ -557,6 +589,7 @@ ansible-inventory -i inventory-generated.ini --list > inventory.json
 ### nmap-scanner.sh
 
 Low-level nmap operations:
+
 - `discover_hosts()` - Find live hosts
 - `scan_ports()` - Port scanning
 - `get_open_ports()` - Extract open ports
@@ -566,6 +599,7 @@ Low-level nmap operations:
 ### service-detector.sh
 
 Service intelligence:
+
 - `get_service_name()` - Port to service mapping
 - `should_allow_port()` - Suggest for firewall
 - `get_port_warning()` - Security warnings
@@ -574,6 +608,7 @@ Service intelligence:
 ### inventory-builder.sh
 
 Inventory file generation:
+
 - `init_inventory()` - Create header
 - `add_host()` - Add host entries
 - `add_zone_vars()` - Zone variables
