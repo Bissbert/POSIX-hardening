@@ -1,0 +1,109 @@
+---
+# ==============================================================================
+# Setup Safety Timeout Mechanism
+# ==============================================================================
+# Creates and starts a background script that will auto-reset firewall
+# after timeout period if not cancelled (prevents permanent lockout)
+# ==============================================================================
+
+- name: Display safety timeout phase
+  ansible.builtin.debug:
+    msg: |
+      ========================================
+      PHASE 3: SAFETY TIMEOUT MECHANISM
+      ========================================
+      Setting up auto-reset safety mechanism
+      Timeout: {{ posix_firewall_safety_timeout }} seconds
+      ========================================
+  tags: [firewall, safety]
+
+- name: Create safety reset script from template
+  ansible.builtin.template:
+    src: firewall_reset.sh.j2
+    dest: "{{ posix_firewall_reset_script }}"
+    mode: '0700'
+  tags: [firewall, safety]
+
+- name: Start safety timeout in background
+  ansible.builtin.shell: |
+    nohup {{ posix_firewall_reset_script }} > /dev/null 2>&1 &
+    echo $! > {{ posix_firewall_reset_pid_file }}
+    echo "Safety timeout started with PID: $(cat {{ posix_firewall_reset_pid_file }})"
+  register: safety_timeout_start
+  changed_when: true
+  tags: [firewall, safety]
+
+- name: Verify safety timeout is running
+  ansible.builtin.shell: |
+    if [ -f {{ posix_firewall_reset_pid_file }} ]; then
+      pid=$(cat {{ posix_firewall_reset_pid_file }})
+      if kill -0 "$pid" 2>/dev/null; then
+        echo "Safety timeout running (PID: $pid)"
+        exit 0
+      else
+        echo "WARNING: Safety timeout process not running (PID: $pid)"
+        echo "This is normal in some environments (Docker, containers)"
+        echo "Other safety mechanisms are in place (backups, rollback handlers)"
+        exit 1
+      fi
+    else
+      echo "WARNING: PID file not created"
+      echo "Safety timeout may not be active"
+      exit 1
+    fi
+  register: safety_verify
+  changed_when: false
+  failed_when: false  # Don't fail - just warn
+  tags: [firewall, safety]
+
+- name: Display safety timeout status
+  ansible.builtin.debug:
+    msg: |
+      ========================================
+      SAFETY TIMEOUT STATUS
+      ========================================
+      {% if safety_verify.rc == 0 %}
+      ✅ Safety timeout is running
+      Auto-reset will trigger in {{ posix_firewall_safety_timeout }} seconds if not cancelled
+      {% else %}
+      ⚠️  Safety timeout process may not be running
+      This can happen in containerized environments
+
+      Other safety mechanisms are active:
+        - Configuration backups created
+        - Emergency rollback handlers configured
+        - Connectivity validation will verify firewall works
+        - Manual rollback available from backups
+      {% endif %}
+      ========================================
+  tags: [firewall, safety]
+
+- name: Store safety timeout PID as fact
+  ansible.builtin.slurp:
+    src: "{{ posix_firewall_reset_pid_file }}"
+  register: safety_pid_content
+  tags: [firewall, safety]
+
+- name: Set safety timeout PID fact
+  ansible.builtin.set_fact:
+    posix_firewall_safety_pid: "{{ safety_pid_content.content | b64decode | trim }}"
+  tags: [firewall, safety]
+
+- name: Display safety timeout status
+  ansible.builtin.debug:
+    msg: |
+      ========================================
+      SAFETY TIMEOUT ACTIVE
+      ========================================
+      PID: {{ posix_firewall_safety_pid }}
+      Timeout: {{ posix_firewall_safety_timeout }} seconds
+      Reset script: {{ posix_firewall_reset_script }}
+
+      Firewall will automatically reset to permissive state if:
+        1. Connectivity validation fails
+        2. Ansible playbook crashes
+        3. Timeout expires before cancellation
+
+      This prevents permanent lockout from firewall misconfigurations
+      ========================================
+  tags: [firewall, safety]

@@ -1,0 +1,136 @@
+---
+# ==============================================================================
+# POSIX Firewall Hardening Role - Handlers
+# ==============================================================================
+# Handlers for firewall reload and emergency rollback
+# ==============================================================================
+
+- name: reload iptables rules
+  ansible.builtin.shell: |
+    if [ -f {{ posix_firewall_rules_v4 }} ]; then
+      {{ posix_firewall_iptables_restore_bin }} < {{ posix_firewall_rules_v4 }}
+      echo "IPv4 rules reloaded from {{ posix_firewall_rules_v4 }}"
+    else
+      echo "WARNING: No IPv4 rules file found to reload"
+      exit 1
+    fi
+  listen: reload iptables
+  tags: [firewall, reload]
+
+- name: reload ip6tables rules
+  ansible.builtin.shell: |
+    if [ -f {{ posix_firewall_rules_v6 }} ]; then
+      ip6tables-restore < {{ posix_firewall_rules_v6 }}
+      echo "IPv6 rules reloaded from {{ posix_firewall_rules_v6 }}"
+    else
+      echo "INFO: No IPv6 rules file found (may not be configured)"
+    fi
+  listen: reload iptables
+  when: posix_firewall_ipv6_enabled | bool
+  failed_when: false
+  tags: [firewall, reload, ipv6]
+
+- name: Display emergency rollback message
+  ansible.builtin.debug:
+    msg: |
+      ========================================
+      EMERGENCY FIREWALL ROLLBACK INITIATED
+      ========================================
+      Attempting to restore firewall to safe state...
+  listen: emergency firewall rollback
+  tags: [firewall, rollback, emergency]
+
+- name: Try to restore from latest backup
+  ansible.builtin.shell: |
+    if [ -n "{{ posix_firewall_latest_backup_v4 | default('') }}" ] && [ -f "{{ posix_firewall_latest_backup_v4 | default('') }}" ]; then
+      {{ posix_firewall_iptables_restore_bin }} < {{ posix_firewall_latest_backup_v4 }}
+      echo "IPv4 rules restored from backup: {{ posix_firewall_latest_backup_v4 }}"
+    else
+      echo "No backup found, resetting to permissive state..."
+      {{ posix_firewall_iptables_bin }} -F
+      {{ posix_firewall_iptables_bin }} -X
+      {{ posix_firewall_iptables_bin }} -P INPUT ACCEPT
+      {{ posix_firewall_iptables_bin }} -P FORWARD ACCEPT
+      {{ posix_firewall_iptables_bin }} -P OUTPUT ACCEPT
+      echo "IPv4 firewall reset to ACCEPT ALL"
+    fi
+  register: ipv4_rollback
+  failed_when: false
+  listen: emergency firewall rollback
+  tags: [firewall, rollback, emergency]
+
+- name: Display IPv4 rollback result
+  ansible.builtin.debug:
+    msg: "{{ ipv4_rollback.stdout_lines }}"
+  listen: emergency firewall rollback
+  tags: [firewall, rollback, emergency]
+
+- name: Try to restore IPv6 from latest backup
+  ansible.builtin.shell: |
+    if [ -n "{{ posix_firewall_latest_backup_v6 | default('') }}" ] && [ -f "{{ posix_firewall_latest_backup_v6 | default('') }}" ]; then
+      ip6tables-restore < {{ posix_firewall_latest_backup_v6 }}
+      echo "IPv6 rules restored from backup: {{ posix_firewall_latest_backup_v6 }}"
+    else
+      echo "No IPv6 backup found, resetting to permissive state..."
+      {{ posix_firewall_ip6tables_bin }} -F
+      {{ posix_firewall_ip6tables_bin }} -X
+      {{ posix_firewall_ip6tables_bin }} -P INPUT ACCEPT
+      {{ posix_firewall_ip6tables_bin }} -P FORWARD ACCEPT
+      {{ posix_firewall_ip6tables_bin }} -P OUTPUT ACCEPT
+      echo "IPv6 firewall reset to ACCEPT ALL"
+    fi
+  register: ipv6_rollback
+  when: posix_firewall_ipv6_enabled | bool
+  failed_when: false
+  listen: emergency firewall rollback
+  tags: [firewall, rollback, emergency]
+
+- name: Display IPv6 rollback result
+  ansible.builtin.debug:
+    msg: "{{ ipv6_rollback.stdout_lines }}"
+  when: posix_firewall_ipv6_enabled | bool
+  listen: emergency firewall rollback
+  tags: [firewall, rollback, emergency]
+
+- name: Log rollback event
+  ansible.builtin.lineinfile:
+    path: "{{ posix_firewall_log_file }}"
+    line: "{{ ansible_date_time.iso8601 }}: EMERGENCY ROLLBACK - Firewall restored from backup or reset to permissive state"
+    create: true
+    mode: '0644'
+  listen: emergency firewall rollback
+  tags: [firewall, rollback, emergency]
+
+- name: Cancel safety timeout if still running
+  ansible.builtin.shell: |
+    if [ -f {{ posix_firewall_reset_pid_file }} ]; then
+      pid=$(cat {{ posix_firewall_reset_pid_file }})
+      if kill -0 "$pid" 2>/dev/null; then
+        kill "$pid"
+        echo "Safety timeout cancelled"
+      fi
+      rm -f {{ posix_firewall_reset_pid_file }}
+    fi
+  failed_when: false
+  listen: emergency firewall rollback
+  tags: [firewall, rollback, emergency]
+
+- name: Display rollback completion
+  ansible.builtin.debug:
+    msg: |
+      ========================================
+      EMERGENCY ROLLBACK COMPLETED
+      ========================================
+      Firewall has been restored to previous state or permissive mode
+      Check logs: {{ posix_firewall_log_file }}
+      Review backups: {{ posix_firewall_backup_dir }}/
+
+      Current firewall status:
+        - If backup existed: RESTORED from {{ posix_firewall_latest_backup_v4 | default('N/A') }}
+        - If no backup: PERMISSIVE (ACCEPT ALL)
+
+      Manual verification recommended:
+        iptables -L -n -v
+      ========================================
+  listen: emergency firewall rollback
+  tags: [firewall, rollback, emergency]

@@ -1,0 +1,95 @@
+---
+# ==============================================================================
+# Backup Current Firewall Rules
+# ==============================================================================
+# Creates timestamped backup of current iptables and ip6tables rules
+# ==============================================================================
+
+- name: Display backup phase
+  ansible.builtin.debug:
+    msg: |
+      ========================================
+      PHASE 2: BACKUP CURRENT RULES
+      ========================================
+      Creating timestamped backup of firewall rules...
+  tags: [firewall, backup]
+
+- name: Generate backup timestamp
+  ansible.builtin.set_fact:
+    firewall_backup_timestamp: "{{ ansible_date_time.date }}-{{ ansible_date_time.hour }}{{ ansible_date_time.minute }}{{ ansible_date_time.second }}"
+  tags: [firewall, backup]
+
+- name: Set backup file paths
+  ansible.builtin.set_fact:
+    firewall_backup_v4: "{{ posix_firewall_backup_dir }}/iptables.rules.{{ firewall_backup_timestamp }}"
+    firewall_backup_v6: "{{ posix_firewall_backup_dir }}/ip6tables.rules.{{ firewall_backup_timestamp }}"
+  tags: [firewall, backup]
+
+- name: Backup current IPv4 iptables rules
+  ansible.builtin.shell: |
+    {{ posix_firewall_iptables_save_bin }} > {{ firewall_backup_v4 }}
+    chmod 600 {{ firewall_backup_v4 }}
+  args:
+    creates: "{{ firewall_backup_v4 }}"
+  register: ipv4_backup
+  changed_when: ipv4_backup.rc == 0
+  tags: [firewall, backup]
+
+- name: Backup current IPv6 ip6tables rules
+  ansible.builtin.shell: |
+    ip6tables-save > {{ firewall_backup_v6 }} 2>/dev/null || echo "# IPv6 not available" > {{ firewall_backup_v6 }}
+    chmod 600 {{ firewall_backup_v6 }}
+  args:
+    creates: "{{ firewall_backup_v6 }}"
+  register: ipv6_backup
+  changed_when: ipv6_backup.rc == 0
+  when: posix_firewall_ipv6_enabled | bool
+  tags: [firewall, backup, ipv6]
+
+- name: Verify backup files exist
+  ansible.builtin.stat:
+    path: "{{ item }}"
+  register: backup_verify
+  loop:
+    - "{{ firewall_backup_v4 }}"
+    - "{{ firewall_backup_v6 }}"
+  when: item is defined
+  tags: [firewall, backup]
+
+- name: Store backup paths as facts for rollback
+  ansible.builtin.set_fact:
+    posix_firewall_latest_backup_v4: "{{ firewall_backup_v4 }}"
+    posix_firewall_latest_backup_v6: "{{ firewall_backup_v6 }}"
+  tags: [firewall, backup]
+
+- name: Display backup status
+  ansible.builtin.debug:
+    msg: |
+      ========================================
+      BACKUP COMPLETED
+      ========================================
+      IPv4 rules backed up to: {{ firewall_backup_v4 }}
+      {% if posix_firewall_ipv6_enabled %}
+      IPv6 rules backed up to: {{ firewall_backup_v6 }}
+      {% endif %}
+
+      These backups can be used for manual rollback:
+        IPv4: {{ posix_firewall_iptables_restore_bin }} < {{ firewall_backup_v4 }}
+        {% if posix_firewall_ipv6_enabled %}
+        IPv6: ip6tables-restore < {{ firewall_backup_v6 }}
+        {% endif %}
+      ========================================
+  tags: [firewall, backup]
+
+- name: List recent backups
+  ansible.builtin.find:
+    paths: "{{ posix_firewall_backup_dir }}"
+    patterns: "iptables.rules.*"
+    age: -30d
+  register: recent_backups
+  tags: [firewall, backup]
+
+- name: Display recent backup count
+  ansible.builtin.debug:
+    msg: "Recent backups found: {{ recent_backups.matched }} (last 30 days)"
+  tags: [firewall, backup]

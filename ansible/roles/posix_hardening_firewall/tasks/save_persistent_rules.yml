@@ -1,0 +1,186 @@
+---
+# ==============================================================================
+# Save Persistent Firewall Rules
+# ==============================================================================
+# Saves iptables rules to survive reboot using distribution-specific methods
+# ==============================================================================
+
+- name: Display persistence phase
+  ansible.builtin.debug:
+    msg: |
+      ========================================
+      PHASE 8: SAVE PERSISTENT RULES
+      ========================================
+      Making firewall rules persistent across reboots...
+  tags: [firewall, persistence]
+
+# ==============================================================================
+# CREATE RULES DIRECTORY
+# ==============================================================================
+
+- name: Create iptables rules directory (Debian/Ubuntu)
+  ansible.builtin.file:
+    path: "{{ posix_firewall_rules_dir }}"
+    state: directory
+    mode: '0755'
+  when: ansible_os_family in ['Debian']
+  tags: [firewall, persistence]
+
+# ==============================================================================
+# SAVE RULES - DEBIAN/UBUNTU METHOD
+# ==============================================================================
+
+- name: Save IPv4 rules (Debian/Ubuntu)
+  ansible.builtin.shell: |
+    {{ posix_firewall_iptables_save_bin }} > {{ posix_firewall_rules_v4 }}
+    chmod 600 {{ posix_firewall_rules_v4 }}
+  when: ansible_os_family in ['Debian']
+  register: save_v4_debian
+  changed_when: save_v4_debian.rc == 0
+  tags: [firewall, persistence, debian]
+
+- name: Save IPv6 rules (Debian/Ubuntu)
+  ansible.builtin.shell: |
+    ip6tables-save > {{ posix_firewall_rules_v6 }}
+    chmod 600 {{ posix_firewall_rules_v6 }}
+  when:
+    - ansible_os_family in ['Debian']
+    - posix_firewall_ipv6_enabled | bool
+  register: save_v6_debian
+  changed_when: save_v6_debian.rc == 0
+  tags: [firewall, persistence, debian, ipv6]
+
+# ==============================================================================
+# SAVE RULES - RHEL/CENTOS METHOD
+# ==============================================================================
+
+- name: Create sysconfig directory (RHEL/CentOS)
+  ansible.builtin.file:
+    path: /etc/sysconfig
+    state: directory
+    mode: '0755'
+  when: ansible_os_family in ['RedHat', 'Rocky', 'AlmaLinux']
+  tags: [firewall, persistence, rhel]
+
+- name: Save IPv4 rules (RHEL/CentOS)
+  ansible.builtin.shell: |
+    {{ posix_firewall_iptables_save_bin }} > {{ posix_firewall_rules_v4_rhel }}
+    chmod 600 {{ posix_firewall_rules_v4_rhel }}
+  when: ansible_os_family in ['RedHat', 'Rocky', 'AlmaLinux']
+  register: save_v4_rhel
+  changed_when: save_v4_rhel.rc == 0
+  tags: [firewall, persistence, rhel]
+
+- name: Save IPv6 rules (RHEL/CentOS)
+  ansible.builtin.shell: |
+    ip6tables-save > {{ posix_firewall_rules_v6_rhel }}
+    chmod 600 {{ posix_firewall_rules_v6_rhel }}
+  when:
+    - ansible_os_family in ['RedHat', 'Rocky', 'AlmaLinux']
+    - posix_firewall_ipv6_enabled | bool
+  register: save_v6_rhel
+  changed_when: save_v6_rhel.rc == 0
+  tags: [firewall, persistence, rhel, ipv6]
+
+# ==============================================================================
+# CREATE NETWORK RESTORE HOOK (DEBIAN/UBUNTU)
+# ==============================================================================
+
+- name: Check if network if-pre-up.d directory exists
+  ansible.builtin.stat:
+    path: /etc/network/if-pre-up.d
+  register: network_hook_dir
+  when: ansible_os_family in ['Debian']
+  tags: [firewall, persistence, debian]
+
+- name: Create iptables network restore hook (Debian/Ubuntu)
+  ansible.builtin.copy:
+    content: |
+      #!/bin/sh
+      # Restore iptables rules on network interface up
+      # Managed by Ansible - posix_hardening_firewall role
+
+      [ -f {{ posix_firewall_rules_v4 }} ] && {{ posix_firewall_iptables_restore_bin }} < {{ posix_firewall_rules_v4 }}
+      {% if posix_firewall_ipv6_enabled %}
+      [ -f {{ posix_firewall_rules_v6 }} ] && ip6tables-restore < {{ posix_firewall_rules_v6 }}
+      {% endif %}
+      exit 0
+    dest: "{{ posix_firewall_network_hook }}"
+    mode: '0755'
+  when:
+    - ansible_os_family in ['Debian']
+    - network_hook_dir.stat.exists | default(false)
+  tags: [firewall, persistence, debian]
+
+# ==============================================================================
+# INSTALL IPTABLES-PERSISTENT (OPTIONAL)
+# ==============================================================================
+
+- name: Check if iptables-persistent package is available
+  ansible.builtin.command: apt-cache show {{ posix_firewall_iptables_persistent_package }}
+  register: iptables_persistent_check
+  changed_when: false
+  failed_when: false
+  when: ansible_os_family in ['Debian']
+  tags: [firewall, persistence, debian]
+
+- name: Install iptables-persistent (Debian/Ubuntu)
+  ansible.builtin.apt:
+    name: "{{ posix_firewall_iptables_persistent_package }}"
+    state: present
+    update_cache: false
+  when:
+    - ansible_os_family in ['Debian']
+    - iptables_persistent_check.rc == 0
+  register: iptables_persistent_install
+  failed_when: false
+  tags: [firewall, persistence, debian]
+
+- name: Enable iptables service (RHEL/CentOS)
+  ansible.builtin.systemd:
+    name: iptables
+    enabled: true
+    state: started
+  when: ansible_os_family in ['RedHat', 'Rocky', 'AlmaLinux']
+  failed_when: false
+  tags: [firewall, persistence, rhel]
+
+# ==============================================================================
+# VERIFICATION
+# ==============================================================================
+
+- name: Verify persistence files exist
+  ansible.builtin.stat:
+    path: "{{ item }}"
+  register: persistence_files
+  loop:
+    - "{{ posix_firewall_rules_v4 if ansible_os_family in ['Debian'] else posix_firewall_rules_v4_rhel }}"
+  tags: [firewall, persistence]
+
+- name: Display persistence status
+  ansible.builtin.debug:
+    msg: |
+      ========================================
+      FIREWALL RULES PERSISTENCE: CONFIGURED
+      ========================================
+      Rules saved to:
+      {% if ansible_os_family in ['Debian'] %}
+        IPv4: {{ posix_firewall_rules_v4 }}
+        {% if posix_firewall_ipv6_enabled %}
+        IPv6: {{ posix_firewall_rules_v6 }}
+        {% endif %}
+        Network hook: {{ posix_firewall_network_hook if network_hook_dir.stat.exists | default(false) else 'N/A (directory not found)' }}
+        iptables-persistent: {{ 'INSTALLED' if iptables_persistent_install is defined and iptables_persistent_install is not failed else 'NOT INSTALLED' }}
+      {% elif ansible_os_family in ['RedHat', 'Rocky', 'AlmaLinux'] %}
+        IPv4: {{ posix_firewall_rules_v4_rhel }}
+        {% if posix_firewall_ipv6_enabled %}
+        IPv6: {{ posix_firewall_rules_v6_rhel }}
+        {% endif %}
+        Service: iptables (enabled)
+      {% else %}
+        Distribution: {{ ansible_os_family }} (may require manual configuration)
+      {% endif %}
+
+      Rules will be restored automatically on reboot
+      ========================================
+  tags: [firewall, persistence]

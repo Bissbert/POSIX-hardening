@@ -1,0 +1,186 @@
+---
+# ==============================================================================
+# Test Playbook: Firewall Hardening Role
+# ==============================================================================
+# WARNING: This playbook modifies firewall rules
+# LOCKOUT RISK: Always test in a safe environment first
+# ==============================================================================
+#
+# Usage:
+#   # Syntax check
+#   ansible-playbook playbooks/test_firewall_hardening.yml --syntax-check
+#
+#   # Check mode (dry-run)
+#   ansible-playbook playbooks/test_firewall_hardening.yml --check
+#
+#   # Run on test hosts
+#   ansible-playbook playbooks/test_firewall_hardening.yml -i inventories/test/hosts.yml
+#
+#   # Skip the 10-second pause
+#   ansible-playbook playbooks/test_firewall_hardening.yml --skip-tags pause
+#
+#   # Run only validation
+#   ansible-playbook playbooks/test_firewall_hardening.yml --tags validation
+#
+# ==============================================================================
+
+- name: Test Firewall Hardening Role (CRITICAL - LOCKOUT RISK)
+  hosts: all
+  become: yes
+  gather_facts: yes
+
+  vars:
+    # REQUIRED: Override these in your inventory or extra-vars
+    # Example: ansible-playbook playbooks/test_firewall_hardening.yml -e "admin_ip=192.168.1.100"
+
+    # These should be set in group_vars/all.yml or command line
+    # admin_ip: "192.168.1.100"  # REQUIRED
+
+    # Firewall Settings (use defaults if not specified)
+    posix_firewall_ssh_port: "{{ ssh_port | default(22) }}"
+
+    # Additional ports to allow (example)
+    posix_firewall_allowed_ports: []
+
+    # Trusted networks (example)
+    posix_firewall_trusted_networks: []
+
+    # Safety timeout (5 minutes)
+    posix_firewall_safety_timeout: 300
+
+    # Testing flags
+    posix_firewall_force_reharden: false
+    posix_firewall_skip_connectivity_test: false
+
+  pre_tasks:
+    - name: Display critical warning
+      ansible.builtin.debug:
+        msg: |
+          ========================================
+          CRITICAL WARNING
+          ========================================
+          This playbook will MODIFY FIREWALL RULES
+          LOCKOUT RISK if prerequisites are not met
+
+          Requirements:
+            1. iptables must be installed
+            2. admin_ip should be set for priority access
+            3. SSH access must be working
+            4. Console/KVM access available (recommended)
+
+          Current configuration:
+            Admin IP: {{ admin_ip | default('NOT SET - RECOMMENDED!') }}
+            SSH Port: {{ posix_firewall_ssh_port }}
+            Safety Timeout: {{ posix_firewall_safety_timeout }} seconds
+
+          Safety mechanisms:
+            - Safety timeout (auto-reset after {{ posix_firewall_safety_timeout }}s)
+            - Automatic rollback on failure
+            - Connectivity validation
+            - Configuration backups
+
+          Testing recommendations:
+            1. Run with --check first (dry-run)
+            2. Test on disposable VM/container first
+            3. Ensure SSH access is working
+            4. Have console access ready
+          ========================================
+      tags: [always]
+
+    - name: Verify admin_ip is set (optional but recommended)
+      ansible.builtin.debug:
+        msg: |
+          WARNING: admin_ip is not set!
+          Setting admin_ip provides priority firewall access and reduces lockout risk.
+
+          Set with: -e "admin_ip=YOUR.IP.ADDRESS"
+      when: admin_ip is not defined or admin_ip | length == 0
+      tags: [always]
+
+  roles:
+    - role: posix_hardening_firewall
+      tags: [firewall]
+
+  post_tasks:
+    - name: Display post-hardening test instructions
+      ansible.builtin.debug:
+        msg: |
+          ========================================
+          FIREWALL HARDENING TEST COMPLETED
+          ========================================
+
+          Next steps:
+          1. Test SSH access from your workstation:
+             ssh {{ ansible_user }}@{{ ansible_host | default(inventory_hostname) }}
+
+          2. Verify firewall rules:
+             ssh {{ ansible_user }}@{{ ansible_host | default(inventory_hostname) }} 'sudo iptables -L -n -v'
+
+          3. Check IPv6 rules (if enabled):
+             ssh {{ ansible_user }}@{{ ansible_host | default(inventory_hostname) }} 'sudo ip6tables -L -n -v'
+
+          4. Verify SSH is allowed:
+             ssh {{ ansible_user }}@{{ ansible_host | default(inventory_hostname) }} 'sudo iptables -L INPUT -n | grep {{ posix_firewall_ssh_port }}'
+
+          5. Check firewall status:
+             ssh {{ ansible_user }}@{{ ansible_host | default(inventory_hostname) }} 'sudo systemctl status iptables || echo "No iptables service"'
+
+          6. Review logs:
+             ssh {{ ansible_user }}@{{ ansible_host | default(inventory_hostname) }} 'sudo cat /var/log/hardening/firewall_hardening.log'
+
+          Backup location: /var/backups/hardening/
+          Marker file: /var/lib/hardening/firewall_hardened
+          Rules saved: /etc/iptables/rules.v4 and rules.v6
+          ========================================
+      tags: [always]
+
+    - name: Run post-hardening validation tests
+      block:
+        - name: Test SSH port is still accessible
+          ansible.builtin.wait_for:
+            port: "{{ posix_firewall_ssh_port }}"
+            host: "{{ ansible_host | default(inventory_hostname) }}"
+            timeout: 10
+          delegate_to: localhost
+          become: no
+
+        - name: Test SSH connection still works
+          ansible.builtin.command: whoami
+          register: whoami_test
+          changed_when: false
+
+        - name: Verify firewall rules are present
+          ansible.builtin.shell: |
+            iptables -L INPUT -n | grep -q "dpt:{{ posix_firewall_ssh_port }}" && \
+            iptables -L INPUT -n | grep -q "state RELATED,ESTABLISHED"
+          register: firewall_check
+          changed_when: false
+
+        - name: Display validation results
+          ansible.builtin.debug:
+            msg: |
+              ========================================
+              POST-HARDENING VALIDATION RESULTS
+              ========================================
+              SSH Port Accessible: YES
+              SSH Connection: SUCCESS (user: {{ whoami_test.stdout }})
+              Firewall Rules: VERIFIED
+              ========================================
+              All post-hardening tests PASSED
+              ========================================
+
+      rescue:
+        - name: Display validation failure
+          ansible.builtin.debug:
+            msg: |
+              ========================================
+              POST-HARDENING VALIDATION FAILED
+              ========================================
+              Some validation tests did not pass
+              Review the error messages above
+
+              Safety timeout will auto-reset firewall rules in {{ posix_firewall_safety_timeout }} seconds
+              Check console/KVM access if needed
+              ========================================
+
+      tags: [validation, always]

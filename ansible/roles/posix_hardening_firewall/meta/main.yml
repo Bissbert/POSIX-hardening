@@ -1,0 +1,77 @@
+---
+# ==============================================================================
+# POSIX Firewall Hardening Role - Meta Information
+# ==============================================================================
+
+galaxy_info:
+  role_name: posix_hardening_firewall
+  author: POSIX Hardening Project
+  description: Comprehensive iptables/ip6tables firewall hardening with safety mechanisms
+  company: N/A
+  license: MIT
+
+  min_ansible_version: "2.9"
+
+  platforms:
+    - name: Debian
+      versions:
+        - bullseye
+        - bookworm
+        - buster
+    - name: Ubuntu
+      versions:
+        - focal
+        - jammy
+        - noble
+    - name: EL
+      versions:
+        - "8"
+        - "9"
+    - name: Rocky
+      versions:
+        - "8"
+        - "9"
+    - name: AlmaLinux
+      versions:
+        - "8"
+        - "9"
+
+  galaxy_tags:
+    - security
+    - hardening
+    - firewall
+    - iptables
+    - ip6tables
+    - networking
+    - system
+
+# ==============================================================================
+# DEPENDENCIES
+# ==============================================================================
+# This role has no hard dependencies, but validation role is recommended
+
+dependencies: []
+  # Optional: posix_hardening_validation for enhanced pre-flight checks
+  # - role: posix_hardening_validation
+  #   vars:
+  #     posix_validation_check_ssh_keys: false
+  #     posix_validation_mode: basic
+
+# ==============================================================================
+# ROLE REQUIREMENTS
+# ==============================================================================
+# Required system packages (not installed by this role):
+#   - iptables
+#   - iptables-save
+#   - iptables-restore
+#   - ip6tables (if IPv6 enabled)
+#
+# Optional packages:
+#   - iptables-persistent (Debian/Ubuntu)
+#   - iptables-services (RHEL/CentOS)
+#
+# Required variables (set in group_vars or host_vars):
+#   - admin_ip (recommended but optional)
+#   - posix_ssh_port (inherited from SSH role, defaults to 22)
+#
+# See defaults/main.yml for complete variable list

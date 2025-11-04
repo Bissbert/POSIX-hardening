@@ -1,0 +1,492 @@
+---
+# ==============================================================================
+# Apply IPv4 Firewall Rules
+# ==============================================================================
+# Configures iptables rules for IPv4 with comprehensive security settings
+# ==============================================================================
+
+- name: Display IPv4 rules application phase
+  ansible.builtin.debug:
+    msg: |
+      ========================================
+      PHASE 4: APPLYING IPv4 FIREWALL RULES
+      ========================================
+      Configuring iptables...
+  tags: [firewall, ipv4]
+
+# ==============================================================================
+# FLUSH EXISTING RULES
+# ==============================================================================
+
+- name: Flush all existing IPv4 rules
+  ansible.builtin.iptables:
+    chain: "{{ item }}"
+    flush: true
+  loop:
+    - INPUT
+    - FORWARD
+    - OUTPUT
+  tags: [firewall, ipv4]
+
+- name: Delete all custom chains
+  ansible.builtin.command: "{{ posix_firewall_iptables_bin }} -X"
+  changed_when: true
+  tags: [firewall, ipv4]
+
+- name: Zero all counters
+  ansible.builtin.command: "{{ posix_firewall_iptables_bin }} -Z"
+  changed_when: true
+  tags: [firewall, ipv4]
+
+# ==============================================================================
+# CRITICAL: ESTABLISHED/RELATED CONNECTIONS FIRST
+# ==============================================================================
+
+- name: Allow established and related connections (INPUT)
+  ansible.builtin.iptables:
+    chain: INPUT
+    ctstate: ESTABLISHED,RELATED
+    jump: ACCEPT
+    comment: "Allow established and related connections"
+  tags: [firewall, ipv4]
+
+- name: Allow established and related connections (OUTPUT)
+  ansible.builtin.iptables:
+    chain: OUTPUT
+    ctstate: ESTABLISHED,RELATED
+    jump: ACCEPT
+    comment: "Allow established and related connections"
+  tags: [firewall, ipv4]
+
+# ==============================================================================
+# ADMIN IP PRIORITY ACCESS (if configured)
+# ==============================================================================
+
+- name: Allow all traffic from admin IP (priority rule)
+  ansible.builtin.iptables:
+    chain: INPUT
+    source: "{{ posix_firewall_admin_ip }}"
+    jump: ACCEPT
+    comment: "Admin IP priority access"
+    action: insert
+    rule_num: '1'
+  when:
+    - posix_firewall_admin_ip is defined
+    - posix_firewall_admin_ip != ""
+    - "':' not in posix_firewall_admin_ip"  # Not IPv6
+  tags: [firewall, ipv4, admin]
+
+# ==============================================================================
+# SSH PROTECTION WITH RATE LIMITING
+# ==============================================================================
+
+- name: SSH rate limiting - set recent list (track new connections)
+  ansible.builtin.command:
+    cmd: >-
+      {{ posix_firewall_iptables_bin }} -A INPUT
+      -p tcp --dport {{ posix_firewall_ssh_port }}
+      -m state --state NEW
+      -m recent --set --name SSH
+      -m comment --comment "SSH rate limit - track"
+  changed_when: true
+  when: posix_firewall_ssh_rate_limit_enabled | bool
+  tags: [firewall, ipv4, ssh]
+
+- name: SSH rate limiting - drop excess connections
+  ansible.builtin.command:
+    cmd: >-
+      {{ posix_firewall_iptables_bin }} -I INPUT 1
+      -p tcp --dport {{ posix_firewall_ssh_port }}
+      -m state --state NEW
+      -m recent --update --seconds {{ posix_firewall_ssh_rate_limit_seconds }}
+      --hitcount {{ posix_firewall_ssh_rate_limit_hits }}
+      --name SSH
+      -j DROP
+      -m comment --comment "SSH rate limit - drop excessive"
+  changed_when: true
+  when: posix_firewall_ssh_rate_limit_enabled | bool
+  tags: [firewall, ipv4, ssh]
+
+- name: Allow SSH connections
+  ansible.builtin.iptables:
+    chain: INPUT
+    protocol: tcp
+    destination_port: "{{ posix_firewall_ssh_port }}"
+    ctstate: NEW
+    jump: ACCEPT
+    comment: "Allow SSH"
+  tags: [firewall, ipv4, ssh]
+
+# ==============================================================================
+# LOOPBACK INTERFACE
+# ==============================================================================
+
+- name: Allow all traffic on loopback interface (INPUT)
+  ansible.builtin.iptables:
+    chain: INPUT
+    in_interface: lo
+    jump: ACCEPT
+    comment: "Allow loopback"
+  tags: [firewall, ipv4]
+
+- name: Allow all traffic on loopback interface (OUTPUT)
+  ansible.builtin.iptables:
+    chain: OUTPUT
+    out_interface: lo
+    jump: ACCEPT
+    comment: "Allow loopback"
+  tags: [firewall, ipv4]
+
+# ==============================================================================
+# SECURITY: DROP INVALID PACKETS
+# ==============================================================================
+
+- name: Drop invalid packets
+  ansible.builtin.iptables:
+    chain: INPUT
+    ctstate: INVALID
+    jump: DROP
+    comment: "Drop invalid packets"
+  when: posix_firewall_drop_invalid | bool
+  tags: [firewall, ipv4, security]
+
+# ==============================================================================
+# SECURITY: DROP BOGUS TCP FLAGS
+# ==============================================================================
+
+- name: Drop NULL packets (no flags set)
+  ansible.builtin.iptables:
+    chain: INPUT
+    protocol: tcp
+    tcp_flags:
+      flags: ALL
+      flags_set: NONE
+    jump: DROP
+    comment: "Drop NULL packets"
+  when: posix_firewall_drop_bogus_tcp | bool
+  tags: [firewall, ipv4, security]
+
+- name: Drop SYN-FIN packets
+  ansible.builtin.iptables:
+    chain: INPUT
+    protocol: tcp
+    tcp_flags:
+      flags: SYN,FIN
+      flags_set: SYN,FIN
+    jump: DROP
+    comment: "Drop SYN-FIN packets"
+  when: posix_firewall_drop_bogus_tcp | bool
+  tags: [firewall, ipv4, security]
+
+- name: Drop XMAS packets (all flags set)
+  ansible.builtin.iptables:
+    chain: INPUT
+    protocol: tcp
+    tcp_flags:
+      flags: ALL
+      flags_set: ALL
+    jump: DROP
+    comment: "Drop XMAS packets"
+  when: posix_firewall_drop_bogus_tcp | bool
+  tags: [firewall, ipv4, security]
+
+# ==============================================================================
+# SYN FLOOD PROTECTION
+# ==============================================================================
+
+- name: Limit SYN packets (SYN flood protection)
+  ansible.builtin.iptables:
+    chain: INPUT
+    protocol: tcp
+    syn: match
+    limit: "{{ posix_firewall_syn_flood_rate }}"
+    limit_burst: "{{ posix_firewall_syn_flood_burst }}"
+    jump: ACCEPT
+    comment: "SYN flood protection"
+  when: posix_firewall_syn_flood_protection | bool
+  tags: [firewall, ipv4, security]
+
+# ==============================================================================
+# ICMP WITH RATE LIMITING
+# ==============================================================================
+
+- name: Allow ICMP echo-request (ping) with rate limit
+  ansible.builtin.iptables:
+    chain: INPUT
+    protocol: icmp
+    icmp_type: echo-request
+    limit: "{{ posix_firewall_icmp_rate_limit }}"
+    jump: ACCEPT
+    comment: "Allow ping with rate limit"
+  when:
+    - posix_firewall_icmp_enabled | bool
+    - "'echo-request' in posix_firewall_icmp_types"
+  tags: [firewall, ipv4, icmp]
+
+- name: Allow ICMP echo-reply
+  ansible.builtin.iptables:
+    chain: INPUT
+    protocol: icmp
+    icmp_type: echo-reply
+    jump: ACCEPT
+    comment: "Allow ping reply"
+  when:
+    - posix_firewall_icmp_enabled | bool
+    - "'echo-reply' in posix_firewall_icmp_types"
+  tags: [firewall, ipv4, icmp]
+
+- name: Allow ICMP destination-unreachable
+  ansible.builtin.iptables:
+    chain: INPUT
+    protocol: icmp
+    icmp_type: destination-unreachable
+    jump: ACCEPT
+    comment: "Allow ICMP destination unreachable"
+  when:
+    - posix_firewall_icmp_enabled | bool
+    - "'destination-unreachable' in posix_firewall_icmp_types"
+  tags: [firewall, ipv4, icmp]
+
+- name: Allow ICMP time-exceeded
+  ansible.builtin.iptables:
+    chain: INPUT
+    protocol: icmp
+    icmp_type: time-exceeded
+    jump: ACCEPT
+    comment: "Allow ICMP time exceeded"
+  when:
+    - posix_firewall_icmp_enabled | bool
+    - "'time-exceeded' in posix_firewall_icmp_types"
+  tags: [firewall, ipv4, icmp]
+
+# ==============================================================================
+# CUSTOM INBOUND PORTS
+# ==============================================================================
+
+- name: Allow additional TCP ports
+  ansible.builtin.iptables:
+    chain: INPUT
+    protocol: tcp
+    destination_port: "{{ item }}"
+    ctstate: NEW
+    jump: ACCEPT
+    comment: "Allow port {{ item }}"
+  loop: "{{ posix_firewall_allowed_ports }}"
+  when: posix_firewall_allowed_ports | length > 0
+  tags: [firewall, ipv4, custom]
+
+# ==============================================================================
+# TRUSTED NETWORKS
+# ==============================================================================
+
+- name: Allow all traffic from trusted networks
+  ansible.builtin.iptables:
+    chain: INPUT
+    source: "{{ item }}"
+    jump: ACCEPT
+    comment: "Trusted network {{ item }}"
+  loop: "{{ posix_firewall_trusted_networks }}"
+  when: posix_firewall_trusted_networks | length > 0
+  tags: [firewall, ipv4, custom]
+
+# ==============================================================================
+# OUTBOUND SERVICES
+# ==============================================================================
+
+- name: Allow outbound DNS (UDP)
+  ansible.builtin.iptables:
+    chain: OUTPUT
+    protocol: udp
+    destination_port: '53'
+    jump: ACCEPT
+    comment: "Allow DNS queries"
+  when: posix_firewall_allow_dns | bool
+  tags: [firewall, ipv4, outbound]
+
+- name: Allow outbound DNS (TCP)
+  ansible.builtin.iptables:
+    chain: OUTPUT
+    protocol: tcp
+    destination_port: '53'
+    jump: ACCEPT
+    comment: "Allow DNS queries (TCP)"
+  when: posix_firewall_allow_dns | bool
+  tags: [firewall, ipv4, outbound]
+
+- name: Allow outbound NTP
+  ansible.builtin.iptables:
+    chain: OUTPUT
+    protocol: udp
+    destination_port: '123'
+    jump: ACCEPT
+    comment: "Allow NTP"
+  when: posix_firewall_allow_ntp | bool
+  tags: [firewall, ipv4, outbound]
+
+- name: Allow outbound HTTP
+  ansible.builtin.iptables:
+    chain: OUTPUT
+    protocol: tcp
+    destination_port: '80'
+    jump: ACCEPT
+    comment: "Allow HTTP"
+  when: posix_firewall_allow_http | bool
+  tags: [firewall, ipv4, outbound]
+
+- name: Allow outbound HTTPS
+  ansible.builtin.iptables:
+    chain: OUTPUT
+    protocol: tcp
+    destination_port: '443'
+    jump: ACCEPT
+    comment: "Allow HTTPS"
+  when: posix_firewall_allow_https | bool
+  tags: [firewall, ipv4, outbound]
+
+# ==============================================================================
+# CUSTOM OUTBOUND PORTS
+# ==============================================================================
+
+- name: Allow custom outbound TCP ports
+  ansible.builtin.iptables:
+    chain: OUTPUT
+    protocol: tcp
+    destination_port: "{{ item }}"
+    jump: ACCEPT
+    comment: "Custom outbound TCP {{ item }}"
+  loop: "{{ posix_firewall_custom_outbound_tcp }}"
+  when: posix_firewall_custom_outbound_tcp | length > 0
+  tags: [firewall, ipv4, outbound, custom]
+
+- name: Allow custom outbound UDP ports
+  ansible.builtin.iptables:
+    chain: OUTPUT
+    protocol: udp
+    destination_port: "{{ item }}"
+    jump: ACCEPT
+    comment: "Custom outbound UDP {{ item }}"
+  loop: "{{ posix_firewall_custom_outbound_udp }}"
+  when: posix_firewall_custom_outbound_udp | length > 0
+  tags: [firewall, ipv4, outbound, custom]
+
+# ==============================================================================
+# CUSTOM CHAINS
+# ==============================================================================
+
+- name: Create custom chains
+  ansible.builtin.command: "{{ posix_firewall_iptables_bin }} -N {{ item.name }}"
+  loop: "{{ posix_firewall_custom_chains }}"
+  when: posix_firewall_custom_chains | length > 0
+  register: custom_chains_result
+  failed_when: false
+  changed_when: custom_chains_result.rc == 0
+  tags: [firewall, ipv4, custom]
+
+# ==============================================================================
+# FAIL2BAN INTEGRATION
+# ==============================================================================
+
+- name: Create fail2ban chain
+  ansible.builtin.command: "{{ posix_firewall_iptables_bin }} -N {{ posix_firewall_fail2ban_chain }}"
+  when: posix_firewall_fail2ban_enabled | bool
+  register: fail2ban_chain_result
+  failed_when: false
+  changed_when: fail2ban_chain_result.rc == 0
+  tags: [firewall, ipv4, fail2ban]
+
+- name: Jump to fail2ban chain early in INPUT
+  ansible.builtin.iptables:
+    chain: INPUT
+    jump: "{{ posix_firewall_fail2ban_chain }}"
+    action: insert
+    rule_num: '1'
+  when: posix_firewall_fail2ban_enabled | bool
+  tags: [firewall, ipv4, fail2ban]
+
+# ==============================================================================
+# LOGGING CHAIN (if enabled)
+# ==============================================================================
+
+- name: Create logging chain
+  ansible.builtin.command: "{{ posix_firewall_iptables_bin }} -N LOGGING"
+  when: posix_firewall_log_dropped | bool
+  register: logging_chain_result
+  failed_when: false
+  changed_when: logging_chain_result.rc == 0
+  tags: [firewall, ipv4, logging]
+
+- name: Jump to logging chain for unmatched INPUT
+  ansible.builtin.iptables:
+    chain: INPUT
+    jump: LOGGING
+  when: posix_firewall_log_dropped | bool
+  tags: [firewall, ipv4, logging]
+
+- name: Log dropped packets
+  ansible.builtin.iptables:
+    chain: LOGGING
+    jump: LOG
+    limit: "{{ posix_firewall_log_rate_limit }}"
+    log_prefix: "{{ posix_firewall_log_prefix }}"
+    log_level: "{{ posix_firewall_log_level }}"
+  when: posix_firewall_log_dropped | bool
+  tags: [firewall, ipv4, logging]
+
+- name: Drop packets in logging chain
+  ansible.builtin.iptables:
+    chain: LOGGING
+    jump: DROP
+  when: posix_firewall_log_dropped | bool
+  tags: [firewall, ipv4, logging]
+
+# ==============================================================================
+# DEFAULT POLICIES
+# ==============================================================================
+
+- name: Set default INPUT policy
+  ansible.builtin.iptables:
+    chain: INPUT
+    policy: "{{ posix_firewall_default_input_policy }}"
+  tags: [firewall, ipv4, policy]
+
+- name: Set default FORWARD policy
+  ansible.builtin.iptables:
+    chain: FORWARD
+    policy: "{{ posix_firewall_default_forward_policy }}"
+  tags: [firewall, ipv4, policy]
+
+- name: Set default OUTPUT policy
+  ansible.builtin.iptables:
+    chain: OUTPUT
+    policy: "{{ posix_firewall_default_output_policy }}"
+  tags: [firewall, ipv4, policy]
+
+# ==============================================================================
+# VERIFICATION
+# ==============================================================================
+
+- name: Display IPv4 firewall rules summary
+  ansible.builtin.command: "{{ posix_firewall_iptables_bin }} -L -n -v"
+  register: ipv4_rules_summary
+  changed_when: false
+  tags: [firewall, ipv4]
+
+- name: Display IPv4 rules applied
+  ansible.builtin.debug:
+    msg: |
+      ========================================
+      IPv4 FIREWALL RULES APPLIED
+      ========================================
+      Default policies set:
+        INPUT: {{ posix_firewall_default_input_policy }}
+        FORWARD: {{ posix_firewall_default_forward_policy }}
+        OUTPUT: {{ posix_firewall_default_output_policy }}
+
+      SSH protected on port: {{ posix_firewall_ssh_port }}
+      Rate limiting: {{ 'ENABLED' if posix_firewall_ssh_rate_limit_enabled else 'DISABLED' }}
+      ICMP: {{ 'ENABLED' if posix_firewall_icmp_enabled else 'DISABLED' }}
+      Logging: {{ 'ENABLED' if posix_firewall_log_dropped else 'DISABLED' }}
+
+      Rules count: {{ ipv4_rules_summary.stdout_lines | length }}
+      ========================================
+  tags: [firewall, ipv4]

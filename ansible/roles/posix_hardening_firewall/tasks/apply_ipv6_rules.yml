@@ -1,0 +1,237 @@
+---
+# ==============================================================================
+# Apply IPv6 Firewall Rules
+# ==============================================================================
+# Configures ip6tables rules for IPv6 with three modes: same, block, custom
+# ==============================================================================
+
+- name: Display IPv6 rules application phase
+  ansible.builtin.debug:
+    msg: |
+      ========================================
+      PHASE 5: APPLYING IPv6 FIREWALL RULES
+      ========================================
+      IPv6 mode: {{ posix_firewall_ipv6_mode }}
+      Configuring ip6tables...
+  tags: [firewall, ipv6]
+
+# ==============================================================================
+# FLUSH EXISTING IPv6 RULES
+# ==============================================================================
+
+- name: Flush all existing IPv6 rules
+  ansible.builtin.command: "{{ posix_firewall_ip6tables_bin }} -F {{ item }}"
+  loop:
+    - INPUT
+    - FORWARD
+    - OUTPUT
+  changed_when: true
+  tags: [firewall, ipv6]
+
+- name: Delete all IPv6 custom chains
+  ansible.builtin.command: "{{ posix_firewall_ip6tables_bin }} -X"
+  changed_when: true
+  tags: [firewall, ipv6]
+
+# ==============================================================================
+# MODE: BLOCK (Minimal IPv6, SSH only)
+# ==============================================================================
+
+- name: IPv6 Block Mode - Allow only SSH and ICMPv6
+  block:
+    - name: Allow established and related connections (IPv6)
+      ansible.builtin.command: |
+        {{ posix_firewall_ip6tables_bin }} -A INPUT -m state --state ESTABLISHED,RELATED -j ACCEPT
+      changed_when: true
+
+    - name: Allow loopback (IPv6)
+      ansible.builtin.command: "{{ posix_firewall_ip6tables_bin }} -A INPUT -i lo -j ACCEPT"
+      changed_when: true
+
+    - name: Allow ICMPv6 (required for IPv6 to function)
+      ansible.builtin.command: "{{ posix_firewall_ip6tables_bin }} -A INPUT -p ipv6-icmp -j ACCEPT"
+      changed_when: true
+
+    - name: Allow SSH on IPv6
+      ansible.builtin.command: |
+        {{ posix_firewall_ip6tables_bin }} -A INPUT -p tcp --dport {{ posix_firewall_ssh_port }} -j ACCEPT
+      changed_when: true
+
+    - name: Admin IPv6 priority access
+      ansible.builtin.command: |
+        {{ posix_firewall_ip6tables_bin }} -I INPUT 1 -s {{ posix_firewall_admin_ip }} -j ACCEPT
+      when:
+        - posix_firewall_admin_ip is defined
+        - posix_firewall_admin_ip != ""
+        - "':' in posix_firewall_admin_ip"  # Is IPv6
+      changed_when: true
+
+  when: posix_firewall_ipv6_mode == 'block'
+  tags: [firewall, ipv6, block]
+
+# ==============================================================================
+# MODE: SAME (Apply same rules as IPv4)
+# ==============================================================================
+
+- name: IPv6 Same Mode - Apply IPv4-equivalent rules
+  block:
+    - name: Allow established and related connections (IPv6)
+      ansible.builtin.command: |
+        {{ posix_firewall_ip6tables_bin }} -A INPUT -m state --state ESTABLISHED,RELATED -j ACCEPT
+      changed_when: true
+
+    - name: Allow established and related connections OUTPUT (IPv6)
+      ansible.builtin.command: |
+        {{ posix_firewall_ip6tables_bin }} -A OUTPUT -m state --state ESTABLISHED,RELATED -j ACCEPT
+      changed_when: true
+
+    - name: Admin IPv6 priority access
+      ansible.builtin.command: |
+        {{ posix_firewall_ip6tables_bin }} -I INPUT 1 -s {{ posix_firewall_admin_ip }} -j ACCEPT
+      when:
+        - posix_firewall_admin_ip is defined
+        - posix_firewall_admin_ip != ""
+        - "':' in posix_firewall_admin_ip"  # Is IPv6
+      changed_when: true
+
+    - name: Allow SSH on IPv6
+      ansible.builtin.command: |
+        {{ posix_firewall_ip6tables_bin }} -A INPUT -p tcp --dport {{ posix_firewall_ssh_port }} -j ACCEPT
+      changed_when: true
+
+    - name: Allow loopback (IPv6)
+      ansible.builtin.command: "{{ posix_firewall_ip6tables_bin }} -A INPUT -i lo -j ACCEPT"
+      changed_when: true
+
+    - name: Allow loopback OUTPUT (IPv6)
+      ansible.builtin.command: "{{ posix_firewall_ip6tables_bin }} -A OUTPUT -o lo -j ACCEPT"
+      changed_when: true
+
+    - name: Allow ICMPv6 (required for IPv6)
+      ansible.builtin.command: "{{ posix_firewall_ip6tables_bin }} -A INPUT -p ipv6-icmp -j ACCEPT"
+      changed_when: true
+
+    - name: Drop invalid packets (IPv6)
+      ansible.builtin.command: |
+        {{ posix_firewall_ip6tables_bin }} -A INPUT -m state --state INVALID -j DROP
+      when: posix_firewall_drop_invalid | bool
+      changed_when: true
+
+    - name: Allow additional ports on IPv6
+      ansible.builtin.command: |
+        {{ posix_firewall_ip6tables_bin }} -A INPUT -p tcp --dport {{ item }} -m state --state NEW -j ACCEPT
+      loop: "{{ posix_firewall_allowed_ports }}"
+      when: posix_firewall_allowed_ports | length > 0
+      changed_when: true
+
+    - name: Allow trusted IPv6 networks
+      ansible.builtin.command: |
+        {{ posix_firewall_ip6tables_bin }} -A INPUT -s {{ item }} -j ACCEPT
+      loop: "{{ posix_firewall_trusted_networks }}"
+      when:
+        - posix_firewall_trusted_networks | length > 0
+        - "':' in item"  # Is IPv6 network
+      changed_when: true
+
+    - name: Allow outbound DNS on IPv6
+      ansible.builtin.command: |
+        {{ posix_firewall_ip6tables_bin }} -A OUTPUT -p {{ item.proto }} --dport 53 -j ACCEPT
+      loop:
+        - { proto: 'udp' }
+        - { proto: 'tcp' }
+      when: posix_firewall_allow_dns | bool
+      changed_when: true
+
+    - name: Allow outbound HTTP/HTTPS on IPv6
+      ansible.builtin.command: |
+        {{ posix_firewall_ip6tables_bin }} -A OUTPUT -p tcp --dport {{ item }} -j ACCEPT
+      loop:
+        - 80
+        - 443
+      when: posix_firewall_allow_http or posix_firewall_allow_https
+      changed_when: true
+
+  when: posix_firewall_ipv6_mode == 'same'
+  tags: [firewall, ipv6, same]
+
+# ==============================================================================
+# MODE: CUSTOM (User-defined rules)
+# ==============================================================================
+
+- name: IPv6 Custom Mode - Apply user-defined rules
+  block:
+    - name: Basic IPv6 protection (custom mode)
+      ansible.builtin.command: |
+        {{ posix_firewall_ip6tables_bin }} -A INPUT -m state --state ESTABLISHED,RELATED -j ACCEPT
+      changed_when: true
+
+    - name: Allow loopback (IPv6 custom)
+      ansible.builtin.command: "{{ posix_firewall_ip6tables_bin }} -A INPUT -i lo -j ACCEPT"
+      changed_when: true
+
+    - name: Allow ICMPv6 (IPv6 custom)
+      ansible.builtin.command: "{{ posix_firewall_ip6tables_bin }} -A INPUT -p ipv6-icmp -j ACCEPT"
+      changed_when: true
+
+    - name: Allow SSH (IPv6 custom)
+      ansible.builtin.command: |
+        {{ posix_firewall_ip6tables_bin }} -A INPUT -p tcp --dport {{ posix_firewall_ssh_port }} -j ACCEPT
+      changed_when: true
+
+    - name: Apply custom IPv6 rules
+      ansible.builtin.command: |
+        {{ posix_firewall_ip6tables_bin }} -A {{ item.chain }} \
+        {% if item.protocol is defined %}-p {{ item.protocol }}{% endif %} \
+        {% if item.source is defined %}-s {{ item.source }}{% endif %} \
+        {% if item.destination_port is defined %}--dport {{ item.destination_port }}{% endif %} \
+        -j {{ item.jump }} \
+        {% if item.comment is defined %}-m comment --comment "{{ item.comment }}"{% endif %}
+      loop: "{{ posix_firewall_ipv6_custom_rules }}"
+      when: posix_firewall_ipv6_custom_rules | length > 0
+      changed_when: true
+
+  when: posix_firewall_ipv6_mode == 'custom'
+  tags: [firewall, ipv6, custom]
+
+# ==============================================================================
+# SET IPv6 DEFAULT POLICIES
+# ==============================================================================
+
+- name: Set IPv6 default policies
+  ansible.builtin.command: |
+    {{ posix_firewall_ip6tables_bin }} -P {{ item.chain }} {{ item.policy }}
+  loop:
+    - { chain: 'INPUT', policy: "{{ posix_firewall_default_input_policy }}" }
+    - { chain: 'FORWARD', policy: "{{ posix_firewall_default_forward_policy }}" }
+    - { chain: 'OUTPUT', policy: "{{ posix_firewall_default_output_policy }}" }
+  changed_when: true
+  tags: [firewall, ipv6, policy]
+
+# ==============================================================================
+# VERIFICATION
+# ==============================================================================
+
+- name: Display IPv6 firewall rules summary
+  ansible.builtin.command: "{{ posix_firewall_ip6tables_bin }} -L -n -v"
+  register: ipv6_rules_summary
+  changed_when: false
+  tags: [firewall, ipv6]
+
+- name: Display IPv6 rules applied
+  ansible.builtin.debug:
+    msg: |
+      ========================================
+      IPv6 FIREWALL RULES APPLIED
+      ========================================
+      Mode: {{ posix_firewall_ipv6_mode }}
+      Default policies:
+        INPUT: {{ posix_firewall_default_input_policy }}
+        FORWARD: {{ posix_firewall_default_forward_policy }}
+        OUTPUT: {{ posix_firewall_default_output_policy }}
+
+      SSH protected on port: {{ posix_firewall_ssh_port }}
+      ICMPv6: ENABLED (required for IPv6)
+
+      Rules count: {{ ipv6_rules_summary.stdout_lines | length }}
+      ========================================
+  tags: [firewall, ipv6]

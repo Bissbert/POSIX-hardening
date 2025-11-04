@@ -1,0 +1,198 @@
+---
+# ==============================================================================
+# Validate Prerequisites for Firewall Hardening
+# ==============================================================================
+# Checks that system meets requirements for firewall configuration
+# ==============================================================================
+
+- name: Display pre-flight validation phase
+  ansible.builtin.debug:
+    msg: |
+      ========================================
+      PHASE 1: PRE-FLIGHT VALIDATION
+      ========================================
+      Checking system requirements...
+  tags: [firewall, validation]
+
+- name: Check for iptables binary
+  ansible.builtin.stat:
+    path: "{{ posix_firewall_iptables_bin }}"
+  register: iptables_check
+  tags: [firewall, validation]
+
+- name: Fail if iptables not found
+  ansible.builtin.fail:
+    msg: |
+      iptables not found at {{ posix_firewall_iptables_bin }}
+      This system may be using nftables, firewalld, or ufw instead.
+      Please configure firewall manually or install iptables.
+  when: not iptables_check.stat.exists
+  tags: [firewall, validation]
+
+- name: Check for iptables-save binary
+  ansible.builtin.stat:
+    path: "{{ posix_firewall_iptables_save_bin }}"
+  register: iptables_save_check
+  tags: [firewall, validation]
+
+- name: Warn if iptables-save not found
+  ansible.builtin.debug:
+    msg: "WARNING: iptables-save not found - persistence may not work correctly"
+  when: not iptables_save_check.stat.exists
+  tags: [firewall, validation]
+
+- name: Check for iptables-restore binary
+  ansible.builtin.stat:
+    path: "{{ posix_firewall_iptables_restore_bin }}"
+  register: iptables_restore_check
+  tags: [firewall, validation]
+
+- name: Warn if iptables-restore not found
+  ansible.builtin.debug:
+    msg: "WARNING: iptables-restore not found - rollback may not work correctly"
+  when: not iptables_restore_check.stat.exists
+  tags: [firewall, validation]
+
+- name: Check for ip6tables binary (if IPv6 enabled)
+  ansible.builtin.stat:
+    path: "{{ posix_firewall_ip6tables_bin }}"
+  register: ip6tables_check
+  when: posix_firewall_ipv6_enabled | bool
+  tags: [firewall, validation, ipv6]
+
+- name: Warn if ip6tables not found but IPv6 enabled
+  ansible.builtin.debug:
+    msg: |
+      WARNING: IPv6 enabled but ip6tables not found
+      IPv6 firewall configuration will be skipped
+  when:
+    - posix_firewall_ipv6_enabled | bool
+    - not ip6tables_check.stat.exists
+  tags: [firewall, validation, ipv6]
+
+- name: Check if SSH port is configured
+  ansible.builtin.assert:
+    that:
+      - posix_firewall_ssh_port is defined
+      - posix_firewall_ssh_port | int > 0
+      - posix_firewall_ssh_port | int < 65536
+    fail_msg: "SSH port must be defined and be a valid port number (1-65535)"
+    success_msg: "SSH port validation passed: {{ posix_firewall_ssh_port }}"
+  tags: [firewall, validation]
+
+- name: Verify SSH service is running
+  ansible.builtin.service_facts:
+  tags: [firewall, validation]
+
+- name: Check SSH service status
+  ansible.builtin.debug:
+    msg: "SSH service status: {{ ansible_facts.services['sshd.service'].state | default(ansible_facts.services['ssh.service'].state | default('unknown')) }}"
+  tags: [firewall, validation]
+
+- name: Warn if admin IP not set
+  ansible.builtin.debug:
+    msg: |
+      ========================================
+      WARNING: Admin IP not configured
+      ========================================
+      No priority firewall rule will be created
+      This is OPTIONAL but recommended for emergency access
+
+      Set admin_ip in group_vars/all.yml:
+        admin_ip: "YOUR.IP.ADDRESS.HERE"
+      ========================================
+  when:
+    - posix_firewall_admin_ip is not defined or posix_firewall_admin_ip == ""
+  tags: [firewall, validation]
+
+- name: Create backup directory if it doesn't exist
+  ansible.builtin.file:
+    path: "{{ posix_firewall_backup_dir }}"
+    state: directory
+    mode: '0755'
+  tags: [firewall, validation]
+
+- name: Create log directory if it doesn't exist
+  ansible.builtin.file:
+    path: "{{ posix_firewall_log_dir }}"
+    state: directory
+    mode: '0755'
+  tags: [firewall, validation]
+
+- name: Check if running in Docker or container
+  ansible.builtin.stat:
+    path: /.dockerenv
+  register: docker_check
+  tags: [firewall, validation]
+
+- name: Check for container environment file
+  ansible.builtin.stat:
+    path: /run/.containerenv
+  register: container_check
+  tags: [firewall, validation]
+
+- name: Warn if running in container
+  ansible.builtin.debug:
+    msg: |
+      ========================================
+      WARNING: Container Environment Detected
+      ========================================
+      Firewall configuration in containers may have limitations
+      Some iptables modules may not be available
+      Host firewall rules may override container rules
+      ========================================
+  when: docker_check.stat.exists or container_check.stat.exists
+  tags: [firewall, validation]
+
+- name: Test iptables functionality
+  ansible.builtin.command: "{{ posix_firewall_iptables_bin }} -L -n"
+  register: iptables_test
+  changed_when: false
+  failed_when: false
+  tags: [firewall, validation]
+
+- name: Display iptables test result
+  ansible.builtin.debug:
+    msg: |
+      Iptables test: {{ 'PASSED' if iptables_test.rc == 0 else 'FAILED (rc=' + (iptables_test.rc | string) + ')' }}
+  tags: [firewall, validation]
+
+- name: Fail if iptables is not functional
+  ansible.builtin.fail:
+    msg: |
+      Iptables is installed but not functional (exit code: {{ iptables_test.rc }})
+      Error: {{ iptables_test.stderr }}
+      This may indicate insufficient permissions or kernel support.
+  when: iptables_test.rc != 0
+  tags: [firewall, validation]
+
+- name: Check for required iptables modules
+  ansible.builtin.shell: |
+    lsmod | grep -E "ip_tables|iptable_filter|iptable_nat|nf_conntrack" || echo "Some modules not loaded"
+  register: iptables_modules
+  changed_when: false
+  failed_when: false
+  tags: [firewall, validation]
+
+- name: Display loaded iptables modules
+  ansible.builtin.debug:
+    msg: "{{ iptables_modules.stdout_lines }}"
+  tags: [firewall, validation]
+
+- name: Display pre-flight validation success
+  ansible.builtin.debug:
+    msg: |
+      ========================================
+      PRE-FLIGHT VALIDATION: PASSED
+      ========================================
+      System meets requirements for firewall hardening
+      - iptables: AVAILABLE
+      - iptables-save: {{ 'AVAILABLE' if iptables_save_check.stat.exists else 'MISSING' }}
+      - iptables-restore: {{ 'AVAILABLE' if iptables_restore_check.stat.exists else 'MISSING' }}
+      - ip6tables: {{ 'AVAILABLE' if (posix_firewall_ipv6_enabled and ip6tables_check.stat.exists) else 'N/A' }}
+      - SSH port: {{ posix_firewall_ssh_port }}
+      - Admin IP: {{ posix_firewall_admin_ip | default('Not set') }}
+
+      Proceeding with firewall configuration...
+      ========================================
+  tags: [firewall, validation]

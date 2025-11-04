@@ -1,0 +1,274 @@
+---
+# ==============================================================================
+# POSIX Firewall Hardening Role - Default Variables
+# ==============================================================================
+# These variables control iptables/ip6tables firewall configuration
+# Override in group_vars/all.yml or host_vars/
+# ==============================================================================
+
+# ------------------------------------------------------------------------------
+# CRITICAL SAFETY VARIABLES
+# ------------------------------------------------------------------------------
+# Role identification
+posix_firewall_hardening_marker: /var/lib/hardening/firewall_hardened
+
+# ------------------------------------------------------------------------------
+# IPTABLES BINARY PATHS
+# ------------------------------------------------------------------------------
+posix_firewall_iptables_bin: /usr/sbin/iptables
+posix_firewall_ip6tables_bin: /usr/sbin/ip6tables
+posix_firewall_iptables_save_bin: /usr/sbin/iptables-save
+posix_firewall_iptables_restore_bin: /usr/sbin/iptables-restore
+
+# ------------------------------------------------------------------------------
+# SAFETY TIMEOUT MECHANISM
+# ------------------------------------------------------------------------------
+# Auto-reset firewall after timeout to prevent permanent lockout
+posix_firewall_safety_timeout: 300  # 5 minutes in seconds
+posix_firewall_safety_timeout_enabled: true
+
+# ------------------------------------------------------------------------------
+# SSH PROTECTION SETTINGS
+# ------------------------------------------------------------------------------
+# SSH port (inherited from SSH role or group_vars)
+posix_firewall_ssh_port: "{{ posix_ssh_port | default(22) }}"
+
+# SSH rate limiting (brute-force protection)
+posix_firewall_ssh_rate_limit_enabled: true
+posix_firewall_ssh_rate_limit_hits: 4
+posix_firewall_ssh_rate_limit_seconds: 60
+
+# ------------------------------------------------------------------------------
+# ICMP SETTINGS
+# ------------------------------------------------------------------------------
+posix_firewall_icmp_enabled: true
+posix_firewall_icmp_rate_limit: "1/s"
+posix_firewall_icmp_types:
+  - echo-request
+  - echo-reply
+  - destination-unreachable
+  - time-exceeded
+
+# ------------------------------------------------------------------------------
+# LOGGING CONFIGURATION
+# ------------------------------------------------------------------------------
+posix_firewall_log_dropped: true
+posix_firewall_log_rate_limit: "2/min"
+posix_firewall_log_prefix: "IPTables-Dropped: "
+posix_firewall_log_level: 4
+
+# ------------------------------------------------------------------------------
+# OUTBOUND SERVICE RULES
+# ------------------------------------------------------------------------------
+# Allow outbound connections to common services
+posix_firewall_allow_dns: true
+posix_firewall_allow_ntp: true
+posix_firewall_allow_http: true
+posix_firewall_allow_https: true
+
+# ------------------------------------------------------------------------------
+# CUSTOM OUTBOUND PORTS
+# ------------------------------------------------------------------------------
+# Additional outbound TCP/UDP ports to allow
+posix_firewall_custom_outbound_tcp: []
+  # - 8080
+  # - 3306
+
+posix_firewall_custom_outbound_udp: []
+  # - 514  # syslog
+
+# ------------------------------------------------------------------------------
+# CUSTOM INBOUND CONFIGURATION
+# ------------------------------------------------------------------------------
+# Additional TCP ports to allow inbound
+posix_firewall_allowed_ports: []
+  # - 80    # HTTP
+  # - 443   # HTTPS
+  # - 3000  # Custom app
+
+# Trusted networks (full access)
+posix_firewall_trusted_networks: []
+  # - "10.0.0.0/8"
+  # - "192.168.1.0/24"
+
+# ------------------------------------------------------------------------------
+# DEFAULT POLICIES
+# ------------------------------------------------------------------------------
+posix_firewall_default_input_policy: DROP
+posix_firewall_default_output_policy: ACCEPT
+posix_firewall_default_forward_policy: DROP
+
+# ------------------------------------------------------------------------------
+# IPv6 CONFIGURATION
+# ------------------------------------------------------------------------------
+posix_firewall_ipv6_enabled: true
+posix_firewall_ipv6_mode: same  # Options: same, block, custom
+
+# IPv6 specific rules (only used when ipv6_mode is 'custom')
+posix_firewall_ipv6_custom_rules: []
+  # - chain: INPUT
+  #   protocol: tcp
+  #   destination_port: 80
+  #   jump: ACCEPT
+
+# ------------------------------------------------------------------------------
+# CUSTOM CHAINS
+# ------------------------------------------------------------------------------
+# Define custom iptables chains
+posix_firewall_custom_chains: []
+  # - name: RATE_LIMIT
+  #   description: "Rate limiting chain"
+  # - name: BLACKLIST
+  #   description: "Blacklisted IPs"
+
+# ------------------------------------------------------------------------------
+# CUSTOM IPv4 RULES
+# ------------------------------------------------------------------------------
+# Advanced custom rules (executed after standard rules)
+posix_firewall_custom_rules_ipv4: []
+  # - chain: INPUT
+  #   protocol: tcp
+  #   destination_port: 8080
+  #   source: 192.168.1.0/24
+  #   jump: ACCEPT
+  #   comment: "Allow app access from internal network"
+
+# ------------------------------------------------------------------------------
+# CUSTOM IPv6 RULES
+# ------------------------------------------------------------------------------
+posix_firewall_custom_rules_ipv6: []
+  # - chain: INPUT
+  #   protocol: tcp
+  #   destination_port: 443
+  #   jump: ACCEPT
+
+# ------------------------------------------------------------------------------
+# ADMIN IP CONFIGURATION
+# ------------------------------------------------------------------------------
+# Admin IP gets priority access (first rule, bypasses all restrictions)
+posix_firewall_admin_ip: "{{ admin_ip | default('') }}"
+
+# ------------------------------------------------------------------------------
+# CONTROL FLAGS
+# ------------------------------------------------------------------------------
+posix_firewall_force_reharden: false  # Force re-hardening even if already completed
+posix_firewall_skip_connectivity_test: false  # Skip post-hardening connectivity test
+posix_firewall_backup_current_rules: true  # Backup rules before applying changes
+posix_firewall_save_persistent: true  # Save rules to survive reboot
+
+# ------------------------------------------------------------------------------
+# FILE PATHS
+# ------------------------------------------------------------------------------
+posix_firewall_backup_dir: /var/backups/hardening
+posix_firewall_rules_v4: /etc/iptables/rules.v4
+posix_firewall_rules_v6: /etc/iptables/rules.v6
+posix_firewall_rules_dir: /etc/iptables
+
+# RHEL/CentOS paths
+posix_firewall_rules_v4_rhel: /etc/sysconfig/iptables
+posix_firewall_rules_v6_rhel: /etc/sysconfig/ip6tables
+
+# Network hook for Debian/Ubuntu
+posix_firewall_network_hook: /etc/network/if-pre-up.d/iptables
+
+# Safety reset script
+posix_firewall_reset_script: /tmp/firewall_reset.sh
+posix_firewall_reset_pid_file: /var/run/firewall_reset.pid
+
+# ------------------------------------------------------------------------------
+# LOG FILES
+# ------------------------------------------------------------------------------
+posix_firewall_log_dir: /var/log/hardening
+posix_firewall_log_file: "{{ posix_firewall_log_dir }}/firewall.log"
+
+# ------------------------------------------------------------------------------
+# TESTING AND VALIDATION
+# ------------------------------------------------------------------------------
+posix_firewall_connectivity_test_timeout: 30
+posix_firewall_connectivity_test_host: localhost
+posix_firewall_validate_rules_exist: true
+
+# ------------------------------------------------------------------------------
+# DISTRIBUTION SPECIFIC SETTINGS
+# ------------------------------------------------------------------------------
+# Package names vary by distribution
+posix_firewall_iptables_persistent_package: >-
+  {{
+    'iptables-persistent' if ansible_os_family in ['Debian']
+    else 'iptables-services' if ansible_os_family in ['RedHat', 'Rocky', 'AlmaLinux']
+    else 'iptables'
+  }}
+
+# ------------------------------------------------------------------------------
+# PERFORMANCE TUNING
+# ------------------------------------------------------------------------------
+# Conntrack settings (for high-traffic servers)
+posix_firewall_conntrack_max: 65536
+posix_firewall_conntrack_buckets: 16384
+posix_firewall_optimize_conntrack: false
+
+# ------------------------------------------------------------------------------
+# ADVANCED FEATURES
+# ------------------------------------------------------------------------------
+# Port knocking (disabled by default)
+posix_firewall_port_knocking_enabled: false
+posix_firewall_port_knocking_sequence: []
+  # - 7000
+  # - 8000
+  # - 9000
+
+# GeoIP blocking (requires xtables-addons)
+posix_firewall_geoip_enabled: false
+posix_firewall_geoip_blocked_countries: []
+  # - CN
+  # - RU
+
+# Fail2ban integration
+posix_firewall_fail2ban_chain: fail2ban
+posix_firewall_fail2ban_enabled: false
+
+# ------------------------------------------------------------------------------
+# SECURITY HARDENING OPTIONS
+# ------------------------------------------------------------------------------
+# Drop invalid packets
+posix_firewall_drop_invalid: true
+
+# Drop packets with bogus TCP flags
+posix_firewall_drop_bogus_tcp: true
+
+# SYN flood protection
+posix_firewall_syn_flood_protection: true
+posix_firewall_syn_flood_rate: "1/s"
+posix_firewall_syn_flood_burst: 3
+
+# Disable ICMP redirects (for routers/gateways)
+posix_firewall_block_icmp_redirects: false
+
+# Block ICMP timestamp requests
+posix_firewall_block_icmp_timestamp: true
+
+# ------------------------------------------------------------------------------
+# DOCKER INTEGRATION
+# ------------------------------------------------------------------------------
+# Docker creates its own iptables rules
+posix_firewall_docker_integration: false
+posix_firewall_docker_chain: DOCKER-USER
+
+# ------------------------------------------------------------------------------
+# KUBERNETES INTEGRATION
+# ------------------------------------------------------------------------------
+posix_firewall_kubernetes_integration: false
+posix_firewall_kubernetes_preserve_chains:
+  - KUBE-SERVICES
+  - KUBE-FORWARD
+  - KUBE-NODEPORTS
+
+# ------------------------------------------------------------------------------
+# EMERGENCY RECOVERY
+# ------------------------------------------------------------------------------
+# Auto-recovery settings
+posix_firewall_emergency_allow_all_timeout: 600  # 10 minutes
+posix_firewall_emergency_recovery_enabled: true
+
+# Console access required if this is false
+posix_firewall_allow_emergency_reset: true

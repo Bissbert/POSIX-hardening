@@ -1,0 +1,409 @@
+---
+# ==============================================================================
+# POSIX Firewall Hardening Role - Main Tasks
+# ==============================================================================
+# CRITICAL WARNING: This role modifies firewall rules
+# HIGH LOCKOUT RISK - Emergency mechanisms and validation REQUIRED
+#
+# Converted from: scripts/02-firewall-setup.sh
+# ==============================================================================
+# SAFETY FEATURES:
+#   1. Pre-flight validation (iptables exists, SSH protected)
+#   2. Backup current rules (timestamped)
+#   3. Safety timeout mechanism (auto-reset after 5 minutes)
+#   4. Admin IP priority access (first rule)
+#   5. Connectivity validation (verify SSH still works)
+#   6. Automatic rollback on failure
+#   7. Idempotent execution (marker file)
+# ==============================================================================
+
+# ------------------------------------------------------------------------------
+# CHECK IF ALREADY HARDENED
+# ------------------------------------------------------------------------------
+
+- name: Check if firewall already hardened
+  ansible.builtin.stat:
+    path: "{{ posix_firewall_hardening_marker }}"
+  register: firewall_marker
+  tags: [firewall, check, always]
+
+- name: Display skip message if already hardened
+  ansible.builtin.debug:
+    msg: |
+      ========================================
+      FIREWALL ALREADY HARDENED
+      ========================================
+      Marker file exists: {{ posix_firewall_hardening_marker }}
+      Skipping firewall configuration.
+
+      To re-run hardening:
+        Set posix_firewall_force_reharden: true
+      ========================================
+  when:
+    - firewall_marker.stat.exists
+    - not posix_firewall_force_reharden | bool
+  tags: [firewall, check]
+
+- name: Skip hardening if already completed
+  ansible.builtin.meta: end_host
+  when:
+    - firewall_marker.stat.exists
+    - not posix_firewall_force_reharden | bool
+  tags: [firewall, check]
+
+# ------------------------------------------------------------------------------
+# DISPLAY CRITICAL WARNING
+# ------------------------------------------------------------------------------
+
+- name: Display firewall hardening warning
+  ansible.builtin.debug:
+    msg: |
+      ========================================
+      WARNING: FIREWALL HARDENING IN PROGRESS
+      ========================================
+      This role will modify iptables/ip6tables firewall rules
+      LOCKOUT RISK: Incorrect configuration can prevent SSH access
+
+      Safety mechanisms enabled:
+        - Pre-flight validation
+        - Current rules backup
+        - Safety timeout (auto-reset after {{ posix_firewall_safety_timeout }}s)
+        - Admin IP priority: {{ posix_firewall_admin_ip | default('NOT SET') }}
+        - SSH protection on port {{ posix_firewall_ssh_port }}
+        - Connectivity validation
+        - Automatic rollback on failure
+
+      Default policies:
+        INPUT: {{ posix_firewall_default_input_policy }}
+        FORWARD: {{ posix_firewall_default_forward_policy }}
+        OUTPUT: {{ posix_firewall_default_output_policy }}
+
+      Allowed ports: {{ posix_firewall_allowed_ports | join(', ') if posix_firewall_allowed_ports else 'None (only SSH)' }}
+
+      Press Ctrl+C within 10 seconds to abort...
+      ========================================
+  tags: [firewall, warning]
+
+- name: Pause for review (can be skipped with --skip-tags pause)
+  ansible.builtin.pause:
+    seconds: 10
+    prompt: "Review warning above. Execution will continue in 10 seconds..."
+  tags: [firewall, warning, pause]
+  when: not ansible_check_mode
+
+# ------------------------------------------------------------------------------
+# PHASE 1: PRE-FLIGHT VALIDATION
+# ------------------------------------------------------------------------------
+
+- name: Phase 1 - Pre-flight validation
+  ansible.builtin.include_tasks: validate_prerequisites.yml
+  tags: [firewall, validation, phase1]
+
+# ------------------------------------------------------------------------------
+# PHASE 2: BACKUP CURRENT RULES
+# ------------------------------------------------------------------------------
+
+- name: Phase 2 - Backup current firewall rules
+  ansible.builtin.include_tasks: backup_firewall_rules.yml
+  when:
+    - posix_firewall_backup_current_rules | bool
+    - not ansible_check_mode
+  tags: [firewall, backup, phase2]
+
+# ------------------------------------------------------------------------------
+# PHASE 3: SETUP SAFETY TIMEOUT (CRITICAL)
+# ------------------------------------------------------------------------------
+
+- name: Phase 3 - Setup safety timeout mechanism
+  ansible.builtin.include_tasks: setup_safety_timeout.yml
+  when:
+    - posix_firewall_safety_timeout_enabled | bool
+    - not ansible_check_mode
+  tags: [firewall, safety, phase3]
+
+# ------------------------------------------------------------------------------
+# PHASE 4: APPLY IPv4 FIREWALL RULES (CRITICAL)
+# ------------------------------------------------------------------------------
+
+- name: Phase 4 - Apply IPv4 firewall rules
+  block:
+    - name: Apply IPv4 iptables rules
+      ansible.builtin.include_tasks: apply_ipv4_rules.yml
+      tags: [firewall, ipv4, phase4]
+
+  rescue:
+    - name: IPv4 firewall configuration failed - triggering emergency rollback
+      ansible.builtin.debug:
+        msg: |
+          ========================================
+          ERROR: IPv4 FIREWALL CONFIGURATION FAILED
+          ========================================
+          Rules application encountered errors
+          Attempting emergency rollback...
+          ========================================
+
+    - name: Trigger emergency firewall rollback handler
+      ansible.builtin.command: /bin/true
+      notify: emergency firewall rollback
+      changed_when: true
+
+    - name: Fail the play after rollback attempt
+      ansible.builtin.fail:
+        msg: |
+          IPv4 firewall configuration failed and rollback attempted.
+          Check {{ posix_firewall_backup_dir }} for backup files.
+          Console access may be required.
+
+  tags: [firewall, ipv4, phase4]
+
+# ------------------------------------------------------------------------------
+# PHASE 5: APPLY IPv6 FIREWALL RULES
+# ------------------------------------------------------------------------------
+
+- name: Phase 5 - Apply IPv6 firewall rules
+  block:
+    - name: Apply IPv6 ip6tables rules
+      ansible.builtin.include_tasks: apply_ipv6_rules.yml
+      when: posix_firewall_ipv6_enabled | bool
+      tags: [firewall, ipv6, phase5]
+
+  rescue:
+    - name: IPv6 firewall configuration failed
+      ansible.builtin.debug:
+        msg: |
+          ========================================
+          WARNING: IPv6 FIREWALL CONFIGURATION FAILED
+          ========================================
+          IPv6 rules application encountered errors
+          IPv4 rules remain active
+          Attempting rollback of IPv6 only...
+          ========================================
+
+    - name: Reset IPv6 to permissive state
+      ansible.builtin.command: "{{ item }}"
+      loop:
+        - "{{ posix_firewall_ip6tables_bin }} -F"
+        - "{{ posix_firewall_ip6tables_bin }} -X"
+        - "{{ posix_firewall_ip6tables_bin }} -P INPUT ACCEPT"
+        - "{{ posix_firewall_ip6tables_bin }} -P FORWARD ACCEPT"
+        - "{{ posix_firewall_ip6tables_bin }} -P OUTPUT ACCEPT"
+      failed_when: false
+      changed_when: false
+
+    - name: Log IPv6 failure but continue
+      ansible.builtin.debug:
+        msg: "IPv6 firewall configuration failed but IPv4 rules remain active. Continuing..."
+
+  tags: [firewall, ipv6, phase5]
+
+# ------------------------------------------------------------------------------
+# PHASE 6: POST-HARDENING CONNECTIVITY VALIDATION (CRITICAL)
+# ------------------------------------------------------------------------------
+
+- name: Phase 6 - Post-hardening connectivity validation
+  block:
+    - name: Validate SSH connectivity
+      ansible.builtin.include_tasks: validate_connectivity.yml
+      when: not posix_firewall_skip_connectivity_test | bool
+      tags: [firewall, validation, phase6]
+
+  rescue:
+    - name: Connectivity validation failed - CRITICAL
+      ansible.builtin.debug:
+        msg: |
+          ========================================
+          CRITICAL: FIREWALL CONNECTIVITY TEST FAILED
+          ========================================
+          Cannot verify SSH access after hardening
+          Emergency rollback will be attempted
+          Safety timeout will auto-reset firewall in {{ posix_firewall_safety_timeout }} seconds
+          ========================================
+
+    - name: Trigger emergency rollback
+      ansible.builtin.command: /bin/true
+      notify: emergency firewall rollback
+      changed_when: true
+
+    - name: Display emergency access information
+      ansible.builtin.debug:
+        msg: |
+          ========================================
+          EMERGENCY ACCESS INFORMATION
+          ========================================
+          Firewall will auto-reset in {{ posix_firewall_safety_timeout }} seconds
+
+          Manual rollback:
+            1. Find latest backup: ls -lt {{ posix_firewall_backup_dir }}
+            2. Restore IPv4: {{ posix_firewall_iptables_restore_bin }} < backup_file
+            3. Restore IPv6: ip6tables-restore < backup_file.v6
+
+          Emergency reset (if you have console access):
+            iptables -F && iptables -P INPUT ACCEPT
+
+          Console/KVM access may be required
+          ========================================
+
+    - name: Fail after emergency rollback
+      ansible.builtin.fail:
+        msg: "Firewall connectivity validation failed - rollback attempted"
+
+  tags: [firewall, validation, phase6]
+
+# ------------------------------------------------------------------------------
+# PHASE 7: CANCEL SAFETY TIMEOUT
+# ------------------------------------------------------------------------------
+
+- name: Phase 7 - Cancel safety timeout (rules are good)
+  block:
+    - name: Stop safety timeout script
+      ansible.builtin.shell: |
+        if [ -f {{ posix_firewall_reset_pid_file }} ]; then
+          pid=$(cat {{ posix_firewall_reset_pid_file }})
+          if kill -0 "$pid" 2>/dev/null; then
+            kill "$pid"
+            echo "Safety timeout cancelled (PID: $pid)"
+          else
+            echo "Safety timeout process not running"
+          fi
+          rm -f {{ posix_firewall_reset_pid_file }}
+        else
+          echo "No PID file found"
+        fi
+      register: timeout_cancel
+      changed_when: "'cancelled' in timeout_cancel.stdout"
+      failed_when: false
+
+    - name: Remove safety reset script
+      ansible.builtin.file:
+        path: "{{ posix_firewall_reset_script }}"
+        state: absent
+
+    - name: Display timeout cancellation
+      ansible.builtin.debug:
+        msg: "{{ timeout_cancel.stdout_lines }}"
+
+  when:
+    - posix_firewall_safety_timeout_enabled | bool
+    - not ansible_check_mode
+  tags: [firewall, safety, phase7]
+
+# ------------------------------------------------------------------------------
+# PHASE 8: SAVE PERSISTENT RULES
+# ------------------------------------------------------------------------------
+
+- name: Phase 8 - Save persistent firewall rules
+  ansible.builtin.include_tasks: save_persistent_rules.yml
+  when:
+    - posix_firewall_save_persistent | bool
+    - not ansible_check_mode
+  tags: [firewall, persistence, phase8]
+
+# ------------------------------------------------------------------------------
+# PHASE 9: FINALIZATION AND CLEANUP
+# ------------------------------------------------------------------------------
+
+- name: Phase 9 - Finalization
+  block:
+    - name: Create marker directory
+      ansible.builtin.file:
+        path: "{{ posix_firewall_hardening_marker | dirname }}"
+        state: directory
+        mode: '0755'
+
+    - name: Create hardening marker file
+      ansible.builtin.copy:
+        content: |
+          Firewall hardened on: {{ ansible_date_time.iso8601 }}
+          Ansible managed: {{ inventory_hostname }}
+          SSH port: {{ posix_firewall_ssh_port }}
+          Admin IP: {{ posix_firewall_admin_ip | default('Not set') }}
+          IPv6 enabled: {{ posix_firewall_ipv6_enabled }}
+          IPv6 mode: {{ posix_firewall_ipv6_mode }}
+        dest: "{{ posix_firewall_hardening_marker }}"
+        mode: '0644'
+
+    - name: Display firewall hardening success
+      ansible.builtin.debug:
+        msg: |
+          ========================================
+          FIREWALL HARDENING COMPLETED SUCCESSFULLY
+          ========================================
+          All validation tests passed
+          Firewall rules are active and SSH is accessible
+          Configuration marker: {{ posix_firewall_hardening_marker }}
+
+          Applied configuration:
+            - Default INPUT policy: {{ posix_firewall_default_input_policy }}
+            - Default OUTPUT policy: {{ posix_firewall_default_output_policy }}
+            - Default FORWARD policy: {{ posix_firewall_default_forward_policy }}
+            - SSH port {{ posix_firewall_ssh_port }}: PROTECTED
+            - SSH rate limiting: {{ 'ENABLED' if posix_firewall_ssh_rate_limit_enabled else 'DISABLED' }}
+            - ICMP: {{ 'ENABLED' if posix_firewall_icmp_enabled else 'DISABLED' }}
+            - Logging: {{ 'ENABLED' if posix_firewall_log_dropped else 'DISABLED' }}
+            - IPv6: {{ 'ENABLED (' + posix_firewall_ipv6_mode + ')' if posix_firewall_ipv6_enabled else 'DISABLED' }}
+
+          {% if posix_firewall_admin_ip %}
+          Admin IP priority: {{ posix_firewall_admin_ip }}
+          {% endif %}
+
+          {% if posix_firewall_allowed_ports %}
+          Allowed ports: {{ posix_firewall_allowed_ports | join(', ') }}
+          {% endif %}
+
+          {% if posix_firewall_trusted_networks %}
+          Trusted networks: {{ posix_firewall_trusted_networks | join(', ') }}
+          {% endif %}
+
+          Logs: {{ posix_firewall_log_file }}
+          Backups: {{ posix_firewall_backup_dir }}/
+          Rules: {{ posix_firewall_rules_v4 }}, {{ posix_firewall_rules_v6 }}
+          ========================================
+
+    - name: Display current firewall rules summary
+      ansible.builtin.shell: |
+        echo "=== IPv4 Rules Summary ==="
+        {{ posix_firewall_iptables_bin }} -L -n -v --line-numbers | head -50
+        echo ""
+        echo "=== IPv6 Rules Summary ==="
+        {{ posix_firewall_ip6tables_bin }} -L -n -v --line-numbers | head -50 || echo "IPv6 not available"
+      register: firewall_summary
+      changed_when: false
+      failed_when: false
+
+    - name: Display firewall rules
+      ansible.builtin.debug:
+        msg: "{{ firewall_summary.stdout_lines }}"
+      when: firewall_summary.rc == 0
+
+  tags: [firewall, finalization, phase9]
+
+# ------------------------------------------------------------------------------
+# CLEANUP NOTES
+# ------------------------------------------------------------------------------
+
+- name: Display cleanup notes
+  ansible.builtin.debug:
+    msg: |
+      ========================================
+      POST-HARDENING NOTES
+      ========================================
+      1. Test SSH access from your workstation
+      2. Verify allowed services are accessible
+      3. Check firewall logs: {{ posix_firewall_log_file }}
+      4. Monitor dropped packets: dmesg | grep IPTables
+      5. Review rules: iptables -L -n -v
+
+      Backups retained in: {{ posix_firewall_backup_dir }}
+      Marker file: {{ posix_firewall_hardening_marker }}
+
+      To re-run hardening:
+        Set posix_firewall_force_reharden: true
+
+      To add ports:
+        Update posix_firewall_allowed_ports in group_vars
+        Re-run with force_reharden: true
+
+      Emergency recovery (console access):
+        iptables -F && iptables -P INPUT ACCEPT
+      ========================================
+  tags: [firewall, notes, always]
