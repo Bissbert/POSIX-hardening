@@ -1,0 +1,506 @@
+---
+# ==============================================================================
+# SSH Hardening - SSHD Configuration Hardening
+# ==============================================================================
+# CRITICAL: This task modifies SSH configuration
+# All changes use native Ansible modules with validation
+# ==============================================================================
+
+- name: Display SSH hardening notice
+  ansible.builtin.debug:
+    msg: |
+      ========================================
+      APPLYING SSH HARDENING CONFIGURATION
+      ========================================
+      WARNING: Modifying SSH configuration
+      All changes will be validated before reload
+      Backup will be created automatically
+      ========================================
+  tags: [ssh, harden]
+
+# ------------------------------------------------------------------------------
+# BACKUP CURRENT CONFIGURATION
+# ------------------------------------------------------------------------------
+
+- name: Create timestamped backup of sshd_config
+  ansible.builtin.copy:
+    src: "{{ posix_ssh_config_file }}"
+    dest: "{{ posix_ssh_config_backup_dir }}/sshd_config.{{ ansible_date_time.epoch }}.bak"
+    remote_src: yes
+    mode: "{{ posix_ssh_config_mode }}"
+    owner: root
+    group: root
+  when: posix_ssh_backup_config | bool
+  register: ssh_config_backup
+  tags: [ssh, harden, backup]
+
+- name: Display backup location
+  ansible.builtin.debug:
+    msg: "SSH config backed up to: {{ ssh_config_backup.dest }}"
+  when:
+    - posix_ssh_backup_config | bool
+    - ssh_config_backup is changed
+  tags: [ssh, harden, backup]
+
+# ------------------------------------------------------------------------------
+# CHECK SSH VERSION FOR CRYPTO SUPPORT
+# ------------------------------------------------------------------------------
+
+- name: Get SSH version
+  ansible.builtin.shell: /usr/sbin/sshd -v 2>&1 | head -1
+  register: sshd_version
+  changed_when: false
+  tags: [ssh, harden, version]
+
+- name: Display SSH version
+  ansible.builtin.debug:
+    msg: "SSH Version: {{ sshd_version.stdout }}"
+  tags: [ssh, harden, version]
+
+- name: Check if SSH supports modern crypto settings
+  ansible.builtin.shell: /usr/sbin/sshd -T 2>/dev/null | grep -q "ciphers"
+  register: crypto_support
+  changed_when: false
+  failed_when: false
+  when: posix_ssh_check_crypto_support | bool
+  tags: [ssh, harden, version]
+
+# ------------------------------------------------------------------------------
+# AUTHENTICATION SETTINGS (CRITICAL)
+# ------------------------------------------------------------------------------
+
+- name: Disable root login
+  ansible.builtin.lineinfile:
+    path: "{{ posix_ssh_config_file }}"
+    regexp: '^#?PermitRootLogin\s+'
+    line: "PermitRootLogin {{ posix_ssh_permit_root_login }}"
+    state: present
+    validate: '/usr/sbin/sshd -t -f %s'
+    backup: yes
+  notify:
+    - reload sshd
+    - test ssh connectivity
+  tags: [ssh, harden, auth]
+
+- name: Disable password authentication
+  ansible.builtin.lineinfile:
+    path: "{{ posix_ssh_config_file }}"
+    regexp: '^#?PasswordAuthentication\s+'
+    line: "PasswordAuthentication {{ posix_ssh_password_authentication }}"
+    state: present
+    validate: '/usr/sbin/sshd -t -f %s'
+  notify:
+    - reload sshd
+    - test ssh connectivity
+  tags: [ssh, harden, auth]
+
+- name: Enable public key authentication
+  ansible.builtin.lineinfile:
+    path: "{{ posix_ssh_config_file }}"
+    regexp: '^#?PubkeyAuthentication\s+'
+    line: "PubkeyAuthentication {{ posix_ssh_pubkey_authentication }}"
+    state: present
+    validate: '/usr/sbin/sshd -t -f %s'
+  notify: reload sshd
+  tags: [ssh, harden, auth]
+
+- name: Disable empty passwords
+  ansible.builtin.lineinfile:
+    path: "{{ posix_ssh_config_file }}"
+    regexp: '^#?PermitEmptyPasswords\s+'
+    line: "PermitEmptyPasswords {{ posix_ssh_permit_empty_passwords }}"
+    state: present
+    validate: '/usr/sbin/sshd -t -f %s'
+  notify: reload sshd
+  tags: [ssh, harden, auth]
+
+- name: Disable challenge-response authentication
+  ansible.builtin.lineinfile:
+    path: "{{ posix_ssh_config_file }}"
+    regexp: '^#?ChallengeResponseAuthentication\s+'
+    line: "ChallengeResponseAuthentication {{ posix_ssh_challenge_response_authentication }}"
+    state: present
+    validate: '/usr/sbin/sshd -t -f %s'
+  notify: reload sshd
+  tags: [ssh, harden, auth]
+
+- name: Configure PAM usage
+  ansible.builtin.lineinfile:
+    path: "{{ posix_ssh_config_file }}"
+    regexp: '^#?UsePAM\s+'
+    line: "UsePAM {{ posix_ssh_use_pam }}"
+    state: present
+    validate: '/usr/sbin/sshd -t -f %s'
+  notify: reload sshd
+  tags: [ssh, harden, auth]
+
+# ------------------------------------------------------------------------------
+# SSH PORT AND NETWORK SETTINGS
+# ------------------------------------------------------------------------------
+
+- name: Set SSH port
+  ansible.builtin.lineinfile:
+    path: "{{ posix_ssh_config_file }}"
+    regexp: '^#?Port\s+'
+    line: "Port {{ posix_ssh_port }}"
+    state: present
+    validate: '/usr/sbin/sshd -t -f %s'
+  notify:
+    - reload sshd
+    - update firewall for ssh port
+    - test ssh connectivity
+  tags: [ssh, harden, network]
+
+- name: Set listen address
+  ansible.builtin.lineinfile:
+    path: "{{ posix_ssh_config_file }}"
+    regexp: '^#?ListenAddress\s+'
+    line: "ListenAddress {{ posix_ssh_listen_address }}"
+    state: present
+    validate: '/usr/sbin/sshd -t -f %s'
+  notify: reload sshd
+  when: posix_ssh_listen_address | length > 0
+  tags: [ssh, harden, network]
+
+# ------------------------------------------------------------------------------
+# CONNECTION LIMITS AND TIMEOUTS
+# ------------------------------------------------------------------------------
+
+- name: Set maximum authentication tries
+  ansible.builtin.lineinfile:
+    path: "{{ posix_ssh_config_file }}"
+    regexp: '^#?MaxAuthTries\s+'
+    line: "MaxAuthTries {{ posix_ssh_max_auth_tries }}"
+    state: present
+    validate: '/usr/sbin/sshd -t -f %s'
+  notify: reload sshd
+  tags: [ssh, harden, limits]
+
+- name: Set maximum sessions
+  ansible.builtin.lineinfile:
+    path: "{{ posix_ssh_config_file }}"
+    regexp: '^#?MaxSessions\s+'
+    line: "MaxSessions {{ posix_ssh_max_sessions }}"
+    state: present
+    validate: '/usr/sbin/sshd -t -f %s'
+  notify: reload sshd
+  tags: [ssh, harden, limits]
+
+- name: Set maximum startups
+  ansible.builtin.lineinfile:
+    path: "{{ posix_ssh_config_file }}"
+    regexp: '^#?MaxStartups\s+'
+    line: "MaxStartups {{ posix_ssh_max_startups }}"
+    state: present
+    validate: '/usr/sbin/sshd -t -f %s'
+  notify: reload sshd
+  tags: [ssh, harden, limits]
+
+- name: Set login grace time
+  ansible.builtin.lineinfile:
+    path: "{{ posix_ssh_config_file }}"
+    regexp: '^#?LoginGraceTime\s+'
+    line: "LoginGraceTime {{ posix_ssh_login_grace_time }}"
+    state: present
+    validate: '/usr/sbin/sshd -t -f %s'
+  notify: reload sshd
+  tags: [ssh, harden, limits]
+
+- name: Set client alive interval
+  ansible.builtin.lineinfile:
+    path: "{{ posix_ssh_config_file }}"
+    regexp: '^#?ClientAliveInterval\s+'
+    line: "ClientAliveInterval {{ posix_ssh_client_alive_interval }}"
+    state: present
+    validate: '/usr/sbin/sshd -t -f %s'
+  notify: reload sshd
+  tags: [ssh, harden, limits]
+
+- name: Set client alive count max
+  ansible.builtin.lineinfile:
+    path: "{{ posix_ssh_config_file }}"
+    regexp: '^#?ClientAliveCountMax\s+'
+    line: "ClientAliveCountMax {{ posix_ssh_client_alive_count_max }}"
+    state: present
+    validate: '/usr/sbin/sshd -t -f %s'
+  notify: reload sshd
+  tags: [ssh, harden, limits]
+
+# ------------------------------------------------------------------------------
+# SECURITY OPTIONS
+# ------------------------------------------------------------------------------
+
+- name: Disable X11 forwarding
+  ansible.builtin.lineinfile:
+    path: "{{ posix_ssh_config_file }}"
+    regexp: '^#?X11Forwarding\s+'
+    line: "X11Forwarding {{ posix_ssh_x11_forwarding }}"
+    state: present
+    validate: '/usr/sbin/sshd -t -f %s'
+  notify: reload sshd
+  tags: [ssh, harden, security]
+
+- name: Disable agent forwarding
+  ansible.builtin.lineinfile:
+    path: "{{ posix_ssh_config_file }}"
+    regexp: '^#?AllowAgentForwarding\s+'
+    line: "AllowAgentForwarding {{ posix_ssh_allow_agent_forwarding }}"
+    state: present
+    validate: '/usr/sbin/sshd -t -f %s'
+  notify: reload sshd
+  tags: [ssh, harden, security]
+
+- name: Disable TCP forwarding
+  ansible.builtin.lineinfile:
+    path: "{{ posix_ssh_config_file }}"
+    regexp: '^#?AllowTcpForwarding\s+'
+    line: "AllowTcpForwarding {{ posix_ssh_allow_tcp_forwarding }}"
+    state: present
+    validate: '/usr/sbin/sshd -t -f %s'
+  notify: reload sshd
+  tags: [ssh, harden, security]
+
+- name: Disable user environment
+  ansible.builtin.lineinfile:
+    path: "{{ posix_ssh_config_file }}"
+    regexp: '^#?PermitUserEnvironment\s+'
+    line: "PermitUserEnvironment {{ posix_ssh_permit_user_environment }}"
+    state: present
+    validate: '/usr/sbin/sshd -t -f %s'
+  notify: reload sshd
+  tags: [ssh, harden, security]
+
+- name: Disable tunneling
+  ansible.builtin.lineinfile:
+    path: "{{ posix_ssh_config_file }}"
+    regexp: '^#?PermitTunnel\s+'
+    line: "PermitTunnel {{ posix_ssh_permit_tunnel }}"
+    state: present
+    validate: '/usr/sbin/sshd -t -f %s'
+  notify: reload sshd
+  tags: [ssh, harden, security]
+
+- name: Disable gateway ports
+  ansible.builtin.lineinfile:
+    path: "{{ posix_ssh_config_file }}"
+    regexp: '^#?GatewayPorts\s+'
+    line: "GatewayPorts {{ posix_ssh_gateway_ports }}"
+    state: present
+    validate: '/usr/sbin/sshd -t -f %s'
+  notify: reload sshd
+  tags: [ssh, harden, security]
+
+- name: Enable strict modes
+  ansible.builtin.lineinfile:
+    path: "{{ posix_ssh_config_file }}"
+    regexp: '^#?StrictModes\s+'
+    line: "StrictModes {{ posix_ssh_strict_modes }}"
+    state: present
+    validate: '/usr/sbin/sshd -t -f %s'
+  notify: reload sshd
+  tags: [ssh, harden, security]
+
+- name: Ignore rhosts
+  ansible.builtin.lineinfile:
+    path: "{{ posix_ssh_config_file }}"
+    regexp: '^#?IgnoreRhosts\s+'
+    line: "IgnoreRhosts {{ posix_ssh_ignore_rhosts }}"
+    state: present
+    validate: '/usr/sbin/sshd -t -f %s'
+  notify: reload sshd
+  tags: [ssh, harden, security]
+
+- name: Disable host-based authentication
+  ansible.builtin.lineinfile:
+    path: "{{ posix_ssh_config_file }}"
+    regexp: '^#?HostbasedAuthentication\s+'
+    line: "HostbasedAuthentication {{ posix_ssh_hostbased_authentication }}"
+    state: present
+    validate: '/usr/sbin/sshd -t -f %s'
+  notify: reload sshd
+  tags: [ssh, harden, security]
+
+- name: Configure print MOTD
+  ansible.builtin.lineinfile:
+    path: "{{ posix_ssh_config_file }}"
+    regexp: '^#?PrintMotd\s+'
+    line: "PrintMotd {{ posix_ssh_print_motd }}"
+    state: present
+    validate: '/usr/sbin/sshd -t -f %s'
+  notify: reload sshd
+  tags: [ssh, harden, security]
+
+- name: Configure print last log
+  ansible.builtin.lineinfile:
+    path: "{{ posix_ssh_config_file }}"
+    regexp: '^#?PrintLastLog\s+'
+    line: "PrintLastLog {{ posix_ssh_print_last_log }}"
+    state: present
+    validate: '/usr/sbin/sshd -t -f %s'
+  notify: reload sshd
+  tags: [ssh, harden, security]
+
+- name: Configure TCP keep alive
+  ansible.builtin.lineinfile:
+    path: "{{ posix_ssh_config_file }}"
+    regexp: '^#?TCPKeepAlive\s+'
+    line: "TCPKeepAlive {{ posix_ssh_tcp_keep_alive }}"
+    state: present
+    validate: '/usr/sbin/sshd -t -f %s'
+  notify: reload sshd
+  tags: [ssh, harden, security]
+
+- name: Configure compression
+  ansible.builtin.lineinfile:
+    path: "{{ posix_ssh_config_file }}"
+    regexp: '^#?Compression\s+'
+    line: "Compression {{ posix_ssh_compression }}"
+    state: present
+    validate: '/usr/sbin/sshd -t -f %s'
+  notify: reload sshd
+  tags: [ssh, harden, security]
+
+- name: Disable DNS lookups
+  ansible.builtin.lineinfile:
+    path: "{{ posix_ssh_config_file }}"
+    regexp: '^#?UseDNS\s+'
+    line: "UseDNS {{ posix_ssh_use_dns }}"
+    state: present
+    validate: '/usr/sbin/sshd -t -f %s'
+  notify: reload sshd
+  tags: [ssh, harden, security]
+
+# ------------------------------------------------------------------------------
+# LOGGING SETTINGS
+# ------------------------------------------------------------------------------
+
+- name: Set log level
+  ansible.builtin.lineinfile:
+    path: "{{ posix_ssh_config_file }}"
+    regexp: '^#?LogLevel\s+'
+    line: "LogLevel {{ posix_ssh_log_level }}"
+    state: present
+    validate: '/usr/sbin/sshd -t -f %s'
+  notify: reload sshd
+  tags: [ssh, harden, logging]
+
+- name: Set syslog facility
+  ansible.builtin.lineinfile:
+    path: "{{ posix_ssh_config_file }}"
+    regexp: '^#?SyslogFacility\s+'
+    line: "SyslogFacility {{ posix_ssh_syslog_facility }}"
+    state: present
+    validate: '/usr/sbin/sshd -t -f %s'
+  notify: reload sshd
+  tags: [ssh, harden, logging]
+
+# ------------------------------------------------------------------------------
+# AUTHORIZED KEYS CONFIGURATION
+# ------------------------------------------------------------------------------
+
+- name: Set authorized keys file
+  ansible.builtin.lineinfile:
+    path: "{{ posix_ssh_config_file }}"
+    regexp: '^#?AuthorizedKeysFile\s+'
+    line: "AuthorizedKeysFile {{ posix_ssh_authorized_keys_file }}"
+    state: present
+    validate: '/usr/sbin/sshd -t -f %s'
+  notify: reload sshd
+  tags: [ssh, harden, keys]
+
+# ------------------------------------------------------------------------------
+# CRYPTOGRAPHIC SETTINGS (if supported)
+# ------------------------------------------------------------------------------
+
+- name: Configure strong ciphers
+  ansible.builtin.lineinfile:
+    path: "{{ posix_ssh_config_file }}"
+    regexp: '^#?Ciphers\s+'
+    line: "Ciphers {{ posix_ssh_ciphers }}"
+    state: present
+    validate: '/usr/sbin/sshd -t -f %s'
+  notify: reload sshd
+  when:
+    - posix_ssh_check_crypto_support | bool
+    - crypto_support.rc == 0
+  tags: [ssh, harden, crypto]
+
+- name: Configure strong MACs
+  ansible.builtin.lineinfile:
+    path: "{{ posix_ssh_config_file }}"
+    regexp: '^#?MACs\s+'
+    line: "MACs {{ posix_ssh_macs }}"
+    state: present
+    validate: '/usr/sbin/sshd -t -f %s'
+  notify: reload sshd
+  when:
+    - posix_ssh_check_crypto_support | bool
+    - crypto_support.rc == 0
+  tags: [ssh, harden, crypto]
+
+- name: Configure strong key exchange algorithms
+  ansible.builtin.lineinfile:
+    path: "{{ posix_ssh_config_file }}"
+    regexp: '^#?KexAlgorithms\s+'
+    line: "KexAlgorithms {{ posix_ssh_kex_algorithms }}"
+    state: present
+    validate: '/usr/sbin/sshd -t -f %s'
+  notify: reload sshd
+  when:
+    - posix_ssh_check_crypto_support | bool
+    - crypto_support.rc == 0
+  tags: [ssh, harden, crypto]
+
+# ------------------------------------------------------------------------------
+# ACCESS RESTRICTIONS (CRITICAL)
+# ------------------------------------------------------------------------------
+
+- name: Configure AllowUsers restriction
+  ansible.builtin.lineinfile:
+    path: "{{ posix_ssh_config_file }}"
+    regexp: '^#?AllowUsers\s+'
+    line: "AllowUsers {{ posix_ssh_allow_users | join(' ') if posix_ssh_allow_users is sequence else posix_ssh_allow_users }}"
+    state: present
+    validate: '/usr/sbin/sshd -t -f %s'
+  notify:
+    - reload sshd
+    - test ssh connectivity
+  when:
+    - posix_ssh_allow_users is defined
+    - posix_ssh_allow_users | length > 0
+  tags: [ssh, harden, access]
+
+- name: Configure AllowGroups restriction
+  ansible.builtin.lineinfile:
+    path: "{{ posix_ssh_config_file }}"
+    regexp: '^#?AllowGroups\s+'
+    line: "AllowGroups {{ posix_ssh_allow_groups | join(' ') if posix_ssh_allow_groups is sequence else posix_ssh_allow_groups }}"
+    state: present
+    validate: '/usr/sbin/sshd -t -f %s'
+  notify: reload sshd
+  when:
+    - posix_ssh_allow_groups is defined
+    - posix_ssh_allow_groups | length > 0
+  tags: [ssh, harden, access]
+
+# ------------------------------------------------------------------------------
+# FINAL VALIDATION
+# ------------------------------------------------------------------------------
+
+- name: Validate complete SSH configuration
+  ansible.builtin.command: /usr/sbin/sshd -t -f {{ posix_ssh_config_file }}
+  register: final_validation
+  changed_when: false
+  tags: [ssh, harden, validation]
+
+- name: Display SSH hardening completion
+  ansible.builtin.debug:
+    msg: |
+      ========================================
+      SSH CONFIGURATION HARDENING COMPLETE
+      ========================================
+      Configuration validated successfully
+      Changes will be applied on handler flush
+      ========================================
+  when: final_validation.rc == 0
+  tags: [ssh, harden, validation]

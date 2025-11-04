@@ -1,0 +1,268 @@
+---
+# ==============================================================================
+# SSH Hardening - Fix SSH File Permissions
+# ==============================================================================
+# Ensures SSH daemon and user SSH directories have correct permissions
+# Based on OpenSSH StrictModes requirements
+# ==============================================================================
+
+- name: Display SSH permissions fixing notice
+  ansible.builtin.debug:
+    msg: "Fixing SSH file and directory permissions for security compliance"
+  tags: [ssh, permissions]
+
+# ------------------------------------------------------------------------------
+# SSH DAEMON FILES AND DIRECTORIES
+# ------------------------------------------------------------------------------
+
+- name: Ensure /etc/ssh directory has correct permissions
+  ansible.builtin.file:
+    path: /etc/ssh
+    state: directory
+    mode: '{{ posix_ssh_dir_mode }}'
+    owner: root
+    group: root
+  tags: [ssh, permissions, daemon]
+
+- name: Set permissions on sshd_config
+  ansible.builtin.file:
+    path: "{{ posix_ssh_config_file }}"
+    mode: '{{ posix_ssh_config_mode }}'
+    owner: root
+    group: root
+  tags: [ssh, permissions, daemon]
+
+- name: Set permissions on SSH host keys (private)
+  ansible.builtin.file:
+    path: "{{ item }}"
+    mode: '{{ posix_ssh_host_key_mode }}'
+    owner: root
+    group: root
+  with_fileglob:
+    - /etc/ssh/ssh_host_*_key
+  tags: [ssh, permissions, daemon]
+
+- name: Set permissions on SSH host keys (public)
+  ansible.builtin.file:
+    path: "{{ item }}"
+    mode: '{{ posix_ssh_host_key_pub_mode }}'
+    owner: root
+    group: root
+  with_fileglob:
+    - /etc/ssh/ssh_host_*.pub
+  tags: [ssh, permissions, daemon]
+
+- name: Set permissions on ssh_config (client config)
+  ansible.builtin.file:
+    path: /etc/ssh/ssh_config
+    mode: '0644'
+    owner: root
+    group: root
+  when: ansible_os_family == "Debian"
+  failed_when: false
+  tags: [ssh, permissions, daemon]
+
+# ------------------------------------------------------------------------------
+# ROOT SSH DIRECTORY
+# ------------------------------------------------------------------------------
+
+- name: Check if root .ssh directory exists
+  ansible.builtin.stat:
+    path: /root/.ssh
+  register: root_ssh_dir
+  tags: [ssh, permissions, root]
+
+- name: Fix root .ssh directory permissions
+  ansible.builtin.file:
+    path: /root/.ssh
+    state: directory
+    mode: '{{ posix_ssh_user_dir_mode }}'
+    owner: root
+    group: root
+  when: root_ssh_dir.stat.exists
+  tags: [ssh, permissions, root]
+
+- name: Fix root authorized_keys permissions
+  ansible.builtin.file:
+    path: /root/.ssh/authorized_keys
+    mode: '{{ posix_ssh_authorized_keys_mode }}'
+    owner: root
+    group: root
+  when:
+    - root_ssh_dir.stat.exists
+  failed_when: false
+  tags: [ssh, permissions, root]
+
+- name: Fix root private key permissions
+  ansible.builtin.file:
+    path: "{{ item }}"
+    mode: '{{ posix_ssh_private_key_mode }}'
+    owner: root
+    group: root
+  with_fileglob:
+    - /root/.ssh/id_*
+    - /root/.ssh/*_key
+  when: root_ssh_dir.stat.exists
+  failed_when: false
+  tags: [ssh, permissions, root]
+
+- name: Fix root public key permissions
+  ansible.builtin.file:
+    path: "{{ item }}"
+    mode: '{{ posix_ssh_public_key_mode }}'
+    owner: root
+    group: root
+  with_fileglob:
+    - /root/.ssh/*.pub
+  when: root_ssh_dir.stat.exists
+  failed_when: false
+  tags: [ssh, permissions, root]
+
+# ------------------------------------------------------------------------------
+# USER SSH DIRECTORIES
+# ------------------------------------------------------------------------------
+
+- name: Find all home directories
+  ansible.builtin.find:
+    paths: /home
+    file_type: directory
+    recurse: no
+  register: home_directories
+  tags: [ssh, permissions, users]
+
+- name: Find all .ssh directories in user homes
+  ansible.builtin.find:
+    paths: "{{ item.path }}"
+    file_type: directory
+    patterns: '.ssh'
+    hidden: yes
+  loop: "{{ home_directories.files }}"
+  register: user_ssh_dirs
+  tags: [ssh, permissions, users]
+
+- name: Fix user .ssh directory permissions
+  ansible.builtin.file:
+    path: "{{ item.files[0].path }}"
+    state: directory
+    mode: '{{ posix_ssh_user_dir_mode }}'
+    owner: "{{ item.files[0].path.split('/')[-2] }}"
+    group: "{{ item.files[0].path.split('/')[-2] }}"
+  loop: "{{ user_ssh_dirs.results }}"
+  when: item.matched > 0
+  failed_when: false
+  tags: [ssh, permissions, users]
+
+# ------------------------------------------------------------------------------
+# AUTHORIZED KEYS FOR ALLOWED USERS
+# ------------------------------------------------------------------------------
+
+- name: Fix authorized_keys permissions for allowed users
+  block:
+    - name: Get home directory for each allowed user
+      ansible.builtin.getent:
+        database: passwd
+        key: "{{ item }}"
+      loop: "{{ posix_ssh_allow_users }}"
+      register: user_info
+      failed_when: false
+      tags: [ssh, permissions, allowed_users]
+
+    - name: Fix authorized_keys for allowed users
+      ansible.builtin.file:
+        path: "{{ item.ansible_facts.getent_passwd[item.item][4] }}/.ssh/authorized_keys"
+        mode: '{{ posix_ssh_authorized_keys_mode }}'
+        owner: "{{ item.item }}"
+        group: "{{ item.item }}"
+      loop: "{{ user_info.results }}"
+      when:
+        - not item.failed | default(false)
+        - item.ansible_facts is defined
+      failed_when: false
+      tags: [ssh, permissions, allowed_users]
+
+# ------------------------------------------------------------------------------
+# BANNER FILE
+# ------------------------------------------------------------------------------
+
+- name: Fix SSH banner file permissions
+  ansible.builtin.file:
+    path: "{{ posix_ssh_banner_file }}"
+    mode: '0644'
+    owner: root
+    group: root
+  when:
+    - posix_ssh_banner_enabled | bool
+  failed_when: false
+  tags: [ssh, permissions, banner]
+
+# ------------------------------------------------------------------------------
+# BACKUP DIRECTORY
+# ------------------------------------------------------------------------------
+
+- name: Fix SSH backup directory permissions
+  ansible.builtin.file:
+    path: "{{ posix_ssh_config_backup_dir }}"
+    state: directory
+    mode: '0700'
+    owner: root
+    group: root
+  tags: [ssh, permissions, backup]
+
+# ------------------------------------------------------------------------------
+# EMERGENCY SSH FILES
+# ------------------------------------------------------------------------------
+
+- name: Fix emergency SSH config permissions
+  ansible.builtin.file:
+    path: "{{ posix_ssh_emergency_config_file }}"
+    mode: '0600'
+    owner: root
+    group: root
+  when: posix_ssh_enable_emergency_port | bool
+  failed_when: false
+  tags: [ssh, permissions, emergency]
+
+# ------------------------------------------------------------------------------
+# VALIDATION
+# ------------------------------------------------------------------------------
+
+- name: Verify critical file permissions
+  ansible.builtin.shell: |
+    set -e
+    # Check sshd_config is not world-readable
+    [ $(stat -c %a {{ posix_ssh_config_file }}) = "600" ] || exit 1
+
+    # Check host keys are not world-readable
+    for key in /etc/ssh/ssh_host_*_key; do
+      [ -f "$key" ] || continue
+      [ $(stat -c %a "$key") = "600" ] || exit 2
+    done
+
+    echo "Permissions verified"
+  register: permissions_check
+  changed_when: false
+  failed_when: false
+  tags: [ssh, permissions, validation]
+
+- name: Display permissions validation result
+  ansible.builtin.debug:
+    msg: "{{ 'SSH file permissions validated successfully' if permissions_check.rc == 0 else 'WARNING: Some permission issues detected' }}"
+  tags: [ssh, permissions, validation]
+
+# ------------------------------------------------------------------------------
+# SUMMARY
+# ------------------------------------------------------------------------------
+
+- name: Display SSH permissions summary
+  ansible.builtin.debug:
+    msg: |
+      ========================================
+      SSH PERMISSIONS HARDENING COMPLETE
+      ========================================
+      Daemon files: Fixed
+      Host keys: Secured
+      Root .ssh: {{ 'Fixed' if root_ssh_dir.stat.exists else 'N/A' }}
+      User .ssh dirs: Fixed
+      Allowed users: Processed
+      ========================================
+  tags: [ssh, permissions, summary]

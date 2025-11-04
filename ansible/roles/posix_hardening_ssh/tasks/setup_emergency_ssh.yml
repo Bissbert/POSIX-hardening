@@ -1,0 +1,264 @@
+---
+# ==============================================================================
+# SSH Hardening - Emergency SSH Setup
+# ==============================================================================
+# Creates a fallback SSH daemon on an alternate port
+# CRITICAL SAFETY MECHANISM: Prevents complete lockout if main SSH fails
+# ==============================================================================
+
+- name: Display emergency SSH setup notice
+  ansible.builtin.debug:
+    msg: |
+      Setting up emergency SSH access...
+      Port: {{ posix_ssh_emergency_port }}
+      This provides a fallback if main SSH hardening causes issues
+  tags: [ssh, emergency]
+
+# ------------------------------------------------------------------------------
+# CREATE EMERGENCY SSH CONFIGURATION
+# ------------------------------------------------------------------------------
+
+- name: Create emergency SSH configuration from template
+  ansible.builtin.copy:
+    src: "{{ posix_ssh_config_file }}"
+    dest: "{{ posix_ssh_emergency_config_file }}"
+    remote_src: yes
+    mode: '0600'
+    owner: root
+    group: root
+    backup: yes
+  register: emergency_config_created
+  tags: [ssh, emergency, config]
+
+# ------------------------------------------------------------------------------
+# CONFIGURE EMERGENCY SSH PORT AND SETTINGS
+# ------------------------------------------------------------------------------
+
+- name: Set emergency SSH port
+  ansible.builtin.lineinfile:
+    path: "{{ posix_ssh_emergency_config_file }}"
+    regexp: '^#?Port\s+'
+    line: "Port {{ posix_ssh_emergency_port }}"
+    state: present
+  tags: [ssh, emergency, config]
+
+- name: Set PID file for emergency SSH
+  ansible.builtin.lineinfile:
+    path: "{{ posix_ssh_emergency_config_file }}"
+    regexp: '^#?PidFile\s+'
+    line: "PidFile {{ posix_ssh_emergency_pid_file }}"
+    state: present
+  tags: [ssh, emergency, config]
+
+# Make emergency SSH more permissive (for recovery purposes)
+- name: Enable password authentication on emergency SSH
+  ansible.builtin.lineinfile:
+    path: "{{ posix_ssh_emergency_config_file }}"
+    regexp: '^#?PasswordAuthentication\s+'
+    line: "PasswordAuthentication {{ 'yes' if posix_ssh_emergency_permit_password else 'no' }}"
+    state: present
+  tags: [ssh, emergency, config]
+
+- name: Permit root login on emergency SSH (recovery only)
+  ansible.builtin.lineinfile:
+    path: "{{ posix_ssh_emergency_config_file }}"
+    regexp: '^#?PermitRootLogin\s+'
+    line: "PermitRootLogin yes"
+    state: present
+  tags: [ssh, emergency, config]
+
+# Remove AllowUsers restriction from emergency SSH
+- name: Remove AllowUsers restriction from emergency SSH
+  ansible.builtin.lineinfile:
+    path: "{{ posix_ssh_emergency_config_file }}"
+    regexp: '^AllowUsers\s+'
+    state: absent
+  tags: [ssh, emergency, config]
+
+# Remove AllowGroups restriction from emergency SSH
+- name: Remove AllowGroups restriction from emergency SSH
+  ansible.builtin.lineinfile:
+    path: "{{ posix_ssh_emergency_config_file }}"
+    regexp: '^AllowGroups\s+'
+    state: absent
+  tags: [ssh, emergency, config]
+
+# ------------------------------------------------------------------------------
+# VALIDATE EMERGENCY SSH CONFIGURATION
+# ------------------------------------------------------------------------------
+
+- name: Test emergency SSH configuration syntax
+  ansible.builtin.command: /usr/sbin/sshd -t -f {{ posix_ssh_emergency_config_file }}
+  register: emergency_config_test
+  changed_when: false
+  failed_when: emergency_config_test.rc != 0
+  tags: [ssh, emergency, validation]
+
+- name: Display emergency config validation result
+  ansible.builtin.debug:
+    msg: "Emergency SSH configuration syntax validated successfully"
+  when: emergency_config_test.rc == 0
+  tags: [ssh, emergency, validation]
+
+# ------------------------------------------------------------------------------
+# START EMERGENCY SSH DAEMON
+# ------------------------------------------------------------------------------
+
+- name: Check if emergency SSH is already running
+  ansible.builtin.stat:
+    path: "{{ posix_ssh_emergency_pid_file }}"
+  register: emergency_ssh_pid
+  tags: [ssh, emergency, service]
+
+- name: Stop existing emergency SSH if running
+  ansible.builtin.shell: |
+    if [ -f {{ posix_ssh_emergency_pid_file }} ]; then
+      kill $(cat {{ posix_ssh_emergency_pid_file }}) 2>/dev/null || true
+      rm -f {{ posix_ssh_emergency_pid_file }}
+      sleep 1
+    fi
+  when: emergency_ssh_pid.stat.exists
+  changed_when: true
+  tags: [ssh, emergency, service]
+
+- name: Start emergency SSH daemon
+  ansible.builtin.shell: |
+    /usr/sbin/sshd -f {{ posix_ssh_emergency_config_file }}
+  register: emergency_ssh_start
+  changed_when: true
+  tags: [ssh, emergency, service]
+
+- name: Wait for emergency SSH to start
+  ansible.builtin.pause:
+    seconds: 2
+  tags: [ssh, emergency, service]
+
+# ------------------------------------------------------------------------------
+# VERIFY EMERGENCY SSH IS RUNNING
+# ------------------------------------------------------------------------------
+
+- name: Check emergency SSH PID file created
+  ansible.builtin.stat:
+    path: "{{ posix_ssh_emergency_pid_file }}"
+  register: emergency_pid_check
+  tags: [ssh, emergency, validation]
+
+- name: Assert emergency SSH PID file exists
+  ansible.builtin.assert:
+    that:
+      - emergency_pid_check.stat.exists
+    fail_msg: "Emergency SSH PID file not found - daemon may not have started"
+    success_msg: "Emergency SSH daemon PID file verified"
+  tags: [ssh, emergency, validation]
+
+- name: Verify emergency SSH process is running
+  ansible.builtin.shell: |
+    if [ -f {{ posix_ssh_emergency_pid_file }} ]; then
+      pid=$(cat {{ posix_ssh_emergency_pid_file }})
+      if ps -p $pid > /dev/null 2>&1; then
+        echo "running"
+      else
+        echo "not_running"
+      fi
+    else
+      echo "no_pid_file"
+    fi
+  register: emergency_process_check
+  changed_when: false
+  tags: [ssh, emergency, validation]
+
+- name: Assert emergency SSH process is active
+  ansible.builtin.assert:
+    that:
+      - emergency_process_check.stdout == "running"
+    fail_msg: "Emergency SSH process not running (status: {{ emergency_process_check.stdout }})"
+    success_msg: "Emergency SSH process verified active"
+  tags: [ssh, emergency, validation]
+
+- name: Verify emergency SSH port is listening
+  ansible.builtin.wait_for:
+    port: "{{ posix_ssh_emergency_port }}"
+    host: 0.0.0.0
+    state: started
+    timeout: 10
+  register: emergency_port_check
+  tags: [ssh, emergency, validation]
+
+# ------------------------------------------------------------------------------
+# FIREWALL CONFIGURATION FOR EMERGENCY PORT
+# ------------------------------------------------------------------------------
+
+- name: Add firewall rule for emergency SSH port
+  ansible.builtin.iptables:
+    chain: INPUT
+    protocol: tcp
+    destination_port: "{{ posix_ssh_emergency_port }}"
+    ctstate: NEW,ESTABLISHED
+    jump: ACCEPT
+    action: insert
+    rule_num: 1
+    comment: "Emergency SSH access port"
+  when:
+    - posix_ssh_ensure_firewall_rule | bool
+    - ansible_os_family == "Debian"
+  failed_when: false
+  tags: [ssh, emergency, firewall]
+
+# ------------------------------------------------------------------------------
+# CREATE EMERGENCY SSH MARKER
+# ------------------------------------------------------------------------------
+
+- name: Create emergency SSH state file
+  ansible.builtin.copy:
+    content: |
+      Emergency SSH Active
+      Port: {{ posix_ssh_emergency_port }}
+      PID: {{ (lookup('file', posix_ssh_emergency_pid_file, errors='ignore')) | default('unknown') }}
+      Started: {{ ansible_date_time.iso8601 }}
+      Config: {{ posix_ssh_emergency_config_file }}
+    dest: /var/lib/hardening/emergency_ssh_active
+    mode: '0600'
+  tags: [ssh, emergency, state]
+
+# ------------------------------------------------------------------------------
+# DISPLAY EMERGENCY SSH INFORMATION
+# ------------------------------------------------------------------------------
+
+- name: Display emergency SSH success message
+  ansible.builtin.debug:
+    msg: |
+      ========================================
+      EMERGENCY SSH ACTIVATED
+      ========================================
+      Port: {{ posix_ssh_emergency_port }}
+      Config: {{ posix_ssh_emergency_config_file }}
+      PID File: {{ posix_ssh_emergency_pid_file }}
+
+      Connection command:
+        ssh -p {{ posix_ssh_emergency_port }} user@{{ ansible_default_ipv4.address | default(inventory_hostname) }}
+
+      Security Notice:
+        - Password authentication: {{ 'ENABLED' if posix_ssh_emergency_permit_password else 'DISABLED' }}
+        - Root login: ENABLED (for recovery)
+        - No user restrictions
+
+      This emergency access will remain active until:
+        1. Main SSH hardening completes successfully
+        2. Manual cleanup with: kill $(cat {{ posix_ssh_emergency_pid_file }})
+      ========================================
+  tags: [ssh, emergency, info]
+
+# ------------------------------------------------------------------------------
+# SCHEDULE AUTOMATIC CLEANUP (optional)
+# ------------------------------------------------------------------------------
+
+- name: Schedule emergency SSH auto-cleanup
+  ansible.builtin.at:
+    command: "[ -f {{ posix_ssh_emergency_pid_file }} ] && kill $(cat {{ posix_ssh_emergency_pid_file }}) && rm -f {{ posix_ssh_emergency_pid_file }} {{ posix_ssh_emergency_config_file }}"
+    count: "{{ posix_ssh_emergency_timeout | int }}"
+    units: seconds
+  when:
+    - posix_ssh_emergency_timeout | int > 0
+    - ansible_os_family == "Debian"
+  failed_when: false
+  tags: [ssh, emergency, cleanup]

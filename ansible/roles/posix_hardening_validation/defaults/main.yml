@@ -1,0 +1,16 @@
+---
+# ==============================================================================
+# POSIX Hardening Validation Role - Default Variables
+# ==============================================================================
+# These defaults can be overridden in group_vars or inventory variables
+# ==============================================================================
+
+# Validation behavior settings
+posix_validation_min_disk_mb: 100              # Minimum free disk space required (MB)
+posix_validation_check_ssh_keys: true          # Check for existing SSH keys
+posix_validation_mode: preflight               # Mode: 'preflight' or 'full'
+posix_validation_fail_on_warning: false        # Fail deployment if warnings detected
+
+# Report output settings
+posix_validation_save_report: true             # Save validation report to file
+posix_validation_report_path: /tmp             # Where to save reports

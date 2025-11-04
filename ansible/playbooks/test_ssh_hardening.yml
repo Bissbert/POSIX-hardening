@@ -1,0 +1,193 @@
+---
+# ==============================================================================
+# Test Playbook: SSH Hardening Role
+# ==============================================================================
+# WARNING: This playbook modifies SSH configuration
+# LOCKOUT RISK: Always test in a safe environment first
+# ==============================================================================
+#
+# Usage:
+#   # Syntax check
+#   ansible-playbook playbooks/test_ssh_hardening.yml --syntax-check
+#
+#   # Check mode (dry-run)
+#   ansible-playbook playbooks/test_ssh_hardening.yml --check
+#
+#   # Run on test hosts
+#   ansible-playbook playbooks/test_ssh_hardening.yml -i inventories/test/hosts.yml
+#
+#   # Skip the 10-second pause
+#   ansible-playbook playbooks/test_ssh_hardening.yml --skip-tags pause
+#
+#   # Run only validation
+#   ansible-playbook playbooks/test_ssh_hardening.yml --tags validation
+#
+# ==============================================================================
+
+- name: Test SSH Hardening Role (CRITICAL - LOCKOUT RISK)
+  hosts: all
+  become: yes
+  gather_facts: yes
+
+  vars:
+    # REQUIRED: Override these in your inventory or extra-vars
+    # Example: ansible-playbook playbooks/test_ssh_hardening.yml -e "admin_ip=192.168.1.100"
+
+    # These should be set in group_vars/all.yml or command line
+    # admin_ip: "192.168.1.100"  # REQUIRED
+    # ssh_allow_users: "root ansible"  # REQUIRED - space-separated or list
+
+    # SSH Hardening Settings (use defaults if not specified)
+    posix_ssh_port: "{{ ssh_port | default(22) }}"
+    posix_ssh_allow_users: "{{ ssh_allow_users.split() if ssh_allow_users is string else ssh_allow_users }}"
+
+    # Emergency SSH settings
+    posix_ssh_enable_emergency_port: true
+    posix_ssh_emergency_port: 2222
+
+    # Testing flags
+    posix_ssh_force_reharden: false  # Set true to re-run on already hardened systems
+    posix_ssh_skip_connectivity_test: false
+
+  pre_tasks:
+    - name: Display critical warning
+      ansible.builtin.debug:
+        msg: |
+          ========================================
+          CRITICAL WARNING
+          ========================================
+          This playbook will MODIFY SSH configuration
+          LOCKOUT RISK if prerequisites are not met
+
+          Requirements:
+            1. SSH keys must be deployed for allowed users
+            2. admin_ip must be set
+            3. ssh_allow_users must be set
+            4. Console/KVM access available (recommended)
+
+          Current configuration:
+            Admin IP: {{ admin_ip | default('NOT SET - REQUIRED!') }}
+            Allowed Users: {{ posix_ssh_allow_users | default('NOT SET - REQUIRED!') }}
+            SSH Port: {{ posix_ssh_port }}
+            Emergency Port: {{ posix_ssh_emergency_port }}
+
+          Safety mechanisms:
+            - Emergency SSH on port {{ posix_ssh_emergency_port }}
+            - Automatic rollback on failure
+            - Connectivity validation
+            - Configuration backups
+
+          Testing recommendations:
+            1. Run with --check first (dry-run)
+            2. Test on disposable VM first
+            3. Ensure SSH keys are deployed
+            4. Have console access ready
+          ========================================
+      tags: [always]
+
+    - name: Verify required variables are set
+      ansible.builtin.assert:
+        that:
+          - admin_ip is defined
+          - admin_ip | length > 0
+          - posix_ssh_allow_users is defined
+          - posix_ssh_allow_users | length > 0
+        fail_msg: |
+          CRITICAL: Required variables not set!
+
+          Set these variables:
+            admin_ip: "YOUR_IP_ADDRESS"
+            ssh_allow_users: "root your_username"
+
+          Example:
+            ansible-playbook playbooks/test_ssh_hardening.yml \
+              -e "admin_ip=192.168.1.100" \
+              -e "ssh_allow_users='root ansible'"
+        success_msg: "Required variables validated"
+      tags: [always]
+
+  roles:
+    - role: posix_hardening_ssh
+      tags: [ssh]
+
+  post_tasks:
+    - name: Display post-hardening test instructions
+      ansible.builtin.debug:
+        msg: |
+          ========================================
+          SSH HARDENING TEST COMPLETED
+          ========================================
+
+          Next steps:
+          1. Test SSH access from your workstation:
+             ssh {{ ansible_user }}@{{ ansible_host | default(inventory_hostname) }}
+
+          2. If main SSH fails, try emergency SSH:
+             ssh -p {{ posix_ssh_emergency_port }} {{ ansible_user }}@{{ ansible_host | default(inventory_hostname) }}
+
+          3. Verify SSH settings:
+             ssh {{ ansible_user }}@{{ ansible_host | default(inventory_hostname) }} 'sudo grep -E "^(PermitRoot|Password|Pubkey)" /etc/ssh/sshd_config'
+
+          4. Check SSH service status:
+             ssh {{ ansible_user }}@{{ ansible_host | default(inventory_hostname) }} 'sudo systemctl status {{ posix_ssh_service_name | default("ssh") }}'
+
+          5. Review logs:
+             ssh {{ ansible_user }}@{{ ansible_host | default(inventory_hostname) }} 'sudo cat /var/log/hardening/ssh_hardening.log'
+
+          6. Remove emergency SSH (after verification):
+             ssh {{ ansible_user }}@{{ ansible_host | default(inventory_hostname) }} 'sudo kill $(cat /var/run/sshd_emergency.pid)'
+
+          Backup location: /var/backups/hardening/
+          Marker file: /var/lib/hardening/ssh_hardened
+          ========================================
+      tags: [always]
+
+    - name: Run post-hardening validation tests
+      block:
+        - name: Test SSH port is accessible
+          ansible.builtin.wait_for:
+            port: "{{ posix_ssh_port }}"
+            host: "{{ ansible_host | default(inventory_hostname) }}"
+            timeout: 10
+          delegate_to: localhost
+          become: no
+
+        - name: Test SSH connection
+          ansible.builtin.command: whoami
+          register: whoami_test
+          changed_when: false
+
+        - name: Verify critical settings
+          ansible.builtin.shell: |
+            grep -q "^PermitRootLogin no" /etc/ssh/sshd_config && \
+            grep -q "^PasswordAuthentication no" /etc/ssh/sshd_config && \
+            grep -q "^PubkeyAuthentication yes" /etc/ssh/sshd_config
+          register: settings_check
+          changed_when: false
+
+        - name: Display validation results
+          ansible.builtin.debug:
+            msg: |
+              ========================================
+              POST-HARDENING VALIDATION RESULTS
+              ========================================
+              SSH Port Accessible: YES
+              SSH Connection: SUCCESS (user: {{ whoami_test.stdout }})
+              Critical Settings: VERIFIED
+              ========================================
+              All post-hardening tests PASSED
+              ========================================
+
+      rescue:
+        - name: Display validation failure
+          ansible.builtin.debug:
+            msg: |
+              ========================================
+              POST-HARDENING VALIDATION FAILED
+              ========================================
+              Some validation tests did not pass
+              Review the error messages above
+              Check emergency SSH on port {{ posix_ssh_emergency_port }}
+              ========================================
+
+      tags: [validation, always]

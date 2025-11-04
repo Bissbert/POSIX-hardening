@@ -1,0 +1,247 @@
+---
+# ==============================================================================
+# POSIX SSH Hardening Role - Handlers
+# ==============================================================================
+# Handlers for SSH service management with safety mechanisms
+# ==============================================================================
+
+# ------------------------------------------------------------------------------
+# VALIDATE SSH CONFIGURATION
+# ------------------------------------------------------------------------------
+- name: validate sshd config
+  ansible.builtin.command: /usr/sbin/sshd -t -f {{ posix_ssh_config_file }}
+  register: sshd_validation
+  changed_when: false
+  failed_when: sshd_validation.rc != 0
+  listen: validate sshd config
+
+# ------------------------------------------------------------------------------
+# RELOAD SSH SERVICE (preferred - doesn't drop existing connections)
+# ------------------------------------------------------------------------------
+- name: reload sshd
+  ansible.builtin.systemd:
+    name: "{{ posix_ssh_service_name }}"
+    state: reloaded
+  listen: reload sshd
+  register: sshd_reload_result
+  failed_when: false
+
+# Alternative reload method if systemd fails
+- name: reload sshd via signal
+  ansible.builtin.shell: |
+    if [ -f /var/run/sshd.pid ]; then
+      kill -HUP $(cat /var/run/sshd.pid)
+    else
+      systemctl reload {{ posix_ssh_service_name }}
+    fi
+  when: sshd_reload_result is failed
+  listen: reload sshd
+  changed_when: true
+
+# ------------------------------------------------------------------------------
+# RESTART SSH SERVICE (use only when reload is insufficient)
+# ------------------------------------------------------------------------------
+- name: restart sshd
+  ansible.builtin.systemd:
+    name: "{{ posix_ssh_service_name }}"
+    state: restarted
+    enabled: yes
+  listen: restart sshd
+  async: 1
+  poll: 0
+  register: sshd_restart_async
+
+# Wait for SSH to come back up after restart
+- name: wait for sshd after restart
+  ansible.builtin.wait_for:
+    port: "{{ posix_ssh_port }}"
+    host: "{{ ansible_default_ipv4.address | default('0.0.0.0') }}"
+    state: started
+    timeout: 30
+    delay: 2
+  listen: restart sshd
+  delegate_to: localhost
+  become: no
+
+# ------------------------------------------------------------------------------
+# TEST SSH CONNECTIVITY (triggered after reload/restart)
+# ------------------------------------------------------------------------------
+- name: test ssh connectivity
+  ansible.builtin.wait_for_connection:
+    timeout: "{{ posix_ssh_connectivity_test_timeout }}"
+    sleep: "{{ posix_ssh_connectivity_test_sleep }}"
+  listen: test ssh connectivity
+  register: ssh_connection_test
+  when: not posix_ssh_skip_connectivity_test | bool
+
+# ------------------------------------------------------------------------------
+# VERIFY SSH CONFIGURATION APPLIED
+# ------------------------------------------------------------------------------
+- name: verify ssh hardening applied
+  ansible.builtin.shell: |
+    set -e
+    grep -q "^PermitRootLogin no" {{ posix_ssh_config_file }}
+    grep -q "^PasswordAuthentication no" {{ posix_ssh_config_file }}
+    grep -q "^PubkeyAuthentication yes" {{ posix_ssh_config_file }}
+  register: ssh_verify
+  changed_when: false
+  failed_when: ssh_verify.rc != 0
+  listen: verify ssh hardening applied
+
+# ------------------------------------------------------------------------------
+# EMERGENCY ROLLBACK (triggered if connectivity test fails)
+# ------------------------------------------------------------------------------
+- name: find latest backup for rollback
+  ansible.builtin.find:
+    paths: "{{ posix_ssh_config_backup_dir }}"
+    patterns: "sshd_config.*.bak"
+    file_type: file
+  register: ssh_backups
+  listen: emergency ssh rollback
+
+- name: restore from latest backup
+  ansible.builtin.copy:
+    src: "{{ (ssh_backups.files | sort(attribute='mtime') | last).path }}"
+    dest: "{{ posix_ssh_config_file }}"
+    remote_src: yes
+    mode: "{{ posix_ssh_config_mode }}"
+    backup: no
+  when: ssh_backups.matched > 0
+  listen: emergency ssh rollback
+
+- name: reload sshd after rollback
+  ansible.builtin.systemd:
+    name: "{{ posix_ssh_service_name }}"
+    state: reloaded
+  listen: emergency ssh rollback
+  register: rollback_reload
+  failed_when: false
+
+- name: log rollback event
+  ansible.builtin.lineinfile:
+    path: /var/log/hardening/ssh_hardening.log
+    line: "{{ ansible_date_time.iso8601 }} - EMERGENCY ROLLBACK: SSH configuration restored from backup"
+    create: yes
+    mode: '0600'
+  listen: emergency ssh rollback
+
+- name: critical rollback failure warning
+  ansible.builtin.debug:
+    msg: |
+      WARNING: Emergency SSH rollback completed but errors may have occurred.
+      Emergency SSH may still be available on port {{ posix_ssh_emergency_port }}
+      Check /var/backups/hardening/ for backup files.
+  when: rollback_reload is failed
+  listen: emergency ssh rollback
+
+# ------------------------------------------------------------------------------
+# CLEANUP EMERGENCY SSH
+# ------------------------------------------------------------------------------
+- name: stop emergency ssh
+  ansible.builtin.shell: |
+    if [ -f {{ posix_ssh_emergency_pid_file }} ]; then
+      kill $(cat {{ posix_ssh_emergency_pid_file }}) 2>/dev/null || true
+      rm -f {{ posix_ssh_emergency_pid_file }}
+      rm -f {{ posix_ssh_emergency_config_file }}
+      echo "Emergency SSH stopped"
+    fi
+  listen: stop emergency ssh
+  changed_when: true
+  failed_when: false
+
+# ==============================================================================
+# UPDATE FIREWALL FOR SSH PORT (With Persistence)
+# ==============================================================================
+
+- name: Install iptables-persistent for firewall persistence
+  ansible.builtin.apt:
+    name: iptables-persistent
+    state: present
+    update_cache: no
+  when:
+    - posix_ssh_ensure_firewall_rule | default(true) | bool
+    - ansible_os_family == "Debian"
+  environment:
+    DEBIAN_FRONTEND: noninteractive
+  ignore_errors: yes
+  register: iptables_persistent_install
+  listen: update firewall for ssh port
+
+- name: Allow SSH port in iptables (IPv4)
+  ansible.builtin.iptables:
+    chain: INPUT
+    protocol: tcp
+    destination_port: "{{ posix_ssh_port }}"
+    ctstate: NEW,ESTABLISHED
+    jump: ACCEPT
+    action: insert
+    rule_num: 1
+    comment: "SSH port {{ posix_ssh_port }}"
+  when:
+    - posix_ssh_ensure_firewall_rule | default(true) | bool
+    - ansible_os_family == "Debian"
+  listen: update firewall for ssh port
+
+- name: Allow emergency SSH port in iptables (IPv4)
+  ansible.builtin.iptables:
+    chain: INPUT
+    protocol: tcp
+    destination_port: "{{ posix_ssh_emergency_port }}"
+    ctstate: NEW,ESTABLISHED
+    jump: ACCEPT
+    action: insert
+    rule_num: 2
+    comment: "Emergency SSH port {{ posix_ssh_emergency_port }}"
+  when:
+    - posix_ssh_ensure_firewall_rule | default(true) | bool
+    - ansible_os_family == "Debian"
+    - posix_ssh_enable_emergency_port | bool
+  listen: update firewall for ssh port
+
+- name: Add admin IP priority rule in iptables
+  ansible.builtin.iptables:
+    chain: INPUT
+    protocol: tcp
+    source: "{{ posix_ssh_admin_ip }}"
+    destination_port: "{{ posix_ssh_port }}"
+    jump: ACCEPT
+    action: insert
+    rule_num: 1
+    comment: "Admin IP priority access"
+  when:
+    - posix_ssh_ensure_firewall_rule | default(true) | bool
+    - ansible_os_family == "Debian"
+    - posix_ssh_admin_ip | default('') | length > 0
+  listen: update firewall for ssh port
+
+- name: Save iptables rules persistently (IPv4)
+  ansible.builtin.shell: |
+    iptables-save > /etc/iptables/rules.v4
+  when:
+    - posix_ssh_ensure_firewall_rule | default(true) | bool
+    - ansible_os_family == "Debian"
+    - iptables_persistent_install is success
+  changed_when: true
+  listen: update firewall for ssh port
+
+- name: Save ip6tables rules persistently (IPv6)
+  ansible.builtin.shell: |
+    ip6tables-save > /etc/iptables/rules.v6
+  when:
+    - posix_ssh_ensure_firewall_rule | default(true) | bool
+    - ansible_os_family == "Debian"
+    - iptables_persistent_install is success
+  changed_when: true
+  listen: update firewall for ssh port
+
+- name: Display firewall persistence status
+  ansible.builtin.debug:
+    msg: |
+      Firewall rules updated for SSH port {{ posix_ssh_port }}
+      {% if iptables_persistent_install is success %}
+      Rules saved persistently - will survive reboot
+      {% else %}
+      iptables-persistent not available - rules may not persist
+      {% endif %}
+  when: posix_ssh_ensure_firewall_rule | default(true) | bool
+  listen: update firewall for ssh port

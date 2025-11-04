@@ -1,0 +1,379 @@
+---
+# ==============================================================================
+# POSIX Hardening Validation Role - Main Tasks
+# ==============================================================================
+# Pre-flight validation checks before hardening deployment
+# Extracted from ansible/playbooks/preflight.yml
+# ==============================================================================
+
+- name: Initialize validation tracking
+  set_fact:
+    posix_validation_errors: []
+    posix_validation_warnings: []
+  tags: [always, validation]
+
+# ==============================================================================
+# SYSTEM INFORMATION GATHERING
+# ==============================================================================
+
+- name: Display target system information
+  debug:
+    msg: |
+      ========================================
+      Target System Information
+      ========================================
+      Hostname: {{ ansible_hostname }}
+      FQDN: {{ ansible_fqdn }}
+      IP Address: {{ ansible_default_ipv4.address | default('N/A') }}
+      OS: {{ ansible_distribution }} {{ ansible_distribution_version }}
+      Kernel: {{ ansible_kernel }}
+      Architecture: {{ ansible_architecture }}
+      CPU Cores: {{ ansible_processor_cores }}
+      Total Memory: {{ ansible_memtotal_mb }} MB
+      Python: {{ ansible_python_version }}
+      ========================================
+  tags: [validation, info]
+
+# ==============================================================================
+# OPERATING SYSTEM VALIDATION
+# ==============================================================================
+
+- name: Validate Debian-based operating system
+  block:
+    - name: Check OS family is Debian
+      assert:
+        that:
+          - ansible_os_family == "Debian"
+        fail_msg: "ERROR: Not a Debian-based system (found: {{ ansible_os_family }})"
+        success_msg: "Debian-based system confirmed"
+      tags: [validation, os_check]
+
+  rescue:
+    - name: Record OS validation error
+      set_fact:
+        posix_validation_errors: "{{ posix_validation_errors + ['Not a Debian-based system: ' + ansible_os_family] }}"
+      tags: [validation, os_check]
+
+# ==============================================================================
+# PRIVILEGE ESCALATION VALIDATION
+# ==============================================================================
+
+- name: Validate running with privilege escalation
+  block:
+    - name: Check effective user ID is root
+      command: id -u
+      register: effective_uid
+      changed_when: false
+      tags: [validation, privilege_check]
+
+    - name: Assert running as root/sudo
+      assert:
+        that:
+          - effective_uid.stdout == "0"
+        fail_msg: "ERROR: Not running as root (UID: {{ effective_uid.stdout }}). Enable become: yes"
+        success_msg: "Running with root privileges confirmed"
+      tags: [validation, privilege_check]
+
+  rescue:
+    - name: Record privilege error
+      set_fact:
+        posix_validation_errors: "{{ posix_validation_errors + ['Not running as root - privilege escalation required'] }}"
+      tags: [validation, privilege_check]
+
+# ==============================================================================
+# DISK SPACE VALIDATION
+# ==============================================================================
+
+- name: Validate sufficient disk space
+  block:
+    - name: Check available disk space on root filesystem
+      shell: df -BM / | awk 'NR==2 {print $4}' | sed 's/M//'
+      register: root_disk_space
+      changed_when: false
+      tags: [validation, disk_check]
+
+    - name: Assert minimum disk space available
+      assert:
+        that:
+          - root_disk_space.stdout | int >= posix_validation_min_disk_mb
+        fail_msg: "WARNING: Low disk space ({{ root_disk_space.stdout }}MB < {{ posix_validation_min_disk_mb }}MB)"
+        success_msg: "Sufficient disk space available ({{ root_disk_space.stdout }}MB free)"
+      tags: [validation, disk_check]
+
+  rescue:
+    - name: Record disk space warning
+      set_fact:
+        posix_validation_warnings: "{{ posix_validation_warnings + ['Low disk space: ' + root_disk_space.stdout + 'MB'] }}"
+      tags: [validation, disk_check]
+
+# ==============================================================================
+# VARIABLE VALIDATION
+# ==============================================================================
+
+- name: Validate admin_ip is set and not empty
+  assert:
+    that:
+      - admin_ip is defined
+      - admin_ip | length > 0
+      - admin_ip != ""
+    fail_msg: "ERROR: admin_ip not set. Required for firewall configuration."
+    success_msg: "admin_ip configured: {{ admin_ip }}"
+  tags: [validation, variable_check]
+  when: posix_validation_mode == 'full'
+
+- name: Validate admin_ip format (basic IP check)
+  assert:
+    that:
+      - admin_ip | regex_search('^[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}$')
+    fail_msg: "ERROR: admin_ip has invalid format: {{ admin_ip }}"
+    success_msg: "admin_ip format valid"
+  tags: [validation, variable_check]
+  when:
+    - posix_validation_mode == 'full'
+    - admin_ip is defined
+    - admin_ip | length > 0
+
+- name: Validate ssh_allow_users is set
+  block:
+    - name: Check ssh_allow_users is defined
+      assert:
+        that:
+          - ssh_allow_users is defined
+          - ssh_allow_users | length > 0
+          - ssh_allow_users != ""
+        fail_msg: "ERROR: ssh_allow_users is empty. At least one user required for SSH access."
+        success_msg: "ssh_allow_users configured: {{ ssh_allow_users }}"
+      tags: [validation, variable_check]
+
+  rescue:
+    - name: Record ssh_allow_users error
+      set_fact:
+        posix_validation_errors: "{{ posix_validation_errors + ['ssh_allow_users not configured - SSH lockout risk!'] }}"
+      tags: [validation, variable_check]
+
+- name: Validate SSH port is in valid range
+  assert:
+    that:
+      - ssh_port is defined
+      - ssh_port | int >= 1
+      - ssh_port | int <= 65535
+    fail_msg: "ERROR: ssh_port out of valid range (1-65535): {{ ssh_port }}"
+    success_msg: "ssh_port valid: {{ ssh_port }}"
+  tags: [validation, variable_check]
+
+- name: Validate toolkit_path is set
+  assert:
+    that:
+      - toolkit_path is defined
+      - toolkit_path | length > 0
+      - toolkit_path != ""
+    fail_msg: "ERROR: toolkit_path not set"
+    success_msg: "toolkit_path configured: {{ toolkit_path }}"
+  tags: [validation, variable_check]
+
+# ==============================================================================
+# SSH CONNECTIVITY VALIDATION
+# ==============================================================================
+
+- name: Validate SSH connectivity
+  block:
+    - name: Check current SSH port is accessible
+      wait_for:
+        port: "{{ ansible_port | default(22) }}"
+        host: "{{ ansible_host | default(inventory_hostname) }}"
+        timeout: 5
+      delegate_to: localhost
+      register: ssh_port_accessible
+      tags: [validation, ssh_check]
+
+    - name: Display SSH connectivity status
+      debug:
+        msg: "SSH port {{ ansible_port | default(22) }} is accessible"
+      tags: [validation, ssh_check]
+
+  rescue:
+    - name: Record SSH connectivity warning
+      set_fact:
+        posix_validation_warnings: "{{ posix_validation_warnings + ['SSH port check failed - connectivity may be unstable'] }}"
+      tags: [validation, ssh_check]
+
+# ==============================================================================
+# SSH KEYS VALIDATION
+# ==============================================================================
+
+- name: Validate SSH keys exist (if check enabled)
+  block:
+    - name: Check for existing SSH authorized_keys
+      stat:
+        path: "{{ item }}"
+      loop:
+        - /root/.ssh/authorized_keys
+        - "/home/{{ ansible_user }}/.ssh/authorized_keys"
+      register: ssh_keys_present
+      tags: [validation, ssh_keys]
+
+    - name: Verify at least one SSH key file exists
+      assert:
+        that:
+          - ssh_keys_present.results | selectattr('stat.exists', 'equalto', true) | list | length > 0
+        fail_msg: "WARNING: No SSH authorized_keys found"
+        success_msg: "SSH keys present"
+      tags: [validation, ssh_keys]
+
+  rescue:
+    - name: Record SSH keys warning
+      set_fact:
+        posix_validation_warnings: "{{ posix_validation_warnings + ['No SSH authorized_keys found - password auth may be disabled!'] }}"
+      tags: [validation, ssh_keys]
+
+  when: posix_validation_check_ssh_keys | bool
+
+# ==============================================================================
+# CONTROLLER SSH KEYS VALIDATION
+# ==============================================================================
+
+- name: Check Ansible controller team keys exist
+  block:
+    - name: Check team keys directory on controller
+      stat:
+        path: "{{ playbook_dir }}/team_keys/{{ item }}"
+      delegate_to: localhost
+      become: no
+      register: controller_keys
+      loop:
+        - "ansible_ed25519"
+        - "ansible_ed25519.pub"
+        - "team_shared_ed25519"
+        - "team_shared_ed25519.pub"
+      failed_when: false
+      tags: [validation, controller_keys]
+
+    - name: Display controller key status
+      debug:
+        msg:
+          - "Team Keys Directory: {{ playbook_dir }}/team_keys"
+          - "Ansible Key (private): {{ 'FOUND' if controller_keys.results[0].stat.exists else 'MISSING' }}"
+          - "Ansible Key (public): {{ 'FOUND' if controller_keys.results[1].stat.exists else 'MISSING' }}"
+          - "Team Key (private): {{ 'FOUND' if controller_keys.results[2].stat.exists else 'MISSING' }}"
+          - "Team Key (public): {{ 'FOUND' if controller_keys.results[3].stat.exists else 'MISSING' }}"
+      tags: [validation, controller_keys]
+
+    - name: Warn if controller keys not found
+      set_fact:
+        posix_validation_warnings: "{{ posix_validation_warnings + ['Team SSH keys not found on controller. Generate with: cd ansible/team_keys && ./generate_keys.sh'] }}"
+      when: >
+        not controller_keys.results[0].stat.exists or
+        not controller_keys.results[1].stat.exists or
+        not controller_keys.results[2].stat.exists or
+        not controller_keys.results[3].stat.exists
+      tags: [validation, controller_keys]
+
+# ==============================================================================
+# REQUIRED COMMANDS VALIDATION
+# ==============================================================================
+
+- name: Validate required system commands
+  block:
+    - name: Check for required commands
+      command: which {{ item }}
+      loop:
+        - iptables
+        - sysctl
+        - sed
+        - awk
+        - grep
+        - systemctl
+        - df
+        - id
+      register: commands_available
+      changed_when: false
+      failed_when: false
+      tags: [validation, commands]
+
+    - name: Record missing commands
+      set_fact:
+        posix_validation_warnings: "{{ posix_validation_warnings + ['Command not found: ' + item.item] }}"
+      when: item.rc != 0
+      loop: "{{ commands_available.results }}"
+      tags: [validation, commands]
+
+# ==============================================================================
+# EXISTING DEPLOYMENT CHECK
+# ==============================================================================
+
+- name: Check for existing toolkit deployment
+  stat:
+    path: "{{ toolkit_path }}"
+  register: existing_toolkit
+  tags: [validation, existing_check]
+
+- name: Display existing deployment status
+  debug:
+    msg: "{{ 'WARNING: Toolkit already deployed at ' + toolkit_path if existing_toolkit.stat.exists else 'No existing deployment found' }}"
+  tags: [validation, existing_check]
+
+- name: Record existing deployment warning
+  set_fact:
+    posix_validation_warnings: "{{ posix_validation_warnings + ['Toolkit already exists at ' + toolkit_path + ' - will overwrite'] }}"
+  when: existing_toolkit.stat.exists
+  tags: [validation, existing_check]
+
+# ==============================================================================
+# VALIDATION REPORT
+# ==============================================================================
+
+- name: Generate validation report
+  set_fact:
+    posix_validation_report: |
+      ========================================
+      POSIX HARDENING VALIDATION REPORT
+      ========================================
+      Host: {{ inventory_hostname }}
+      Date: {{ ansible_date_time.iso8601 }}
+
+      SYSTEM STATUS:
+      - OS: {{ ansible_distribution }} {{ ansible_distribution_version }}
+      - Kernel: {{ ansible_kernel }}
+      - Architecture: {{ ansible_architecture }}
+      - Memory: {{ ansible_memtotal_mb }}MB
+      - Disk Space: {{ root_disk_space.stdout | default('N/A') }}MB free
+
+      CONFIGURATION:
+      - Toolkit Path: {{ toolkit_path }}
+      - SSH Port: {{ ansible_port | default(22) }}
+      - Admin IP: {{ admin_ip | default('NOT SET') }}
+      - SSH Allow Users: {{ ssh_allow_users | default('NOT SET') }}
+
+      ERRORS: {{ posix_validation_errors | length }}
+      {% for error in posix_validation_errors %}
+      - {{ error }}
+      {% endfor %}
+
+      WARNINGS: {{ posix_validation_warnings | length }}
+      {% for warning in posix_validation_warnings %}
+      - {{ warning }}
+      {% endfor %}
+
+      RECOMMENDATION:
+      {% if posix_validation_errors | length > 0 %}
+      CRITICAL - DO NOT PROCEED - Fix errors before deployment
+      {% elif posix_validation_warnings | length > 2 %}
+      CAUTION - Proceed carefully - Multiple warnings detected
+      {% else %}
+      READY - System validated for hardening deployment
+      {% endif %}
+      ========================================
+  tags: [validation, report]
+
+- name: Display validation report
+  debug:
+    msg: "{{ posix_validation_report.split('\n') }}"
+  tags: [validation, report]
+
+- name: Fail if critical errors detected
+  fail:
+    msg: "Validation failed - {{ posix_validation_errors | length }} critical error(s) found"
+  when:
+    - posix_validation_errors | length > 0
+    - posix_validation_fail_on_warning | bool
+  tags: [validation, report]

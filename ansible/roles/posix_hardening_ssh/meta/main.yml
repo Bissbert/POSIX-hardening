@@ -1,0 +1,33 @@
+---
+galaxy_info:
+  author: POSIX Hardening Team
+  description: Critical SSH hardening role with emergency fallback mechanisms
+  company: Internal
+  license: MIT
+  min_ansible_version: 2.9
+  platforms:
+    - name: Debian
+      versions:
+        - bullseye
+        - bookworm
+    - name: Ubuntu
+      versions:
+        - focal
+        - jammy
+        - noble
+    - name: Kali
+      versions:
+        - all
+  galaxy_tags:
+    - security
+    - hardening
+    - posix
+    - ssh
+    - openssh
+    - sshd
+
+dependencies:
+  - role: posix_hardening_validation
+    vars:
+      posix_validation_check_ssh_keys: true
+      posix_validation_mode: 'full'

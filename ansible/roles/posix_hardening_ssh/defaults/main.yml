@@ -1,0 +1,164 @@
+---
+# ==============================================================================
+# POSIX SSH Hardening Role - Default Variables
+# ==============================================================================
+# These variables control SSH daemon hardening settings
+# Override in group_vars/all.yml or host_vars/
+# ==============================================================================
+
+# ------------------------------------------------------------------------------
+# CRITICAL SAFETY VARIABLES
+# ------------------------------------------------------------------------------
+# REQUIRED: Set these variables to prevent SSH lockout
+posix_ssh_allow_users: []  # MUST be overridden - space-separated list
+posix_ssh_allow_groups: []  # Optional - space-separated list
+
+# ------------------------------------------------------------------------------
+# SSH PORT CONFIGURATION
+# ------------------------------------------------------------------------------
+posix_ssh_port: 22
+posix_ssh_listen_address: "0.0.0.0"  # Listen on all interfaces
+
+# ------------------------------------------------------------------------------
+# EMERGENCY SSH ACCESS
+# ------------------------------------------------------------------------------
+# Creates a fallback SSH daemon on an alternate port with relaxed security
+# This prevents complete lockout if main SSH configuration fails
+posix_ssh_enable_emergency_port: true
+posix_ssh_emergency_port: 2222
+posix_ssh_emergency_permit_password: true  # Allow password auth on emergency port
+posix_ssh_emergency_timeout: 300  # Time in seconds to keep emergency SSH running
+
+# ------------------------------------------------------------------------------
+# AUTHENTICATION SETTINGS
+# ------------------------------------------------------------------------------
+posix_ssh_permit_root_login: "no"
+posix_ssh_password_authentication: "no"
+posix_ssh_pubkey_authentication: "yes"
+posix_ssh_permit_empty_passwords: "no"
+posix_ssh_challenge_response_authentication: "no"
+posix_ssh_use_pam: "yes"
+
+# ------------------------------------------------------------------------------
+# CONNECTION LIMITS AND TIMEOUTS
+# ------------------------------------------------------------------------------
+posix_ssh_max_auth_tries: 3
+posix_ssh_max_sessions: 10
+posix_ssh_max_startups: "10:30:60"
+posix_ssh_login_grace_time: 60
+posix_ssh_client_alive_interval: 300
+posix_ssh_client_alive_count_max: 2
+
+# ------------------------------------------------------------------------------
+# SECURITY OPTIONS
+# ------------------------------------------------------------------------------
+posix_ssh_x11_forwarding: "no"
+posix_ssh_print_motd: "no"
+posix_ssh_print_last_log: "yes"
+posix_ssh_tcp_keep_alive: "yes"
+posix_ssh_compression: "delayed"
+posix_ssh_use_dns: "no"
+posix_ssh_strict_modes: "yes"
+posix_ssh_ignore_rhosts: "yes"
+posix_ssh_hostbased_authentication: "no"
+posix_ssh_protocol: 2
+posix_ssh_log_level: "VERBOSE"
+posix_ssh_syslog_facility: "AUTH"
+posix_ssh_authorized_keys_file: ".ssh/authorized_keys"
+posix_ssh_allow_agent_forwarding: "no"
+posix_ssh_allow_tcp_forwarding: "no"
+posix_ssh_permit_user_environment: "no"
+posix_ssh_permit_tunnel: "no"
+posix_ssh_gateway_ports: "no"
+
+# ------------------------------------------------------------------------------
+# CRYPTOGRAPHIC SETTINGS
+# ------------------------------------------------------------------------------
+# Strong ciphers only (modern SSH implementations)
+posix_ssh_ciphers: "chacha20-poly1305@openssh.com,aes256-gcm@openssh.com,aes128-gcm@openssh.com,aes256-ctr,aes192-ctr,aes128-ctr"
+
+# Strong MACs only
+posix_ssh_macs: "hmac-sha2-512-etm@openssh.com,hmac-sha2-256-etm@openssh.com,hmac-sha2-512,hmac-sha2-256"
+
+# Strong key exchange algorithms only
+posix_ssh_kex_algorithms: "curve25519-sha256,curve25519-sha256@libssh.org,diffie-hellman-group16-sha512,diffie-hellman-group18-sha512,diffie-hellman-group-exchange-sha256"
+
+# Host key algorithms (prefer Ed25519 and ECDSA)
+posix_ssh_host_key_algorithms: "ssh-ed25519,ecdsa-sha2-nistp521,ecdsa-sha2-nistp384,ecdsa-sha2-nistp256,rsa-sha2-512,rsa-sha2-256"
+
+# ------------------------------------------------------------------------------
+# SSH BANNER
+# ------------------------------------------------------------------------------
+posix_ssh_banner_enabled: true
+posix_ssh_banner_file: "/etc/ssh/banner"
+posix_ssh_banner_text: |
+  ###############################################################
+  #                      SECURITY WARNING                      #
+  ###############################################################
+  # Unauthorized access to this system is strictly prohibited. #
+  # All access attempts are logged and monitored.              #
+  # Violators will be prosecuted to the full extent of law.    #
+  ###############################################################
+
+# ------------------------------------------------------------------------------
+# CONTROL FLAGS
+# ------------------------------------------------------------------------------
+posix_ssh_force_reharden: false  # Force re-hardening even if already completed
+posix_ssh_skip_connectivity_test: false  # Skip post-hardening connectivity test
+posix_ssh_skip_interactive_prompts: false  # Skip interactive prompts (set to true for automation)
+posix_ssh_backup_config: true  # Create backup before modifying sshd_config
+posix_ssh_validate_before_reload: true  # Run sshd -t before reloading
+posix_ssh_check_crypto_support: true  # Check if SSH version supports crypto settings
+
+# ------------------------------------------------------------------------------
+# FILE PATHS
+# ------------------------------------------------------------------------------
+posix_ssh_config_file: "/etc/ssh/sshd_config"
+posix_ssh_config_backup_dir: "/var/backups/hardening"
+posix_ssh_emergency_config_file: "/etc/ssh/sshd_emergency_config"
+posix_ssh_emergency_pid_file: "/var/run/sshd_emergency.pid"
+
+# ------------------------------------------------------------------------------
+# SERVICE NAMES
+# ------------------------------------------------------------------------------
+# Different distributions use different service names
+posix_ssh_service_name: "{{ 'ssh' if ansible_distribution in ['Debian', 'Ubuntu'] else 'sshd' }}"
+
+# ------------------------------------------------------------------------------
+# STATE TRACKING
+# ------------------------------------------------------------------------------
+posix_ssh_hardening_marker: "/var/lib/hardening/ssh_hardened"
+
+# ------------------------------------------------------------------------------
+# TESTING AND VALIDATION
+# ------------------------------------------------------------------------------
+posix_ssh_connectivity_test_timeout: 30
+posix_ssh_connectivity_test_sleep: 2
+posix_ssh_rollback_timeout: 60  # Seconds to wait before automatic rollback
+
+# ------------------------------------------------------------------------------
+# FIREWALL INTEGRATION
+# ------------------------------------------------------------------------------
+posix_ssh_ensure_firewall_rule: true  # Ensure firewall allows SSH port
+posix_ssh_admin_ip: "{{ admin_ip | default('') }}"  # Priority firewall rule for admin
+posix_ssh_ignore_firewall_check: false  # Bypass firewall accessibility check (requires console access)
+
+# ------------------------------------------------------------------------------
+# DEPRECATED SETTINGS (for older SSH versions)
+# ------------------------------------------------------------------------------
+# These may not be supported on all systems
+posix_ssh_use_privilege_separation: "sandbox"  # Deprecated in OpenSSH 7.5+
+posix_ssh_rsa_authentication: "no"  # Protocol 1 only (deprecated)
+posix_ssh_rhosts_rsa_authentication: "no"  # Protocol 1 only (deprecated)
+
+# ------------------------------------------------------------------------------
+# PERMISSIONS SETTINGS
+# ------------------------------------------------------------------------------
+posix_ssh_config_mode: "0600"
+posix_ssh_host_key_mode: "0600"
+posix_ssh_host_key_pub_mode: "0644"
+posix_ssh_dir_mode: "0755"
+posix_ssh_user_dir_mode: "0700"
+posix_ssh_authorized_keys_mode: "0600"
+posix_ssh_private_key_mode: "0600"
+posix_ssh_public_key_mode: "0644"

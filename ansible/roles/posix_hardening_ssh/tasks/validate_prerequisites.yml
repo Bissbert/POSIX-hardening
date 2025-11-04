@@ -1,0 +1,388 @@
+---
+# ==============================================================================
+# SSH Hardening - Prerequisites Validation
+# ==============================================================================
+# Validates system state before applying SSH hardening
+# CRITICAL: Prevents lockout by checking SSH keys and user configuration
+# ==============================================================================
+
+- name: Check if SSH hardening already completed
+  ansible.builtin.stat:
+    path: "{{ posix_ssh_hardening_marker }}"
+  register: ssh_hardened_marker
+  tags: [ssh, validation, idempotence]
+
+- name: Verify critical SSH settings still applied (if already hardened)
+  ansible.builtin.shell: |
+    grep -q "^PermitRootLogin {{ posix_ssh_permit_root_login }}" {{ posix_ssh_config_file }} &&
+    grep -q "^PasswordAuthentication {{ posix_ssh_password_authentication }}" {{ posix_ssh_config_file }} &&
+    grep -q "^PubkeyAuthentication {{ posix_ssh_pubkey_authentication }}" {{ posix_ssh_config_file }}
+  when: ssh_hardened_marker.stat.exists
+  register: settings_intact
+  changed_when: false
+  failed_when: false
+  tags: [ssh, validation, idempotence]
+
+- name: Force re-hardening if critical settings have drifted
+  ansible.builtin.set_fact:
+    posix_ssh_force_reharden: true
+  when:
+    - ssh_hardened_marker.stat.exists
+    - settings_intact is defined
+    - settings_intact.rc != 0
+  tags: [ssh, validation, idempotence]
+
+- name: Log configuration drift detection
+  ansible.builtin.debug:
+    msg: "Configuration drift detected! Critical SSH settings have been modified. Re-applying hardening..."
+  when:
+    - ssh_hardened_marker.stat.exists
+    - settings_intact is defined
+    - settings_intact.rc != 0
+  tags: [ssh, validation]
+
+- name: Display SSH hardening status
+  ansible.builtin.debug:
+    msg: "SSH hardening already completed. Use posix_ssh_force_reharden=true to override."
+  when:
+    - ssh_hardened_marker.stat.exists
+    - not (posix_ssh_force_reharden | default(false) | bool)
+    - settings_intact is defined
+    - settings_intact.rc == 0
+  tags: [ssh, validation]
+
+- name: Skip SSH hardening if already completed
+  ansible.builtin.meta: end_host
+  when:
+    - ssh_hardened_marker.stat.exists
+    - not (posix_ssh_force_reharden | default(false) | bool)
+    - settings_intact is defined
+    - settings_intact.rc == 0
+  tags: [ssh, validation, idempotence]
+
+# ------------------------------------------------------------------------------
+# SSH PACKAGE VALIDATION
+# ------------------------------------------------------------------------------
+
+- name: Gather package facts
+  ansible.builtin.package_facts:
+    manager: auto
+  tags: [ssh, validation, packages]
+
+- name: Verify OpenSSH server is installed
+  ansible.builtin.assert:
+    that:
+      - "'openssh-server' in ansible_facts.packages or 'openssh' in ansible_facts.packages"
+    fail_msg: "OpenSSH server is not installed. Install with: apt install openssh-server"
+    success_msg: "OpenSSH server package verified"
+  tags: [ssh, validation, packages]
+
+- name: Check SSH daemon binary exists
+  ansible.builtin.stat:
+    path: /usr/sbin/sshd
+  register: sshd_binary
+  tags: [ssh, validation]
+
+- name: Assert SSH daemon binary present
+  ansible.builtin.assert:
+    that:
+      - sshd_binary.stat.exists
+      - sshd_binary.stat.executable
+    fail_msg: "/usr/sbin/sshd not found or not executable"
+    success_msg: "SSH daemon binary verified"
+  tags: [ssh, validation]
+
+# ------------------------------------------------------------------------------
+# SSH CONFIGURATION FILE VALIDATION
+# ------------------------------------------------------------------------------
+
+- name: Check SSH config file exists
+  ansible.builtin.stat:
+    path: "{{ posix_ssh_config_file }}"
+  register: sshd_config_stat
+  tags: [ssh, validation, config]
+
+- name: Assert SSH config file exists
+  ansible.builtin.assert:
+    that:
+      - sshd_config_stat.stat.exists
+      - sshd_config_stat.stat.isreg
+    fail_msg: "SSH configuration file not found: {{ posix_ssh_config_file }}"
+    success_msg: "SSH configuration file verified"
+  tags: [ssh, validation, config]
+
+# ------------------------------------------------------------------------------
+# CRITICAL USER VALIDATION
+# ------------------------------------------------------------------------------
+
+- name: Validate posix_ssh_allow_users is configured
+  ansible.builtin.assert:
+    that:
+      - posix_ssh_allow_users is defined
+      - posix_ssh_allow_users | length > 0
+    fail_msg: |
+      CRITICAL: posix_ssh_allow_users is empty!
+      This will cause SSH lockout after hardening.
+      Set in group_vars/all.yml or playbook vars:
+        posix_ssh_allow_users:
+          - root
+          - your_username
+    success_msg: "SSH allow users configured: {{ posix_ssh_allow_users | join(', ') }}"
+  tags: [ssh, validation, critical]
+
+# Validate users exist on the system
+- name: Check that allowed SSH users exist on system
+  ansible.builtin.getent:
+    database: passwd
+    key: "{{ item }}"
+  loop: "{{ posix_ssh_allow_users }}"
+  register: user_exists
+  failed_when: false
+  tags: [ssh, validation, users]
+
+- name: Warn about non-existent allowed users
+  ansible.builtin.debug:
+    msg: "WARNING: User '{{ item.item }}' in posix_ssh_allow_users does not exist on system"
+  when: item.failed | default(false)
+  loop: "{{ user_exists.results }}"
+  tags: [ssh, validation, users]
+
+# ------------------------------------------------------------------------------
+# SSH KEYS VALIDATION
+# ------------------------------------------------------------------------------
+
+- name: Check for SSH authorized_keys files
+  ansible.builtin.stat:
+    path: "{{ item }}"
+  register: ssh_keys_check
+  loop:
+    - /root/.ssh/authorized_keys
+    - "/home/{{ ansible_user }}/.ssh/authorized_keys"
+  failed_when: false
+  tags: [ssh, validation, keys]
+
+- name: Count SSH key files found
+  ansible.builtin.set_fact:
+    ssh_keys_found: "{{ ssh_keys_check.results | selectattr('stat.exists', 'equalto', true) | list | length }}"
+  tags: [ssh, validation, keys]
+
+- name: Display SSH keys status
+  ansible.builtin.debug:
+    msg: |
+      SSH authorized_keys files found: {{ ssh_keys_found }}
+      {% if ssh_keys_found | int == 0 %}
+      WARNING: No authorized_keys found!
+      Password authentication will be disabled.
+      Ensure you have console/KVM access to recover if needed.
+      {% else %}
+      SSH keys present - password auth can be safely disabled
+      {% endif %}
+  tags: [ssh, validation, keys]
+
+- name: Check specific keys for allowed users
+  ansible.builtin.stat:
+    path: "/home/{{ item }}/.ssh/authorized_keys"
+  loop: "{{ posix_ssh_allow_users | reject('equalto', 'root') | list }}"
+  register: allowed_user_keys
+  tags: [ssh, validation, keys]
+
+- name: Warn if allowed users have no SSH keys
+  ansible.builtin.debug:
+    msg: "WARNING: User {{ item.item }} has no authorized_keys file"
+  when:
+    - not item.stat.exists
+    - item.item != 'root'
+  loop: "{{ allowed_user_keys.results }}"
+  tags: [ssh, validation, keys]
+
+- name: Count users without SSH keys
+  ansible.builtin.set_fact:
+    users_without_keys_count: "{{ allowed_user_keys.results | selectattr('stat.exists', 'equalto', false) | list | length | int }}"
+  when: allowed_user_keys is defined
+  tags: [ssh, validation, keys]
+
+- name: Interactive safety prompt for missing SSH keys
+  ansible.builtin.pause:
+    prompt: |
+
+      ╔════════════════════════════════════════════════════════════════════╗
+      ║                    CRITICAL SECURITY WARNING                       ║
+      ╚════════════════════════════════════════════════════════════════════╝
+
+      {{ users_without_keys_count | default(0) }} user(s) have NO SSH keys deployed!
+
+      If you continue with SSH hardening:
+        ❌ Password authentication will be DISABLED
+        ❌ These users will be LOCKED OUT of SSH
+        ❌ You may lose access if you don't have console/KVM
+
+      Emergency fallback:
+        ✓ Emergency SSH will be available on port {{ posix_ssh_emergency_port }}
+        ✓ Emergency SSH allows password authentication
+
+      ╔════════════════════════════════════════════════════════════════════╗
+      ║  Do you want to continue with SSH hardening?                       ║
+      ║                                                                    ║
+      ║  Press ENTER to continue (RISKY - may cause lockout)              ║
+      ║  Press Ctrl+C then 'A' to ABORT (RECOMMENDED)                     ║
+      ╚════════════════════════════════════════════════════════════════════╝
+
+  when:
+    - allowed_user_keys is defined
+    - users_without_keys_count | default(0) | int > 0
+    - not ansible_check_mode
+    - not (posix_ssh_skip_interactive_prompts | default(false) | bool)
+  tags: [ssh, validation, keys, interactive]
+
+# ------------------------------------------------------------------------------
+# SSH SERVICE VALIDATION
+# ------------------------------------------------------------------------------
+
+- name: Check SSH service status
+  ansible.builtin.systemd:
+    name: "{{ posix_ssh_service_name }}"
+  register: ssh_service_status
+  failed_when: false
+  tags: [ssh, validation, service]
+
+- name: Display SSH service status
+  ansible.builtin.debug:
+    msg: "SSH service ({{ posix_ssh_service_name }}) is {{ ssh_service_status.status.ActiveState | default('unknown') }}"
+  tags: [ssh, validation, service]
+
+- name: Ensure SSH service is enabled
+  ansible.builtin.systemd:
+    name: "{{ posix_ssh_service_name }}"
+    enabled: yes
+  tags: [ssh, validation, service]
+
+# ------------------------------------------------------------------------------
+# SSH CONNECTIVITY VALIDATION
+# ------------------------------------------------------------------------------
+
+- name: Check if running in SSH session
+  ansible.builtin.set_fact:
+    in_ssh_session: "{{ ansible_env.SSH_CONNECTION is defined or ansible_env.SSH_CLIENT is defined }}"
+  tags: [ssh, validation, connectivity]
+
+- name: Display SSH session warning
+  ansible.builtin.debug:
+    msg: |
+      WARNING: Currently in SSH session!
+      Extra safety measures will be enabled:
+      - Emergency SSH on port {{ posix_ssh_emergency_port }}
+      - Automatic rollback if connectivity lost
+      - Configuration validation before apply
+  when: in_ssh_session | bool
+  tags: [ssh, validation, connectivity]
+
+- name: Verify SSH daemon is listening
+  ansible.builtin.wait_for:
+    port: "{{ ansible_port | default(22) }}"
+    host: "{{ ansible_default_ipv4.address | default('0.0.0.0') }}"
+    state: started
+    timeout: 5
+  register: ssh_listening
+  failed_when: false
+  tags: [ssh, validation, connectivity]
+
+- name: Assert SSH is accessible
+  ansible.builtin.assert:
+    that:
+      - ssh_listening is success
+    fail_msg: "SSH port {{ ansible_port | default(22) }} is not accessible"
+    success_msg: "SSH connectivity verified"
+  tags: [ssh, validation, connectivity]
+
+# ==============================================================================
+# FIREWALL ACCESS VERIFICATION (Critical - Prevents Lockout)
+# ==============================================================================
+
+- name: Check if SSH port is accessible through firewall
+  ansible.builtin.wait_for:
+    port: "{{ posix_ssh_port }}"
+    host: "{{ ansible_default_ipv4.address }}"
+    state: started
+    timeout: 5
+  register: firewall_check
+  failed_when: false
+  tags: [ssh, validation, firewall]
+
+- name: Display firewall check result
+  ansible.builtin.debug:
+    msg: |
+      {% if firewall_check is success %}
+      SSH port {{ posix_ssh_port }} is accessible through firewall
+      {% else %}
+      WARNING: SSH port {{ posix_ssh_port }} appears blocked by firewall
+      This could cause lockout during SSH hardening
+      Ensure firewall allows SSH before proceeding
+      {% endif %}
+  tags: [ssh, validation, firewall]
+
+- name: Fail if firewall blocks SSH (unless override)
+  ansible.builtin.fail:
+    msg: |
+      SSH port {{ posix_ssh_port }} is blocked by firewall.
+
+      To proceed anyway (if you have console access), set:
+        posix_ssh_ignore_firewall_check: true
+
+      To fix, ensure your firewall allows connections to port {{ posix_ssh_port }}
+  when:
+    - firewall_check is failed
+    - not (posix_ssh_ignore_firewall_check | default(false) | bool)
+  tags: [ssh, validation, firewall]
+
+# ------------------------------------------------------------------------------
+# DIRECTORY STRUCTURE VALIDATION
+# ------------------------------------------------------------------------------
+
+- name: Ensure backup directory exists
+  ansible.builtin.file:
+    path: "{{ posix_ssh_config_backup_dir }}"
+    state: directory
+    mode: '0700'
+    owner: root
+    group: root
+  tags: [ssh, validation, directories]
+
+- name: Ensure hardening state directory exists
+  ansible.builtin.file:
+    path: "{{ posix_ssh_hardening_marker | dirname }}"
+    state: directory
+    mode: '0755'
+    owner: root
+    group: root
+  tags: [ssh, validation, directories]
+
+- name: Ensure hardening log directory exists
+  ansible.builtin.file:
+    path: /var/log/hardening
+    state: directory
+    mode: '0750'
+    owner: root
+    group: root
+  tags: [ssh, validation, directories]
+
+# ------------------------------------------------------------------------------
+# VALIDATION SUMMARY
+# ------------------------------------------------------------------------------
+
+- name: Generate validation summary
+  ansible.builtin.debug:
+    msg: |
+      ========================================
+      SSH HARDENING PRE-FLIGHT VALIDATION
+      ========================================
+      SSH Package: INSTALLED
+      SSH Config: {{ posix_ssh_config_file }}
+      SSH Service: {{ ssh_service_status.status.ActiveState | default('unknown') }}
+      Allowed Users: {{ posix_ssh_allow_users | join(', ') }}
+      SSH Keys Found: {{ ssh_keys_found }}
+      In SSH Session: {{ in_ssh_session }}
+      Emergency Port: {{ posix_ssh_emergency_port }}
+      ========================================
+      Ready to proceed with SSH hardening
+      ========================================
+  tags: [ssh, validation, summary]

@@ -1,0 +1,23 @@
+---
+galaxy_info:
+  author: POSIX Hardening Team
+  description: Pre-flight validation for POSIX hardening toolkit deployment
+  company: Internal
+  license: MIT
+  min_ansible_version: 2.9
+  platforms:
+    - name: Debian
+      versions:
+        - bullseye
+        - bookworm
+    - name: Ubuntu
+      versions:
+        - focal
+        - jammy
+  galaxy_tags:
+    - security
+    - hardening
+    - validation
+    - posix
+
+dependencies: []

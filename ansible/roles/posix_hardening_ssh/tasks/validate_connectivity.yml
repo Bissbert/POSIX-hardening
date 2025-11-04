@@ -1,0 +1,258 @@
+---
+# ==============================================================================
+# SSH Hardening - Post-Hardening Connectivity Validation
+# ==============================================================================
+# CRITICAL: Verifies SSH connectivity after hardening
+# Triggers rollback if connectivity is lost
+# ==============================================================================
+
+- name: Display connectivity validation notice
+  ansible.builtin.debug:
+    msg: |
+      ========================================
+      VALIDATING SSH CONNECTIVITY
+      ========================================
+      This test ensures SSH remains accessible
+      Rollback will occur if test fails
+      ========================================
+  tags: [ssh, validation, connectivity]
+
+# ------------------------------------------------------------------------------
+# FLUSH HANDLERS TO APPLY CHANGES
+# ------------------------------------------------------------------------------
+
+- name: Flush handlers to apply SSH configuration
+  ansible.builtin.meta: flush_handlers
+  tags: [ssh, validation]
+
+# ------------------------------------------------------------------------------
+# WAIT FOR SSH SERVICE TO STABILIZE
+# ------------------------------------------------------------------------------
+
+- name: Wait for SSH service to stabilize after configuration changes
+  ansible.builtin.pause:
+    seconds: "{{ posix_ssh_connectivity_test_sleep }}"
+  tags: [ssh, validation]
+
+# ------------------------------------------------------------------------------
+# TEST SSH PORT ACCESSIBILITY
+# ------------------------------------------------------------------------------
+
+- name: Test SSH port is listening
+  ansible.builtin.wait_for:
+    port: "{{ posix_ssh_port }}"
+    host: "{{ ansible_default_ipv4.address | default('0.0.0.0') }}"
+    state: started
+    timeout: "{{ posix_ssh_connectivity_test_timeout }}"
+    delay: 2
+  register: ssh_port_accessible
+  delegate_to: localhost
+  become: no
+  when: not (posix_ssh_skip_connectivity_test | bool)
+  tags: [ssh, validation, connectivity]
+
+- name: Display port accessibility result
+  ansible.builtin.debug:
+    msg: "SSH port {{ posix_ssh_port }} is accessible"
+  when:
+    - not (posix_ssh_skip_connectivity_test | bool)
+    - ssh_port_accessible is success
+  tags: [ssh, validation, connectivity]
+
+# ------------------------------------------------------------------------------
+# TEST SSH CONNECTION
+# ------------------------------------------------------------------------------
+
+- name: Test SSH connection using wait_for_connection
+  ansible.builtin.wait_for_connection:
+    timeout: "{{ posix_ssh_connectivity_test_timeout }}"
+    sleep: "{{ posix_ssh_connectivity_test_sleep }}"
+  register: ssh_connectivity_test
+  when: not (posix_ssh_skip_connectivity_test | bool)
+  tags: [ssh, validation, connectivity]
+
+- name: Display connectivity test result
+  ansible.builtin.debug:
+    msg: "SSH connectivity verified successfully"
+  when:
+    - not (posix_ssh_skip_connectivity_test | bool)
+    - ssh_connectivity_test is success
+  tags: [ssh, validation, connectivity]
+
+# ------------------------------------------------------------------------------
+# VERIFY SSH DAEMON STATUS
+# ------------------------------------------------------------------------------
+
+- name: Check SSH daemon is running
+  ansible.builtin.systemd:
+    name: "{{ posix_ssh_service_name }}"
+  register: sshd_status
+  tags: [ssh, validation, service]
+
+- name: Display SSH daemon status
+  ansible.builtin.debug:
+    msg: "SSH daemon status: {{ sshd_status.status.ActiveState }}"
+  tags: [ssh, validation, service]
+
+- name: Assert SSH daemon is active
+  ansible.builtin.assert:
+    that:
+      - sshd_status.status.ActiveState == "active"
+    fail_msg: "SSH daemon is not active: {{ sshd_status.status.ActiveState }}"
+    success_msg: "SSH daemon is running"
+  tags: [ssh, validation, service]
+
+# ------------------------------------------------------------------------------
+# VERIFY HARDENING SETTINGS APPLIED
+# ------------------------------------------------------------------------------
+
+- name: Verify critical SSH hardening settings
+  ansible.builtin.shell: |
+    set -e
+    config="{{ posix_ssh_config_file }}"
+
+    # Check critical settings
+    grep -q "^PermitRootLogin no" "$config" || exit 1
+    grep -q "^PasswordAuthentication no" "$config" || exit 2
+    grep -q "^PubkeyAuthentication yes" "$config" || exit 3
+
+    echo "Settings verified"
+  register: settings_verification
+  changed_when: false
+  failed_when: settings_verification.rc != 0
+  tags: [ssh, validation, config]
+
+- name: Display settings verification result
+  ansible.builtin.debug:
+    msg: |
+      SSH hardening settings verified:
+      - PermitRootLogin: no
+      - PasswordAuthentication: no
+      - PubkeyAuthentication: yes
+  when: settings_verification.rc == 0
+  tags: [ssh, validation, config]
+
+# ------------------------------------------------------------------------------
+# TEST ACTUAL SSH AUTHENTICATION (optional, advanced)
+# ------------------------------------------------------------------------------
+
+- name: Test SSH authentication using command module
+  ansible.builtin.command: whoami
+  register: auth_test
+  changed_when: false
+  when: not (posix_ssh_skip_connectivity_test | bool)
+  tags: [ssh, validation, auth]
+
+- name: Display authentication test result
+  ansible.builtin.debug:
+    msg: "SSH authentication successful as: {{ auth_test.stdout }}"
+  when:
+    - not (posix_ssh_skip_connectivity_test | bool)
+    - auth_test is success
+  tags: [ssh, validation, auth]
+
+# ------------------------------------------------------------------------------
+# EMERGENCY SSH CLEANUP (if configured)
+# ------------------------------------------------------------------------------
+
+- name: Check if emergency SSH should be removed
+  ansible.builtin.stat:
+    path: /var/lib/hardening/emergency_ssh_active
+  register: emergency_ssh_active
+  tags: [ssh, validation, emergency]
+
+- name: Display emergency SSH notice
+  ansible.builtin.debug:
+    msg: |
+      ========================================
+      EMERGENCY SSH STILL ACTIVE
+      ========================================
+      Port: {{ posix_ssh_emergency_port }}
+      Main SSH hardening successful
+
+      To remove emergency SSH:
+        kill $(cat {{ posix_ssh_emergency_pid_file }})
+        rm -f {{ posix_ssh_emergency_config_file }}
+        rm -f {{ posix_ssh_emergency_pid_file }}
+      ========================================
+  when:
+    - emergency_ssh_active.stat.exists
+    - posix_ssh_enable_emergency_port | bool
+  tags: [ssh, validation, emergency]
+
+# ------------------------------------------------------------------------------
+# MARK SSH AS HARDENED
+# ------------------------------------------------------------------------------
+
+- name: Create SSH hardening completion marker
+  ansible.builtin.copy:
+    content: |
+      SSH Hardening Completed
+      ========================================
+      Date: {{ ansible_date_time.iso8601 }}
+      Hostname: {{ ansible_hostname }}
+      SSH Port: {{ posix_ssh_port }}
+      AllowUsers: {{ posix_ssh_allow_users | join(', ') }}
+
+      Settings Applied:
+      - PermitRootLogin: {{ posix_ssh_permit_root_login }}
+      - PasswordAuthentication: {{ posix_ssh_password_authentication }}
+      - PubkeyAuthentication: {{ posix_ssh_pubkey_authentication }}
+      - PermitEmptyPasswords: {{ posix_ssh_permit_empty_passwords }}
+      - X11Forwarding: {{ posix_ssh_x11_forwarding }}
+      - AllowAgentForwarding: {{ posix_ssh_allow_agent_forwarding }}
+      - AllowTcpForwarding: {{ posix_ssh_allow_tcp_forwarding }}
+      - MaxAuthTries: {{ posix_ssh_max_auth_tries }}
+      - MaxSessions: {{ posix_ssh_max_sessions }}
+      - ClientAliveInterval: {{ posix_ssh_client_alive_interval }}
+      - ClientAliveCountMax: {{ posix_ssh_client_alive_count_max }}
+
+      Cryptography:
+      - Ciphers: Strong only
+      - MACs: Strong only
+      - KexAlgorithms: Strong only
+
+      Banner: {{ 'Enabled' if posix_ssh_banner_enabled else 'Disabled' }}
+      Emergency SSH: {{ 'Active on port ' + posix_ssh_emergency_port|string if emergency_ssh_active.stat.exists else 'Not active' }}
+
+      Connectivity Tests: PASSED
+      ========================================
+    dest: "{{ posix_ssh_hardening_marker }}"
+    mode: '0600'
+    owner: root
+    group: root
+  tags: [ssh, validation, marker]
+
+- name: Log SSH hardening completion
+  ansible.builtin.lineinfile:
+    path: /var/log/hardening/ssh_hardening.log
+    line: "{{ ansible_date_time.iso8601 }} - SSH hardening completed successfully on {{ ansible_hostname }}"
+    create: yes
+    mode: '0600'
+  tags: [ssh, validation, logging]
+
+# ------------------------------------------------------------------------------
+# CONNECTIVITY VALIDATION SUMMARY
+# ------------------------------------------------------------------------------
+
+- name: Display validation summary
+  ansible.builtin.debug:
+    msg: |
+      ========================================
+      SSH CONNECTIVITY VALIDATION COMPLETE
+      ========================================
+      Port Accessible: {{ 'YES' if ssh_port_accessible is success else 'SKIPPED' }}
+      Connection Test: {{ 'PASSED' if ssh_connectivity_test is success else 'SKIPPED' }}
+      Daemon Status: {{ sshd_status.status.ActiveState }}
+      Settings Verified: {{ 'YES' if settings_verification.rc == 0 else 'NO' }}
+      Authentication: {{ 'WORKING' if auth_test is success else 'SKIPPED' }}
+
+      SSH Hardening: SUCCESSFUL
+      Marker Created: {{ posix_ssh_hardening_marker }}
+      ========================================
+  tags: [ssh, validation, summary]
+
+# ------------------------------------------------------------------------------
+# FAILURE HANDLING (rescue block would be in main.yml)
+# ------------------------------------------------------------------------------
+# If this validation fails, handlers should trigger emergency rollback

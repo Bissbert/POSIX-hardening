@@ -1,0 +1,256 @@
+---
+# ==============================================================================
+# POSIX SSH Hardening Role - Main Tasks
+# ==============================================================================
+# CRITICAL WARNING: This role modifies SSH configuration
+# HIGH LOCKOUT RISK - Emergency mechanisms and validation REQUIRED
+#
+# Converted from: scripts/01-ssh-hardening.sh
+# ==============================================================================
+# SAFETY FEATURES:
+#   1. Pre-flight validation (SSH keys, users, connectivity)
+#   2. Emergency SSH on alternate port (fallback access)
+#   3. Configuration validation before apply (sshd -t)
+#   4. Timestamped backups
+#   5. Post-hardening connectivity tests
+#   6. Automatic rollback on failure
+#   7. Idempotent execution (marker file)
+# ==============================================================================
+
+# ------------------------------------------------------------------------------
+# DISPLAY CRITICAL WARNING
+# ------------------------------------------------------------------------------
+
+- name: Display SSH hardening warning
+  ansible.builtin.debug:
+    msg: |
+      ========================================
+      WARNING: SSH HARDENING IN PROGRESS
+      ========================================
+      This role will modify SSH daemon configuration
+      LOCKOUT RISK: Incorrect configuration can prevent SSH access
+
+      Safety mechanisms enabled:
+        - Pre-flight validation
+        - Emergency SSH on port {{ posix_ssh_emergency_port }}
+        - Configuration backups
+        - Automatic rollback on failure
+        - Connectivity validation
+
+      Allowed SSH users: {{ posix_ssh_allow_users | join(', ') }}
+      SSH port: {{ posix_ssh_port }}
+
+      Emergency access (if enabled):
+        ssh -p {{ posix_ssh_emergency_port }} user@host
+
+      Press Ctrl+C within 10 seconds to abort...
+      ========================================
+  tags: [ssh, warning]
+
+- name: Pause for review (can be skipped with --skip-tags pause)
+  ansible.builtin.pause:
+    seconds: 10
+    prompt: "Review warning above. Execution will continue in 10 seconds..."
+  tags: [ssh, warning, pause]
+  when: ansible_check_mode == false
+
+# ------------------------------------------------------------------------------
+# PHASE 1: PRE-FLIGHT VALIDATION
+# ------------------------------------------------------------------------------
+
+- name: Phase 1 - Pre-flight validation
+  ansible.builtin.include_tasks: validate_prerequisites.yml
+  tags: [ssh, validation, phase1]
+
+# ------------------------------------------------------------------------------
+# PHASE 2: EMERGENCY SSH SETUP
+# ------------------------------------------------------------------------------
+
+- name: Phase 2 - Emergency SSH setup
+  ansible.builtin.include_tasks: setup_emergency_ssh.yml
+  when:
+    - posix_ssh_enable_emergency_port | bool
+    - not ansible_check_mode
+  tags: [ssh, emergency, phase2]
+
+# ------------------------------------------------------------------------------
+# PHASE 3: SSH CONFIGURATION HARDENING (CRITICAL)
+# ------------------------------------------------------------------------------
+
+- name: Phase 3 - SSH configuration hardening
+  block:
+    - name: Apply SSH hardening configuration
+      ansible.builtin.include_tasks: harden_sshd_config.yml
+      tags: [ssh, harden, phase3]
+
+  rescue:
+    - name: SSH hardening failed - triggering emergency rollback
+      ansible.builtin.debug:
+        msg: |
+          ========================================
+          ERROR: SSH HARDENING FAILED
+          ========================================
+          Configuration changes encountered errors
+          Attempting emergency rollback...
+          ========================================
+
+    - name: Trigger emergency rollback handler
+      ansible.builtin.command: /bin/true
+      notify: emergency ssh rollback
+      changed_when: true
+
+    - name: Fail the play after rollback attempt
+      ansible.builtin.fail:
+        msg: |
+          SSH hardening failed and rollback attempted.
+          Check /var/backups/hardening/ for backup files.
+          Emergency SSH may be available on port {{ posix_ssh_emergency_port }}.
+
+  tags: [ssh, harden, phase3]
+
+# ------------------------------------------------------------------------------
+# PHASE 4: SSH PERMISSIONS HARDENING
+# ------------------------------------------------------------------------------
+
+- name: Phase 4 - SSH permissions hardening
+  ansible.builtin.include_tasks: fix_ssh_permissions.yml
+  tags: [ssh, permissions, phase4]
+
+# ------------------------------------------------------------------------------
+# PHASE 5: SSH BANNER CONFIGURATION
+# ------------------------------------------------------------------------------
+
+- name: Phase 5 - SSH banner configuration
+  ansible.builtin.include_tasks: configure_ssh_banner.yml
+  when: posix_ssh_banner_enabled | bool
+  tags: [ssh, banner, phase5]
+
+# ------------------------------------------------------------------------------
+# PHASE 6: POST-HARDENING VALIDATION (CRITICAL)
+# ------------------------------------------------------------------------------
+
+- name: Phase 6 - Post-hardening connectivity validation
+  block:
+    - name: Validate SSH connectivity
+      ansible.builtin.include_tasks: validate_connectivity.yml
+      tags: [ssh, validation, phase6]
+
+  rescue:
+    - name: Connectivity validation failed - CRITICAL
+      ansible.builtin.debug:
+        msg: |
+          ========================================
+          CRITICAL: SSH CONNECTIVITY TEST FAILED
+          ========================================
+          Cannot verify SSH access after hardening
+          Emergency rollback will be attempted
+          ========================================
+
+    - name: Trigger emergency rollback
+      ansible.builtin.command: /bin/true
+      notify: emergency ssh rollback
+      changed_when: true
+
+    - name: Display emergency access information
+      ansible.builtin.debug:
+        msg: |
+          ========================================
+          EMERGENCY ACCESS INFORMATION
+          ========================================
+          If locked out, try emergency SSH:
+            ssh -p {{ posix_ssh_emergency_port }} user@{{ ansible_host | default(inventory_hostname) }}
+
+          Manual rollback:
+            1. Find latest backup: ls -lt /var/backups/hardening/
+            2. Restore: cp /var/backups/hardening/sshd_config.*.bak /etc/ssh/sshd_config
+            3. Reload: systemctl reload {{ posix_ssh_service_name }}
+
+          Console/KVM access may be required
+          ========================================
+
+    - name: Fail after emergency rollback
+      ansible.builtin.fail:
+        msg: "SSH connectivity validation failed - rollback attempted"
+
+  tags: [ssh, validation, phase6]
+
+# ------------------------------------------------------------------------------
+# PHASE 7: CLEANUP AND FINALIZATION
+# ------------------------------------------------------------------------------
+
+- name: Phase 7 - Cleanup and finalization
+  block:
+    - name: Display SSH hardening success
+      ansible.builtin.debug:
+        msg: |
+          ========================================
+          SSH HARDENING COMPLETED SUCCESSFULLY
+          ========================================
+          All validation tests passed
+          SSH daemon is accessible and secure
+          Configuration marker: {{ posix_ssh_hardening_marker }}
+
+          Applied hardening:
+            - Root login: DISABLED
+            - Password auth: DISABLED
+            - Public key auth: ENABLED
+            - Strong crypto: ENABLED
+            - Access restrictions: APPLIED
+            - Connection limits: CONFIGURED
+            - Banner: {{ 'ENABLED' if posix_ssh_banner_enabled else 'DISABLED' }}
+
+          Allowed users: {{ posix_ssh_allow_users | join(', ') }}
+          SSH port: {{ posix_ssh_port }}
+
+          {% if posix_ssh_enable_emergency_port %}
+          Emergency SSH still active on port {{ posix_ssh_emergency_port }}
+          Stop with: kill $(cat {{ posix_ssh_emergency_pid_file }})
+          {% endif %}
+
+          Logs: /var/log/hardening/ssh_hardening.log
+          Backups: {{ posix_ssh_config_backup_dir }}/
+          ========================================
+
+    - name: Monitor current SSH connections
+      ansible.builtin.shell: |
+        echo "=== Active SSH Connections ==="
+        who | grep pts || echo "None found via 'who'"
+        echo ""
+        echo "=== SSH Service Status ==="
+        systemctl status {{ posix_ssh_service_name }} --no-pager | head -10 || true
+      register: ssh_monitoring
+      changed_when: false
+      failed_when: false
+
+    - name: Display SSH monitoring information
+      ansible.builtin.debug:
+        msg: "{{ ssh_monitoring.stdout_lines }}"
+      when: ssh_monitoring.rc == 0
+
+  tags: [ssh, finalization, phase7]
+
+# ------------------------------------------------------------------------------
+# CLEANUP NOTES
+# ------------------------------------------------------------------------------
+
+- name: Display cleanup notes
+  ansible.builtin.debug:
+    msg: |
+      ========================================
+      POST-HARDENING NOTES
+      ========================================
+      1. Test SSH access from your workstation
+      2. Verify you can reconnect with your SSH keys
+      3. Remove emergency SSH if no longer needed:
+         kill $(cat {{ posix_ssh_emergency_pid_file }})
+      4. Update firewall rules if SSH port changed
+      5. Update monitoring systems with new port
+      6. Document allowed users and backup location
+
+      Backups retained in: {{ posix_ssh_config_backup_dir }}
+      Marker file: {{ posix_ssh_hardening_marker }}
+
+      To re-run hardening:
+        Set posix_ssh_force_reharden: true
+      ========================================
+  tags: [ssh, notes, always]

@@ -1,0 +1,105 @@
+---
+# ==============================================================================
+# SSH Hardening - Configure SSH Banner
+# ==============================================================================
+# Creates and configures a warning banner for SSH connections
+# Legal notice displayed before authentication
+# ==============================================================================
+
+- name: Display SSH banner configuration notice
+  ansible.builtin.debug:
+    msg: "Configuring SSH login banner"
+  when: posix_ssh_banner_enabled | bool
+  tags: [ssh, banner]
+
+# ------------------------------------------------------------------------------
+# CREATE BANNER FILE
+# ------------------------------------------------------------------------------
+
+- name: Create SSH banner file
+  ansible.builtin.copy:
+    content: "{{ posix_ssh_banner_text }}"
+    dest: "{{ posix_ssh_banner_file }}"
+    mode: '0644'
+    owner: root
+    group: root
+  when: posix_ssh_banner_enabled | bool
+  register: banner_created
+  tags: [ssh, banner, config]
+
+- name: Display banner file location
+  ansible.builtin.debug:
+    msg: "SSH banner created: {{ posix_ssh_banner_file }}"
+  when:
+    - posix_ssh_banner_enabled | bool
+    - banner_created is changed
+  tags: [ssh, banner]
+
+# ------------------------------------------------------------------------------
+# CONFIGURE SSHD TO USE BANNER
+# ------------------------------------------------------------------------------
+
+- name: Enable banner in sshd_config
+  ansible.builtin.lineinfile:
+    path: "{{ posix_ssh_config_file }}"
+    regexp: '^#?Banner\s+'
+    line: "Banner {{ posix_ssh_banner_file }}"
+    state: present
+    validate: '/usr/sbin/sshd -t -f %s'
+  notify: reload sshd
+  when: posix_ssh_banner_enabled | bool
+  tags: [ssh, banner, config]
+
+# ------------------------------------------------------------------------------
+# DISABLE BANNER (if not enabled)
+# ------------------------------------------------------------------------------
+
+- name: Disable banner in sshd_config
+  ansible.builtin.lineinfile:
+    path: "{{ posix_ssh_config_file }}"
+    regexp: '^Banner\s+'
+    state: absent
+  notify: reload sshd
+  when: not (posix_ssh_banner_enabled | bool)
+  tags: [ssh, banner, config]
+
+- name: Remove banner file if disabled
+  ansible.builtin.file:
+    path: "{{ posix_ssh_banner_file }}"
+    state: absent
+  when: not (posix_ssh_banner_enabled | bool)
+  tags: [ssh, banner, config]
+
+# ------------------------------------------------------------------------------
+# VERIFICATION
+# ------------------------------------------------------------------------------
+
+- name: Verify banner file exists
+  ansible.builtin.stat:
+    path: "{{ posix_ssh_banner_file }}"
+  register: banner_file_check
+  when: posix_ssh_banner_enabled | bool
+  tags: [ssh, banner, validation]
+
+- name: Assert banner file created
+  ansible.builtin.assert:
+    that:
+      - banner_file_check.stat.exists
+      - banner_file_check.stat.isreg
+    fail_msg: "SSH banner file not found: {{ posix_ssh_banner_file }}"
+    success_msg: "SSH banner file verified"
+  when:
+    - posix_ssh_banner_enabled | bool
+    - not ansible_check_mode
+  tags: [ssh, banner, validation]
+
+- name: Display banner completion
+  ansible.builtin.debug:
+    msg: |
+      ========================================
+      SSH BANNER CONFIGURED
+      ========================================
+      File: {{ posix_ssh_banner_file }}
+      Status: {{ 'ENABLED' if posix_ssh_banner_enabled else 'DISABLED' }}
+      ========================================
+  tags: [ssh, banner, summary]

@@ -1,0 +1,20 @@
+---
+profile: production
+
+exclude_paths:
+  - .cache/
+  - .github/
+  - ansible/retry/
+  - ansible/testing/
+  - testing/
+
+skip_list:
+  - yaml[line-length]
+  - no-changed-when  # Will fix gradually in next task
+
+warn_list:
+  - experimental
+  - role-name
+
+offline: false
+strict: false  # Set true when ready
