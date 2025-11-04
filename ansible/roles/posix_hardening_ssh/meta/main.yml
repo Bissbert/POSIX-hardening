@@ -28,10 +28,5 @@ galaxy_info:
     - openssh
     - sshd
 
-dependencies: []
-  # Note: posix_hardening_validation dependency disabled for Molecule testing
-  # In production, include manually if needed:
-  # - role: posix_hardening_validation
-  #   vars:
-  #     posix_validation_check_ssh_keys: true
-  #     posix_validation_mode: 'full'
+dependencies:
+  - role: posix_hardening_validation

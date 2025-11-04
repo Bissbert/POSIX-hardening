@@ -29,4 +29,5 @@ galaxy_info:
     - memory
     - network
 
-dependencies: []
+dependencies:
+  - role: posix_hardening_firewall

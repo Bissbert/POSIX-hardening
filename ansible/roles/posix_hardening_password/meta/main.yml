@@ -31,4 +31,5 @@ galaxy_info:
     - password
     - pam
 
-dependencies: []
+dependencies:
+  - role: posix_hardening_files

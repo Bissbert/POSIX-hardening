@@ -35,4 +35,5 @@ galaxy_info:
     - compliance
     - tripwire
 
-dependencies: []
+dependencies:
+  - role: posix_hardening_files

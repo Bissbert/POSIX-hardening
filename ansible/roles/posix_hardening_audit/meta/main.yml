@@ -34,4 +34,5 @@ galaxy_info:
     - monitoring
     - compliance
 
-dependencies: []
+dependencies:
+  - role: posix_hardening_files

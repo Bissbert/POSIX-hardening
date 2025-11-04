@@ -31,4 +31,5 @@ galaxy_info:
     - sudo
     - sudoers
 
-dependencies: []
+dependencies:
+  - role: posix_hardening_accounts

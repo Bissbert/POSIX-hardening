@@ -31,4 +31,5 @@ galaxy_info:
     - permissions
     - files
 
-dependencies: []
+dependencies:
+  - role: posix_hardening_firewall

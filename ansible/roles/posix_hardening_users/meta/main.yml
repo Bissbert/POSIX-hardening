@@ -1,9 +1,7 @@
 ---
 galaxy_info:
-  role_name: posix_hardening_sysctl
-  namespace: posix
   author: POSIX Hardening Team
-  description: Additional sysctl hardening for performance and advanced tuning
+  description: Manages users and SSH keys for POSIX hardening deployment
   company: Internal
   license: MIT
   min_ansible_version: 2.9
@@ -16,18 +14,12 @@ galaxy_info:
       versions:
         - focal
         - jammy
-        - noble
-    - name: Kali
-      versions:
-        - all
   galaxy_tags:
     - security
     - hardening
+    - users
+    - ssh
     - posix
-    - sysctl
-    - tuning
-    - performance
-    - tcp
 
 dependencies:
-  - role: posix_hardening_kernel
+  - role: posix_hardening_validation

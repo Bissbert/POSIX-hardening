@@ -31,4 +31,5 @@ galaxy_info:
     - accounts
     - users
 
-dependencies: []
+dependencies:
+  - role: posix_hardening_password

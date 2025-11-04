@@ -32,4 +32,5 @@ galaxy_info:
     - mount
     - filesystem
 
-dependencies: []
+dependencies:
+  - role: posix_hardening_files

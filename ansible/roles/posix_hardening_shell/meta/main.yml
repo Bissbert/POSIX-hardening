@@ -33,4 +33,5 @@ galaxy_info:
     - timeout
     - tmout
 
-dependencies: []
+dependencies:
+  - role: posix_hardening_accounts

@@ -46,4 +46,5 @@ galaxy_info:
     - stig
     - authorization
 
-dependencies: []
+dependencies:
+  - role: posix_hardening_files

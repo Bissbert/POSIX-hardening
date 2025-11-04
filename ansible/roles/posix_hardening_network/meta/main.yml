@@ -29,4 +29,5 @@ galaxy_info:
     - interfaces
     - sysctl
 
-dependencies: []
+dependencies:
+  - role: posix_hardening_kernel
