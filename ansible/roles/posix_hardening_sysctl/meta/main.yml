@@ -1,0 +1,32 @@
+---
+galaxy_info:
+  role_name: posix_hardening_sysctl
+  namespace: posix
+  author: POSIX Hardening Team
+  description: Additional sysctl hardening for performance and advanced tuning
+  company: Internal
+  license: MIT
+  min_ansible_version: 2.9
+  platforms:
+    - name: Debian
+      versions:
+        - bullseye
+        - bookworm
+    - name: Ubuntu
+      versions:
+        - focal
+        - jammy
+        - noble
+    - name: Kali
+      versions:
+        - all
+  galaxy_tags:
+    - security
+    - hardening
+    - posix
+    - sysctl
+    - tuning
+    - performance
+    - tcp
+
+dependencies: []

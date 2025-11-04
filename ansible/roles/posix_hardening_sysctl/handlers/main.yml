@@ -1,0 +1,23 @@
+---
+# ==============================================================================
+# POSIX Additional Sysctl Hardening Role - Handlers
+# ==============================================================================
+# Handlers for sysctl reload
+# ==============================================================================
+
+# ------------------------------------------------------------------------------
+# RELOAD SYSCTL
+# ------------------------------------------------------------------------------
+- name: reload sysctl
+  ansible.builtin.command: sysctl -p {{ posix_sysctl_config_file }}
+  listen: reload sysctl
+  changed_when: false
+  failed_when: false
+  when: posix_sysctl_reload_sysctl | bool
+
+# Alternative: reload all sysctl files
+- name: reload all sysctl
+  ansible.builtin.command: sysctl --system
+  listen: reload all sysctl
+  changed_when: false
+  failed_when: false

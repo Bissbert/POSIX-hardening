@@ -1,0 +1,97 @@
+---
+# ==============================================================================
+# POSIX Additional Sysctl Hardening Role - Default Variables
+# ==============================================================================
+# These variables provide additional/advanced sysctl hardening
+# This role complements posix_hardening_kernel with performance and tuning
+# Override in group_vars/all.yml or host_vars/
+# ==============================================================================
+
+# ------------------------------------------------------------------------------
+# CONTROL FLAGS
+# ------------------------------------------------------------------------------
+posix_sysctl_force_reharden: false  # Force re-hardening even if already completed
+posix_sysctl_backup_config: true  # Create backup before modifying
+posix_sysctl_validate_after_apply: true  # Validate settings after applying
+posix_sysctl_reload_sysctl: true  # Reload sysctl after configuration
+
+# ------------------------------------------------------------------------------
+# STATE TRACKING
+# ------------------------------------------------------------------------------
+posix_sysctl_hardening_marker: "/var/lib/hardening/sysctl_hardened"
+
+# ------------------------------------------------------------------------------
+# FILE PATHS
+# ------------------------------------------------------------------------------
+posix_sysctl_sysctl_conf: "/etc/sysctl.conf"
+posix_sysctl_backup_dir: "/var/backups/hardening"
+posix_sysctl_sysctl_d_dir: "/etc/sysctl.d"
+posix_sysctl_config_file: "{{ posix_sysctl_sysctl_d_dir }}/99-posix-additional-hardening.conf"
+
+# ------------------------------------------------------------------------------
+# ADDITIONAL TCP/IP STACK PARAMETERS
+# ------------------------------------------------------------------------------
+# Maximum SYN backlog (increased for high traffic)
+posix_sysctl_tcp_max_syn_backlog: 4096
+
+# TCP SYN-ACK retries
+posix_sysctl_tcp_synack_retries: 2
+
+# TCP SYN retries
+posix_sysctl_tcp_syn_retries: 2
+
+# TCP FIN timeout (seconds) - reduce to close connections faster
+posix_sysctl_tcp_fin_timeout: 15
+
+# TCP keepalive time (seconds) - detect dead connections
+posix_sysctl_tcp_keepalive_time: 300
+
+# TCP keepalive probes
+posix_sysctl_tcp_keepalive_probes: 5
+
+# TCP keepalive interval
+posix_sysctl_tcp_keepalive_intvl: 30
+
+# ------------------------------------------------------------------------------
+# NETWORK CORE PARAMETERS
+# ------------------------------------------------------------------------------
+# Maximum socket listen() backlog
+posix_sysctl_core_somaxconn: 1024
+
+# Maximum packets in input queue
+posix_sysctl_core_netdev_max_backlog: 5000
+
+# ------------------------------------------------------------------------------
+# ADVANCED TCP TUNING
+# ------------------------------------------------------------------------------
+# Disable saving of TCP connection metrics
+posix_sysctl_tcp_no_metrics_save: 1
+
+# Enable TCP window scaling auto-tuning
+posix_sysctl_tcp_moderate_rcvbuf: 1
+
+# TCP congestion control algorithm
+posix_sysctl_tcp_congestion_control: "htcp"
+
+# ------------------------------------------------------------------------------
+# MEMORY/SWAP MANAGEMENT
+# ------------------------------------------------------------------------------
+# Swappiness (0-100) - lower values prefer RAM over swap
+# 10 = swap only when necessary (recommended for servers)
+posix_sysctl_vm_swappiness: 10
+
+# ------------------------------------------------------------------------------
+# KERNEL PANIC BEHAVIOR
+# ------------------------------------------------------------------------------
+# Kernel panic timeout (seconds) - system will reboot after panic
+posix_sysctl_kernel_panic: 60
+
+# Panic on oops
+posix_sysctl_kernel_panic_on_oops: 1
+
+# ------------------------------------------------------------------------------
+# IDEMPOTENCY CONFIGURATION
+# ------------------------------------------------------------------------------
+# Section markers for idempotent updates
+posix_sysctl_config_begin_marker: "# Additional POSIX Hardening"
+posix_sysctl_config_end_marker: "# End Additional POSIX Hardening"

@@ -1,0 +1,60 @@
+---
+# ==============================================================================
+# POSIX Kernel Hardening Role - Handlers
+# ==============================================================================
+# Handlers for sysctl reload and rollback
+# ==============================================================================
+
+# ------------------------------------------------------------------------------
+# RELOAD SYSCTL
+# ------------------------------------------------------------------------------
+- name: reload sysctl
+  ansible.builtin.command: sysctl -p {{ posix_kernel_config_file }}
+  listen: reload sysctl
+  changed_when: false
+  failed_when: false
+  when: posix_kernel_reload_sysctl | bool
+
+# Alternative: reload all sysctl files
+- name: reload all sysctl
+  ansible.builtin.command: sysctl --system
+  listen: reload all sysctl
+  changed_when: false
+  failed_when: false
+
+# ------------------------------------------------------------------------------
+# ROLLBACK HANDLER (emergency)
+# ------------------------------------------------------------------------------
+- name: find latest kernel backup
+  ansible.builtin.find:
+    paths: "{{ posix_kernel_backup_dir }}"
+    patterns: "sysctl.conf.*.bak"
+    file_type: file
+  register: kernel_backups
+  listen: rollback kernel settings
+
+- name: restore from latest backup
+  ansible.builtin.copy:
+    src: "{{ (kernel_backups.files | sort(attribute='mtime') | last).path }}"
+    dest: "{{ posix_kernel_sysctl_conf }}"
+    remote_src: yes
+    mode: '0644'
+    owner: root
+    group: root
+  when: kernel_backups.matched > 0
+  listen: rollback kernel settings
+
+- name: reload sysctl after rollback
+  ansible.builtin.command: sysctl -p
+  when: kernel_backups.matched > 0
+  listen: rollback kernel settings
+  changed_when: false
+  failed_when: false
+
+- name: log rollback event
+  ansible.builtin.lineinfile:
+    path: /var/log/hardening/kernel_hardening.log
+    line: "{{ ansible_date_time.iso8601 }} - EMERGENCY ROLLBACK: Kernel configuration restored from backup"
+    create: yes
+    mode: '0600'
+  listen: rollback kernel settings

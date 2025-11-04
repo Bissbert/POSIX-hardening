@@ -1,0 +1,71 @@
+---
+# ==============================================================================
+# Validate Additional Sysctl Settings
+# ==============================================================================
+# Verify that critical additional sysctl parameters were applied correctly
+# ==============================================================================
+
+- name: Validate TCP tuning parameters
+  ansible.builtin.shell: |
+    set -e
+    test "$(sysctl -n net.ipv4.tcp_max_syn_backlog)" = "{{ posix_sysctl_tcp_max_syn_backlog }}"
+    test "$(sysctl -n net.ipv4.tcp_synack_retries)" = "{{ posix_sysctl_tcp_synack_retries }}"
+    test "$(sysctl -n net.ipv4.tcp_syn_retries)" = "{{ posix_sysctl_tcp_syn_retries }}"
+    test "$(sysctl -n net.ipv4.tcp_fin_timeout)" = "{{ posix_sysctl_tcp_fin_timeout }}"
+    test "$(sysctl -n net.ipv4.tcp_keepalive_time)" = "{{ posix_sysctl_tcp_keepalive_time }}"
+    test "$(sysctl -n net.ipv4.tcp_keepalive_probes)" = "{{ posix_sysctl_tcp_keepalive_probes }}"
+    test "$(sysctl -n net.ipv4.tcp_keepalive_intvl)" = "{{ posix_sysctl_tcp_keepalive_intvl }}"
+  register: tcp_tuning_validation
+  changed_when: false
+  failed_when: tcp_tuning_validation.rc != 0
+
+- name: Validate network core parameters
+  ansible.builtin.shell: |
+    set -e
+    test "$(sysctl -n net.core.somaxconn)" = "{{ posix_sysctl_core_somaxconn }}"
+    test "$(sysctl -n net.core.netdev_max_backlog)" = "{{ posix_sysctl_core_netdev_max_backlog }}"
+  register: netcore_validation
+  changed_when: false
+  failed_when: netcore_validation.rc != 0
+
+- name: Validate advanced TCP settings
+  ansible.builtin.shell: |
+    set -e
+    test "$(sysctl -n net.ipv4.tcp_no_metrics_save)" = "{{ posix_sysctl_tcp_no_metrics_save }}"
+    test "$(sysctl -n net.ipv4.tcp_moderate_rcvbuf)" = "{{ posix_sysctl_tcp_moderate_rcvbuf }}"
+  register: advanced_tcp_validation
+  changed_when: false
+  failed_when: advanced_tcp_validation.rc != 0
+
+- name: Validate memory/swap settings
+  ansible.builtin.shell: |
+    set -e
+    test "$(sysctl -n vm.swappiness)" = "{{ posix_sysctl_vm_swappiness }}"
+  register: memory_validation
+  changed_when: false
+  failed_when: memory_validation.rc != 0
+
+- name: Validate kernel panic settings
+  ansible.builtin.shell: |
+    set -e
+    test "$(sysctl -n kernel.panic)" = "{{ posix_sysctl_kernel_panic }}"
+    test "$(sysctl -n kernel.panic_on_oops)" = "{{ posix_sysctl_kernel_panic_on_oops }}"
+  register: panic_validation
+  changed_when: false
+  failed_when: panic_validation.rc != 0
+
+- name: Display validation results
+  ansible.builtin.debug:
+    msg: |
+      ========================================
+      ADDITIONAL SYSCTL VALIDATION PASSED
+      ========================================
+      All additional sysctl parameters verified:
+        - TCP tuning: OK
+        - Network core: OK
+        - Advanced TCP: OK
+        - Memory/swap: OK
+        - Kernel panic: OK
+
+      Configuration file: {{ posix_sysctl_config_file }}
+      ========================================

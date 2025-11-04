@@ -1,0 +1,77 @@
+---
+# ==============================================================================
+# Validate Kernel Security Settings
+# ==============================================================================
+# Verify that critical sysctl parameters were applied correctly
+# ==============================================================================
+
+- name: Validate critical network security settings
+  ansible.builtin.shell: |
+    set -e
+    test "$(sysctl -n net.ipv4.tcp_syncookies)" = "{{ posix_kernel_tcp_syncookies }}"
+    test "$(sysctl -n net.ipv4.ip_forward)" = "{{ posix_kernel_ip_forward }}"
+    test "$(sysctl -n net.ipv4.conf.all.send_redirects)" = "{{ posix_kernel_send_redirects_all }}"
+    test "$(sysctl -n net.ipv4.conf.all.accept_source_route)" = "{{ posix_kernel_accept_source_route_ipv4_all }}"
+    test "$(sysctl -n net.ipv4.conf.all.accept_redirects)" = "{{ posix_kernel_accept_redirects_ipv4_all }}"
+    test "$(sysctl -n net.ipv4.conf.all.log_martians)" = "{{ posix_kernel_log_martians_all }}"
+    test "$(sysctl -n net.ipv4.conf.all.rp_filter)" = "{{ posix_kernel_rp_filter_all }}"
+    test "$(sysctl -n net.ipv4.icmp_echo_ignore_broadcasts)" = "{{ posix_kernel_icmp_echo_ignore_broadcasts }}"
+    test "$(sysctl -n net.ipv4.icmp_ignore_bogus_error_responses)" = "{{ posix_kernel_icmp_ignore_bogus_error_responses }}"
+  register: network_validation
+  changed_when: false
+  failed_when: network_validation.rc != 0
+
+- name: Validate memory protection settings
+  ansible.builtin.shell: |
+    set -e
+    test "$(sysctl -n kernel.randomize_va_space)" = "{{ posix_kernel_randomize_va_space }}"
+    test "$(sysctl -n kernel.kptr_restrict)" = "{{ posix_kernel_kptr_restrict }}"
+  register: memory_validation
+  changed_when: false
+  failed_when: memory_validation.rc != 0
+
+- name: Validate core dump restrictions
+  ansible.builtin.shell: |
+    set -e
+    test "$(sysctl -n fs.suid_dumpable)" = "{{ posix_kernel_suid_dumpable }}"
+    test "$(sysctl -n kernel.core_uses_pid)" = "{{ posix_kernel_core_uses_pid }}"
+  register: coredump_validation
+  changed_when: false
+  failed_when: coredump_validation.rc != 0
+
+- name: Validate process security settings
+  ansible.builtin.shell: |
+    set -e
+    test "$(sysctl -n kernel.pid_max)" = "{{ posix_kernel_pid_max }}"
+    test "$(sysctl -n kernel.panic)" = "{{ posix_kernel_panic }}"
+    test "$(sysctl -n kernel.panic_on_oops)" = "{{ posix_kernel_panic_on_oops }}"
+  register: process_validation
+  changed_when: false
+  failed_when: process_validation.rc != 0
+
+- name: Validate TCP/IP stack hardening
+  ansible.builtin.shell: |
+    set -e
+    test "$(sysctl -n net.ipv4.tcp_synack_retries)" = "{{ posix_kernel_tcp_synack_retries }}"
+    test "$(sysctl -n net.ipv4.tcp_syn_retries)" = "{{ posix_kernel_tcp_syn_retries }}"
+    test "$(sysctl -n net.ipv4.tcp_max_syn_backlog)" = "{{ posix_kernel_tcp_max_syn_backlog }}"
+    test "$(sysctl -n net.ipv4.tcp_fin_timeout)" = "{{ posix_kernel_tcp_fin_timeout }}"
+  register: tcp_validation
+  changed_when: false
+  failed_when: tcp_validation.rc != 0
+
+- name: Display validation results
+  ansible.builtin.debug:
+    msg: |
+      ========================================
+      KERNEL HARDENING VALIDATION PASSED
+      ========================================
+      All critical kernel parameters verified:
+        - Network security: OK
+        - Memory protection: OK
+        - Core dump restrictions: OK
+        - Process security: OK
+        - TCP/IP hardening: OK
+
+      Configuration file: {{ posix_kernel_config_file }}
+      ========================================

@@ -1,0 +1,165 @@
+---
+# ==============================================================================
+# POSIX Additional Sysctl Hardening Role - Main Tasks
+# ==============================================================================
+# This role provides additional/advanced sysctl hardening and performance tuning
+# Converted from: scripts/14-sysctl-hardening.sh
+# ==============================================================================
+# FEATURES:
+#   1. Idempotent execution (marker file)
+#   2. Timestamped backups
+#   3. Validation after apply
+#   4. Advanced TCP tuning
+#   5. Network core parameter optimization
+#   6. Memory/swap management
+#   7. Kernel panic behavior
+# ==============================================================================
+
+# ------------------------------------------------------------------------------
+# DISPLAY WARNING
+# ------------------------------------------------------------------------------
+
+- name: Display additional sysctl hardening warning
+  ansible.builtin.debug:
+    msg: |
+      ========================================
+      ADDITIONAL SYSCTL HARDENING IN PROGRESS
+      ========================================
+      This role applies additional sysctl hardening for performance
+      Changes will take effect immediately
+
+      Applied hardening:
+        - Advanced TCP tuning (backlog, timeouts, keepalive)
+        - Network core optimization (somaxconn, netdev_max_backlog)
+        - TCP congestion control
+        - Memory/swap management (swappiness)
+        - Kernel panic behavior
+
+      Backup location: {{ posix_sysctl_backup_dir }}
+      Marker file: {{ posix_sysctl_hardening_marker }}
+      ========================================
+  tags: [sysctl, warning]
+
+# ------------------------------------------------------------------------------
+# CHECK IF ALREADY HARDENED
+# ------------------------------------------------------------------------------
+
+- name: Check if additional sysctl hardening already applied
+  ansible.builtin.stat:
+    path: "{{ posix_sysctl_hardening_marker }}"
+  register: sysctl_hardening_marker_stat
+  tags: [sysctl, check]
+
+- name: Display skip message if already hardened
+  ansible.builtin.debug:
+    msg: |
+      Additional sysctl hardening already applied (marker exists).
+      Set posix_sysctl_force_reharden=true to re-apply.
+  when:
+    - sysctl_hardening_marker_stat.stat.exists
+    - not posix_sysctl_force_reharden | bool
+  tags: [sysctl, check]
+
+# ------------------------------------------------------------------------------
+# PHASE 1: PREPARATION
+# ------------------------------------------------------------------------------
+
+- name: Phase 1 - Preparation
+  block:
+    - name: Ensure backup directory exists
+      ansible.builtin.file:
+        path: "{{ posix_sysctl_backup_dir }}"
+        state: directory
+        mode: '0700'
+        owner: root
+        group: root
+
+    - name: Ensure marker directory exists
+      ansible.builtin.file:
+        path: "{{ posix_sysctl_hardening_marker | dirname }}"
+        state: directory
+        mode: '0755'
+        owner: root
+        group: root
+
+    - name: Backup /etc/sysctl.conf if it exists
+      ansible.builtin.copy:
+        src: "{{ posix_sysctl_sysctl_conf }}"
+        dest: "{{ posix_sysctl_backup_dir }}/sysctl.conf.additional.{{ ansible_date_time.iso8601_basic_short }}.bak"
+        remote_src: yes
+        mode: '0600'
+        owner: root
+        group: root
+      when: posix_sysctl_backup_config | bool
+      failed_when: false
+
+  when:
+    - not sysctl_hardening_marker_stat.stat.exists or posix_sysctl_force_reharden | bool
+  tags: [sysctl, preparation, phase1]
+
+# ------------------------------------------------------------------------------
+# PHASE 2: APPLY ADDITIONAL SYSCTL HARDENING
+# ------------------------------------------------------------------------------
+
+- name: Phase 2 - Apply additional sysctl hardening
+  ansible.builtin.include_tasks: apply_settings.yml
+  when:
+    - not sysctl_hardening_marker_stat.stat.exists or posix_sysctl_force_reharden | bool
+  tags: [sysctl, apply, phase2]
+
+# ------------------------------------------------------------------------------
+# PHASE 3: VALIDATION
+# ------------------------------------------------------------------------------
+
+- name: Phase 3 - Validate settings
+  ansible.builtin.include_tasks: validate_settings.yml
+  when:
+    - not sysctl_hardening_marker_stat.stat.exists or posix_sysctl_force_reharden | bool
+    - posix_sysctl_validate_after_apply | bool
+  tags: [sysctl, validate, phase3]
+
+# ------------------------------------------------------------------------------
+# PHASE 4: FINALIZATION
+# ------------------------------------------------------------------------------
+
+- name: Phase 4 - Finalization
+  block:
+    - name: Create hardening marker file
+      ansible.builtin.copy:
+        content: |
+          Additional sysctl hardening applied on: {{ ansible_date_time.iso8601 }}
+          Applied by: Ansible role posix_hardening_sysctl
+          Hostname: {{ ansible_hostname }}
+          Backup location: {{ posix_sysctl_backup_dir }}
+        dest: "{{ posix_sysctl_hardening_marker }}"
+        mode: '0644'
+        owner: root
+        group: root
+
+    - name: Display additional sysctl hardening success
+      ansible.builtin.debug:
+        msg: |
+          ========================================
+          ADDITIONAL SYSCTL HARDENING COMPLETED
+          ========================================
+          All additional sysctl parameters applied
+          Configuration validated
+
+          Applied hardening:
+            - TCP tuning: ENABLED
+            - Network core: OPTIMIZED
+            - Congestion control: {{ posix_sysctl_tcp_congestion_control }}
+            - Swappiness: {{ posix_sysctl_vm_swappiness }}
+            - Kernel panic behavior: CONFIGURED
+
+          Configuration: {{ posix_sysctl_config_file }}
+          Backups: {{ posix_sysctl_backup_dir }}
+          Marker: {{ posix_sysctl_hardening_marker }}
+
+          To re-apply hardening:
+            Set posix_sysctl_force_reharden: true
+          ========================================
+
+  when:
+    - not sysctl_hardening_marker_stat.stat.exists or posix_sysctl_force_reharden | bool
+  tags: [sysctl, finalization, phase4]

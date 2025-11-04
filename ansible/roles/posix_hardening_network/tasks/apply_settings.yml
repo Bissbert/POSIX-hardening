@@ -1,0 +1,212 @@
+---
+# ==============================================================================
+# Apply Network Security Settings
+# ==============================================================================
+# Applies security settings to each discovered interface and global TCP/ICMP
+# ==============================================================================
+
+# ------------------------------------------------------------------------------
+# PER-INTERFACE HARDENING
+# ------------------------------------------------------------------------------
+
+- name: Apply per-interface security settings
+  ansible.builtin.shell: |
+    set -e
+    # Disable source routing
+    echo {{ posix_network_accept_source_route }} > /proc/sys/net/ipv4/conf/{{ item }}/accept_source_route
+    # Disable redirects (accept)
+    echo {{ posix_network_accept_redirects }} > /proc/sys/net/ipv4/conf/{{ item }}/accept_redirects
+    # Disable redirects (send)
+    echo {{ posix_network_send_redirects }} > /proc/sys/net/ipv4/conf/{{ item }}/send_redirects
+    # Enable source address verification
+    echo {{ posix_network_rp_filter }} > /proc/sys/net/ipv4/conf/{{ item }}/rp_filter
+  loop: "{{ target_interfaces }}"
+  when:
+    - posix_network_apply_runtime | bool
+    - target_interfaces is defined
+    - target_interfaces | length > 0
+  changed_when: true
+  register: interface_hardening
+
+# ------------------------------------------------------------------------------
+# PERSIST PER-INTERFACE SETTINGS TO SYSCTL CONFIG
+# ------------------------------------------------------------------------------
+
+- name: Persist per-interface settings to sysctl.d (accept_source_route)
+  ansible.posix.sysctl:
+    name: "net.ipv4.conf.{{ item }}.accept_source_route"
+    value: "{{ posix_network_accept_source_route }}"
+    state: present
+    sysctl_file: "{{ posix_network_config_file }}"
+    reload: no
+  loop: "{{ target_interfaces }}"
+  when:
+    - posix_network_persist_config | bool
+    - target_interfaces is defined
+    - target_interfaces | length > 0
+
+- name: Persist per-interface settings to sysctl.d (accept_redirects)
+  ansible.posix.sysctl:
+    name: "net.ipv4.conf.{{ item }}.accept_redirects"
+    value: "{{ posix_network_accept_redirects }}"
+    state: present
+    sysctl_file: "{{ posix_network_config_file }}"
+    reload: no
+  loop: "{{ target_interfaces }}"
+  when:
+    - posix_network_persist_config | bool
+    - target_interfaces is defined
+    - target_interfaces | length > 0
+
+- name: Persist per-interface settings to sysctl.d (send_redirects)
+  ansible.posix.sysctl:
+    name: "net.ipv4.conf.{{ item }}.send_redirects"
+    value: "{{ posix_network_send_redirects }}"
+    state: present
+    sysctl_file: "{{ posix_network_config_file }}"
+    reload: no
+  loop: "{{ target_interfaces }}"
+  when:
+    - posix_network_persist_config | bool
+    - target_interfaces is defined
+    - target_interfaces | length > 0
+
+- name: Persist per-interface settings to sysctl.d (rp_filter)
+  ansible.posix.sysctl:
+    name: "net.ipv4.conf.{{ item }}.rp_filter"
+    value: "{{ posix_network_rp_filter }}"
+    state: present
+    sysctl_file: "{{ posix_network_config_file }}"
+    reload: no
+  loop: "{{ target_interfaces }}"
+  when:
+    - posix_network_persist_config | bool
+    - target_interfaces is defined
+    - target_interfaces | length > 0
+
+# ------------------------------------------------------------------------------
+# GLOBAL TCP HARDENING
+# ------------------------------------------------------------------------------
+
+- name: Enable TCP SYN cookies (runtime)
+  ansible.builtin.shell: |
+    echo {{ posix_network_tcp_syncookies }} > /proc/sys/net/ipv4/tcp_syncookies
+  when: posix_network_apply_runtime | bool
+  changed_when: true
+
+- name: Enable TCP SYN cookies (persist)
+  ansible.posix.sysctl:
+    name: net.ipv4.tcp_syncookies
+    value: "{{ posix_network_tcp_syncookies }}"
+    state: present
+    sysctl_file: "{{ posix_network_config_file }}"
+    reload: no
+  when: posix_network_persist_config | bool
+
+- name: Disable TCP timestamps (runtime)
+  ansible.builtin.shell: |
+    echo {{ posix_network_tcp_timestamps }} > /proc/sys/net/ipv4/tcp_timestamps
+  when: posix_network_apply_runtime | bool
+  changed_when: true
+
+- name: Disable TCP timestamps (persist)
+  ansible.posix.sysctl:
+    name: net.ipv4.tcp_timestamps
+    value: "{{ posix_network_tcp_timestamps }}"
+    state: present
+    sysctl_file: "{{ posix_network_config_file }}"
+    reload: no
+  when: posix_network_persist_config | bool
+
+- name: Set TCP SYN-ACK retries (runtime)
+  ansible.builtin.shell: |
+    echo {{ posix_network_tcp_synack_retries }} > /proc/sys/net/ipv4/tcp_synack_retries
+  when: posix_network_apply_runtime | bool
+  changed_when: true
+
+- name: Set TCP SYN-ACK retries (persist)
+  ansible.posix.sysctl:
+    name: net.ipv4.tcp_synack_retries
+    value: "{{ posix_network_tcp_synack_retries }}"
+    state: present
+    sysctl_file: "{{ posix_network_config_file }}"
+    reload: no
+  when: posix_network_persist_config | bool
+
+# ------------------------------------------------------------------------------
+# ICMP HARDENING
+# ------------------------------------------------------------------------------
+
+- name: Ignore ICMP echo to broadcasts (runtime)
+  ansible.builtin.shell: |
+    echo {{ posix_network_icmp_echo_ignore_broadcasts }} > /proc/sys/net/ipv4/icmp_echo_ignore_broadcasts
+  when: posix_network_apply_runtime | bool
+  changed_when: true
+
+- name: Ignore ICMP echo to broadcasts (persist)
+  ansible.posix.sysctl:
+    name: net.ipv4.icmp_echo_ignore_broadcasts
+    value: "{{ posix_network_icmp_echo_ignore_broadcasts }}"
+    state: present
+    sysctl_file: "{{ posix_network_config_file }}"
+    reload: no
+  when: posix_network_persist_config | bool
+
+- name: Ignore bogus ICMP error responses (runtime)
+  ansible.builtin.shell: |
+    echo {{ posix_network_icmp_ignore_bogus_error_responses }} > /proc/sys/net/ipv4/icmp_ignore_bogus_error_responses
+  when: posix_network_apply_runtime | bool
+  changed_when: true
+
+- name: Ignore bogus ICMP error responses (persist)
+  ansible.posix.sysctl:
+    name: net.ipv4.icmp_ignore_bogus_error_responses
+    value: "{{ posix_network_icmp_ignore_bogus_error_responses }}"
+    state: present
+    sysctl_file: "{{ posix_network_config_file }}"
+    reload: no
+  when: posix_network_persist_config | bool
+
+# ------------------------------------------------------------------------------
+# IPv6 HARDENING (if available)
+# ------------------------------------------------------------------------------
+
+- name: Check if IPv6 is available
+  ansible.builtin.stat:
+    path: /proc/sys/net/ipv6
+  register: ipv6_available
+
+- name: Disable IPv6 router advertisements (runtime)
+  ansible.builtin.shell: |
+    echo {{ posix_network_ipv6_accept_ra_all }} > /proc/sys/net/ipv6/conf/all/accept_ra
+    echo {{ posix_network_ipv6_accept_ra_default }} > /proc/sys/net/ipv6/conf/default/accept_ra
+    echo {{ posix_network_ipv6_accept_redirects_all }} > /proc/sys/net/ipv6/conf/all/accept_redirects
+  when:
+    - ipv6_available.stat.exists
+    - posix_network_apply_runtime | bool
+  changed_when: true
+
+- name: Disable IPv6 router advertisements (persist)
+  ansible.posix.sysctl:
+    name: "{{ item.name }}"
+    value: "{{ item.value }}"
+    state: present
+    sysctl_file: "{{ posix_network_config_file }}"
+    reload: no
+  loop:
+    - { name: "net.ipv6.conf.all.accept_ra", value: "{{ posix_network_ipv6_accept_ra_all }}" }
+    - { name: "net.ipv6.conf.default.accept_ra", value: "{{ posix_network_ipv6_accept_ra_default }}" }
+    - { name: "net.ipv6.conf.all.accept_redirects", value: "{{ posix_network_ipv6_accept_redirects_all }}" }
+  when:
+    - ipv6_available.stat.exists
+    - posix_network_persist_config | bool
+
+# ------------------------------------------------------------------------------
+# RELOAD SYSCTL IF PERSISTED
+# ------------------------------------------------------------------------------
+
+- name: Reload sysctl configuration
+  ansible.builtin.command: sysctl -p {{ posix_network_config_file }}
+  when: posix_network_persist_config | bool
+  changed_when: false
+  failed_when: false

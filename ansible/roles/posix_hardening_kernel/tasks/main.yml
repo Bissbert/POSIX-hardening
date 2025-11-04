@@ -1,0 +1,174 @@
+---
+# ==============================================================================
+# POSIX Kernel Hardening Role - Main Tasks
+# ==============================================================================
+# CRITICAL: This role modifies kernel security parameters via sysctl
+# Converted from: scripts/03-kernel-params.sh
+# ==============================================================================
+# FEATURES:
+#   1. Idempotent execution (marker file)
+#   2. Timestamped backups
+#   3. Validation after apply
+#   4. Rollback capability
+#   5. Network security hardening
+#   6. Memory protection hardening
+#   7. Process security hardening
+# ==============================================================================
+
+# ------------------------------------------------------------------------------
+# DISPLAY WARNING
+# ------------------------------------------------------------------------------
+
+- name: Display kernel hardening warning
+  ansible.builtin.debug:
+    msg: |
+      ========================================
+      KERNEL HARDENING IN PROGRESS
+      ========================================
+      This role will modify kernel security parameters via sysctl
+      Changes will take effect immediately
+
+      Applied hardening:
+        - Network security (SYN cookies, IP forwarding, redirects)
+        - TCP/IP stack hardening
+        - Memory protection (ASLR, kptr_restrict)
+        - Core dump restrictions
+        - Process security
+        - Shared memory limits
+        - File descriptor limits
+
+      Backup location: {{ posix_kernel_backup_dir }}
+      Marker file: {{ posix_kernel_hardening_marker }}
+      ========================================
+  tags: [kernel, warning]
+
+# ------------------------------------------------------------------------------
+# CHECK IF ALREADY HARDENED
+# ------------------------------------------------------------------------------
+
+- name: Check if kernel hardening already applied
+  ansible.builtin.stat:
+    path: "{{ posix_kernel_hardening_marker }}"
+  register: kernel_hardening_marker_stat
+  tags: [kernel, check]
+
+- name: Display skip message if already hardened
+  ansible.builtin.debug:
+    msg: |
+      Kernel hardening already applied (marker exists).
+      Set posix_kernel_force_reharden=true to re-apply.
+  when:
+    - kernel_hardening_marker_stat.stat.exists
+    - not posix_kernel_force_reharden | bool
+  tags: [kernel, check]
+
+# ------------------------------------------------------------------------------
+# PHASE 1: PREPARATION
+# ------------------------------------------------------------------------------
+
+- name: Phase 1 - Preparation
+  block:
+    - name: Ensure backup directory exists
+      ansible.builtin.file:
+        path: "{{ posix_kernel_backup_dir }}"
+        state: directory
+        mode: '0700'
+        owner: root
+        group: root
+
+    - name: Ensure marker directory exists
+      ansible.builtin.file:
+        path: "{{ posix_kernel_hardening_marker | dirname }}"
+        state: directory
+        mode: '0755'
+        owner: root
+        group: root
+
+    - name: Create timestamped backup of current sysctl settings
+      ansible.builtin.shell: |
+        sysctl -a > {{ posix_kernel_backup_dir }}/sysctl.backup.{{ ansible_date_time.iso8601_basic_short }}
+      changed_when: false
+      when: posix_kernel_backup_sysctl | bool
+
+    - name: Backup /etc/sysctl.conf if it exists
+      ansible.builtin.copy:
+        src: "{{ posix_kernel_sysctl_conf }}"
+        dest: "{{ posix_kernel_backup_dir }}/sysctl.conf.{{ ansible_date_time.iso8601_basic_short }}.bak"
+        remote_src: yes
+        mode: '0600'
+        owner: root
+        group: root
+      when:
+        - posix_kernel_backup_sysctl | bool
+      failed_when: false
+
+  when:
+    - not kernel_hardening_marker_stat.stat.exists or posix_kernel_force_reharden | bool
+  tags: [kernel, preparation, phase1]
+
+# ------------------------------------------------------------------------------
+# PHASE 2: APPLY KERNEL HARDENING
+# ------------------------------------------------------------------------------
+
+- name: Phase 2 - Apply kernel hardening
+  ansible.builtin.include_tasks: apply_settings.yml
+  when:
+    - not kernel_hardening_marker_stat.stat.exists or posix_kernel_force_reharden | bool
+  tags: [kernel, apply, phase2]
+
+# ------------------------------------------------------------------------------
+# PHASE 3: VALIDATION
+# ------------------------------------------------------------------------------
+
+- name: Phase 3 - Validate settings
+  ansible.builtin.include_tasks: validate_settings.yml
+  when:
+    - not kernel_hardening_marker_stat.stat.exists or posix_kernel_force_reharden | bool
+    - posix_kernel_validate_after_apply | bool
+  tags: [kernel, validate, phase3]
+
+# ------------------------------------------------------------------------------
+# PHASE 4: FINALIZATION
+# ------------------------------------------------------------------------------
+
+- name: Phase 4 - Finalization
+  block:
+    - name: Create hardening marker file
+      ansible.builtin.copy:
+        content: |
+          Kernel hardening applied on: {{ ansible_date_time.iso8601 }}
+          Applied by: Ansible role posix_hardening_kernel
+          Hostname: {{ ansible_hostname }}
+          Backup location: {{ posix_kernel_backup_dir }}
+        dest: "{{ posix_kernel_hardening_marker }}"
+        mode: '0644'
+        owner: root
+        group: root
+
+    - name: Display kernel hardening success
+      ansible.builtin.debug:
+        msg: |
+          ========================================
+          KERNEL HARDENING COMPLETED SUCCESSFULLY
+          ========================================
+          All kernel security parameters applied
+          Configuration validated
+
+          Applied hardening:
+            - Network security: ENABLED
+            - Memory protection: ENABLED
+            - Process security: ENABLED
+            - Core dump restrictions: ENABLED
+            - TCP/IP hardening: ENABLED
+
+          Configuration: {{ posix_kernel_config_file }}
+          Backups: {{ posix_kernel_backup_dir }}
+          Marker: {{ posix_kernel_hardening_marker }}
+
+          To re-apply hardening:
+            Set posix_kernel_force_reharden: true
+          ========================================
+
+  when:
+    - not kernel_hardening_marker_stat.stat.exists or posix_kernel_force_reharden | bool
+  tags: [kernel, finalization, phase4]

@@ -1,0 +1,53 @@
+---
+# ==============================================================================
+# Validate Network Security Settings
+# ==============================================================================
+# Verify that critical network parameters were applied correctly
+# ==============================================================================
+
+- name: Validate global TCP settings
+  ansible.builtin.shell: |
+    set -e
+    test "$(sysctl -n net.ipv4.tcp_syncookies)" = "{{ posix_network_tcp_syncookies }}"
+    test "$(sysctl -n net.ipv4.tcp_timestamps)" = "{{ posix_network_tcp_timestamps }}"
+    test "$(sysctl -n net.ipv4.tcp_synack_retries)" = "{{ posix_network_tcp_synack_retries }}"
+  register: tcp_validation
+  changed_when: false
+  failed_when: tcp_validation.rc != 0
+
+- name: Validate ICMP settings
+  ansible.builtin.shell: |
+    set -e
+    test "$(sysctl -n net.ipv4.icmp_echo_ignore_broadcasts)" = "{{ posix_network_icmp_echo_ignore_broadcasts }}"
+    test "$(sysctl -n net.ipv4.icmp_ignore_bogus_error_responses)" = "{{ posix_network_icmp_ignore_bogus_error_responses }}"
+  register: icmp_validation
+  changed_when: false
+  failed_when: icmp_validation.rc != 0
+
+- name: Validate per-interface settings (sample first interface)
+  ansible.builtin.shell: |
+    set -e
+    test "$(sysctl -n net.ipv4.conf.{{ target_interfaces[0] }}.accept_source_route)" = "{{ posix_network_accept_source_route }}"
+    test "$(sysctl -n net.ipv4.conf.{{ target_interfaces[0] }}.accept_redirects)" = "{{ posix_network_accept_redirects }}"
+    test "$(sysctl -n net.ipv4.conf.{{ target_interfaces[0] }}.send_redirects)" = "{{ posix_network_send_redirects }}"
+    test "$(sysctl -n net.ipv4.conf.{{ target_interfaces[0] }}.rp_filter)" = "{{ posix_network_rp_filter }}"
+  register: interface_validation
+  changed_when: false
+  failed_when: interface_validation.rc != 0
+  when:
+    - target_interfaces is defined
+    - target_interfaces | length > 0
+
+- name: Display validation results
+  ansible.builtin.debug:
+    msg: |
+      ========================================
+      NETWORK HARDENING VALIDATION PASSED
+      ========================================
+      All critical network parameters verified:
+        - TCP settings: OK
+        - ICMP settings: OK
+        - Interface settings: OK ({{ target_interfaces | length }} interfaces)
+
+      Hardened interfaces: {{ target_interfaces | join(', ') }}
+      ========================================

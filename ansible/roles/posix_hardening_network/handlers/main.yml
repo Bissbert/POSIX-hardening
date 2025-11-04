@@ -1,0 +1,21 @@
+---
+# ==============================================================================
+# POSIX Network Hardening Role - Handlers
+# ==============================================================================
+# Handlers for network configuration reload
+# ==============================================================================
+
+# ------------------------------------------------------------------------------
+# RELOAD NETWORK SETTINGS
+# ------------------------------------------------------------------------------
+- name: reload network settings
+  ansible.builtin.command: sysctl --system
+  listen: reload network settings
+  changed_when: false
+  failed_when: false
+
+- name: reload specific network config
+  ansible.builtin.command: sysctl -p {{ posix_network_config_file }}
+  listen: reload specific network config
+  changed_when: false
+  failed_when: false

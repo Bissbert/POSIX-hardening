@@ -1,0 +1,169 @@
+---
+# ==============================================================================
+# Apply Additional Sysctl Settings
+# ==============================================================================
+# Uses ansible.posix.sysctl module for idempotent configuration
+# ==============================================================================
+
+# ------------------------------------------------------------------------------
+# ADDITIONAL TCP/IP STACK PARAMETERS
+# ------------------------------------------------------------------------------
+
+- name: Set maximum TCP SYN backlog
+  ansible.posix.sysctl:
+    name: net.ipv4.tcp_max_syn_backlog
+    value: "{{ posix_sysctl_tcp_max_syn_backlog }}"
+    state: present
+    sysctl_file: "{{ posix_sysctl_config_file }}"
+    reload: yes
+  notify: reload sysctl
+
+- name: Set TCP SYN-ACK retries
+  ansible.posix.sysctl:
+    name: net.ipv4.tcp_synack_retries
+    value: "{{ posix_sysctl_tcp_synack_retries }}"
+    state: present
+    sysctl_file: "{{ posix_sysctl_config_file }}"
+    reload: yes
+  notify: reload sysctl
+
+- name: Set TCP SYN retries
+  ansible.posix.sysctl:
+    name: net.ipv4.tcp_syn_retries
+    value: "{{ posix_sysctl_tcp_syn_retries }}"
+    state: present
+    sysctl_file: "{{ posix_sysctl_config_file }}"
+    reload: yes
+  notify: reload sysctl
+
+- name: Set TCP FIN timeout
+  ansible.posix.sysctl:
+    name: net.ipv4.tcp_fin_timeout
+    value: "{{ posix_sysctl_tcp_fin_timeout }}"
+    state: present
+    sysctl_file: "{{ posix_sysctl_config_file }}"
+    reload: yes
+  notify: reload sysctl
+
+- name: Set TCP keepalive time
+  ansible.posix.sysctl:
+    name: net.ipv4.tcp_keepalive_time
+    value: "{{ posix_sysctl_tcp_keepalive_time }}"
+    state: present
+    sysctl_file: "{{ posix_sysctl_config_file }}"
+    reload: yes
+  notify: reload sysctl
+
+- name: Set TCP keepalive probes
+  ansible.posix.sysctl:
+    name: net.ipv4.tcp_keepalive_probes
+    value: "{{ posix_sysctl_tcp_keepalive_probes }}"
+    state: present
+    sysctl_file: "{{ posix_sysctl_config_file }}"
+    reload: yes
+  notify: reload sysctl
+
+- name: Set TCP keepalive interval
+  ansible.posix.sysctl:
+    name: net.ipv4.tcp_keepalive_intvl
+    value: "{{ posix_sysctl_tcp_keepalive_intvl }}"
+    state: present
+    sysctl_file: "{{ posix_sysctl_config_file }}"
+    reload: yes
+  notify: reload sysctl
+
+# ------------------------------------------------------------------------------
+# NETWORK CORE PARAMETERS
+# ------------------------------------------------------------------------------
+
+- name: Set maximum socket listen backlog (somaxconn)
+  ansible.posix.sysctl:
+    name: net.core.somaxconn
+    value: "{{ posix_sysctl_core_somaxconn }}"
+    state: present
+    sysctl_file: "{{ posix_sysctl_config_file }}"
+    reload: yes
+  notify: reload sysctl
+
+- name: Set maximum netdev backlog
+  ansible.posix.sysctl:
+    name: net.core.netdev_max_backlog
+    value: "{{ posix_sysctl_core_netdev_max_backlog }}"
+    state: present
+    sysctl_file: "{{ posix_sysctl_config_file }}"
+    reload: yes
+  notify: reload sysctl
+
+# ------------------------------------------------------------------------------
+# ADVANCED TCP TUNING
+# ------------------------------------------------------------------------------
+
+- name: Disable TCP metrics save
+  ansible.posix.sysctl:
+    name: net.ipv4.tcp_no_metrics_save
+    value: "{{ posix_sysctl_tcp_no_metrics_save }}"
+    state: present
+    sysctl_file: "{{ posix_sysctl_config_file }}"
+    reload: yes
+  notify: reload sysctl
+
+- name: Enable TCP moderate receive buffer auto-tuning
+  ansible.posix.sysctl:
+    name: net.ipv4.tcp_moderate_rcvbuf
+    value: "{{ posix_sysctl_tcp_moderate_rcvbuf }}"
+    state: present
+    sysctl_file: "{{ posix_sysctl_config_file }}"
+    reload: yes
+  notify: reload sysctl
+
+- name: Set TCP congestion control algorithm
+  ansible.posix.sysctl:
+    name: net.ipv4.tcp_congestion_control
+    value: "{{ posix_sysctl_tcp_congestion_control }}"
+    state: present
+    sysctl_file: "{{ posix_sysctl_config_file }}"
+    reload: yes
+  notify: reload sysctl
+  failed_when: false  # Algorithm may not be available on all systems
+
+# ------------------------------------------------------------------------------
+# MEMORY/SWAP MANAGEMENT
+# ------------------------------------------------------------------------------
+
+- name: Set VM swappiness
+  ansible.posix.sysctl:
+    name: vm.swappiness
+    value: "{{ posix_sysctl_vm_swappiness }}"
+    state: present
+    sysctl_file: "{{ posix_sysctl_config_file }}"
+    reload: yes
+  notify: reload sysctl
+
+# ------------------------------------------------------------------------------
+# KERNEL PANIC BEHAVIOR
+# ------------------------------------------------------------------------------
+
+- name: Set kernel panic timeout
+  ansible.posix.sysctl:
+    name: kernel.panic
+    value: "{{ posix_sysctl_kernel_panic }}"
+    state: present
+    sysctl_file: "{{ posix_sysctl_config_file }}"
+    reload: yes
+  notify: reload sysctl
+
+- name: Enable panic on oops
+  ansible.posix.sysctl:
+    name: kernel.panic_on_oops
+    value: "{{ posix_sysctl_kernel_panic_on_oops }}"
+    state: present
+    sysctl_file: "{{ posix_sysctl_config_file }}"
+    reload: yes
+  notify: reload sysctl
+
+# ------------------------------------------------------------------------------
+# FLUSH HANDLERS
+# ------------------------------------------------------------------------------
+
+- name: Flush handlers to apply all sysctl changes
+  ansible.builtin.meta: flush_handlers

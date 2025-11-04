@@ -1,0 +1,177 @@
+---
+# ==============================================================================
+# POSIX Network Stack Hardening Role - Main Tasks
+# ==============================================================================
+# This role applies network security hardening to runtime interfaces
+# Converted from: scripts/04-network-stack.sh
+# ==============================================================================
+# FEATURES:
+#   1. Idempotent execution (marker file)
+#   2. Runtime interface discovery
+#   3. Per-interface security settings
+#   4. Global TCP/ICMP hardening
+#   5. IPv6 hardening (if available)
+#   6. Validation after apply
+# ==============================================================================
+
+# ------------------------------------------------------------------------------
+# DISPLAY WARNING
+# ------------------------------------------------------------------------------
+
+- name: Display network hardening warning
+  ansible.builtin.debug:
+    msg: |
+      ========================================
+      NETWORK STACK HARDENING IN PROGRESS
+      ========================================
+      This role will apply network security settings to interfaces
+      Changes will take effect immediately at runtime
+
+      Applied hardening:
+        - Per-interface security (source routing, redirects, rp_filter)
+        - TCP hardening (SYN cookies, timestamps, retries)
+        - ICMP hardening (broadcast ignore, bogus errors)
+        - IPv6 hardening (if available)
+
+      Marker file: {{ posix_network_hardening_marker }}
+      ========================================
+  tags: [network, warning]
+
+# ------------------------------------------------------------------------------
+# CHECK IF ALREADY HARDENED
+# ------------------------------------------------------------------------------
+
+- name: Check if network hardening already applied
+  ansible.builtin.stat:
+    path: "{{ posix_network_hardening_marker }}"
+  register: network_hardening_marker_stat
+  tags: [network, check]
+
+- name: Display skip message if already hardened
+  ansible.builtin.debug:
+    msg: |
+      Network hardening already applied (marker exists).
+      Set posix_network_force_reharden=true to re-apply.
+  when:
+    - network_hardening_marker_stat.stat.exists
+    - not posix_network_force_reharden | bool
+  tags: [network, check]
+
+# ------------------------------------------------------------------------------
+# PHASE 1: PREPARATION
+# ------------------------------------------------------------------------------
+
+- name: Phase 1 - Preparation
+  block:
+    - name: Ensure backup directory exists
+      ansible.builtin.file:
+        path: "{{ posix_network_backup_dir }}"
+        state: directory
+        mode: '0700'
+        owner: root
+        group: root
+
+    - name: Ensure marker directory exists
+      ansible.builtin.file:
+        path: "{{ posix_network_hardening_marker | dirname }}"
+        state: directory
+        mode: '0755'
+        owner: root
+        group: root
+
+    - name: Discover network interfaces
+      ansible.builtin.find:
+        paths: /proc/sys/net/ipv4/conf/
+        file_type: directory
+      register: discovered_interfaces_raw
+      when: posix_network_auto_discover | bool
+
+    - name: Extract interface names from discovery
+      ansible.builtin.set_fact:
+        discovered_interfaces: "{{ discovered_interfaces_raw.files | map(attribute='path') | map('basename') | list }}"
+      when: posix_network_auto_discover | bool
+
+    - name: Filter out excluded interfaces
+      ansible.builtin.set_fact:
+        target_interfaces: "{{ discovered_interfaces | default([]) | difference(posix_network_exclude_interfaces) }}"
+      when: posix_network_auto_discover | bool
+
+    - name: Use specific interfaces if provided
+      ansible.builtin.set_fact:
+        target_interfaces: "{{ posix_network_specific_interfaces }}"
+      when: not posix_network_auto_discover | bool
+
+    - name: Display target interfaces
+      ansible.builtin.debug:
+        msg: "Will harden {{ target_interfaces | length }} interfaces: {{ target_interfaces | join(', ') }}"
+
+  when:
+    - not network_hardening_marker_stat.stat.exists or posix_network_force_reharden | bool
+  tags: [network, preparation, phase1]
+
+# ------------------------------------------------------------------------------
+# PHASE 2: APPLY NETWORK HARDENING
+# ------------------------------------------------------------------------------
+
+- name: Phase 2 - Apply network hardening
+  ansible.builtin.include_tasks: apply_settings.yml
+  when:
+    - not network_hardening_marker_stat.stat.exists or posix_network_force_reharden | bool
+  tags: [network, apply, phase2]
+
+# ------------------------------------------------------------------------------
+# PHASE 3: VALIDATION
+# ------------------------------------------------------------------------------
+
+- name: Phase 3 - Validate settings
+  ansible.builtin.include_tasks: validate_settings.yml
+  when:
+    - not network_hardening_marker_stat.stat.exists or posix_network_force_reharden | bool
+    - posix_network_validate_after_apply | bool
+  tags: [network, validate, phase3]
+
+# ------------------------------------------------------------------------------
+# PHASE 4: FINALIZATION
+# ------------------------------------------------------------------------------
+
+- name: Phase 4 - Finalization
+  block:
+    - name: Create hardening marker file
+      ansible.builtin.copy:
+        content: |
+          Network hardening applied on: {{ ansible_date_time.iso8601 }}
+          Applied by: Ansible role posix_hardening_network
+          Hostname: {{ ansible_hostname }}
+          Interfaces hardened: {{ target_interfaces | join(', ') }}
+          Backup location: {{ posix_network_backup_dir }}
+        dest: "{{ posix_network_hardening_marker }}"
+        mode: '0644'
+        owner: root
+        group: root
+
+    - name: Display network hardening success
+      ansible.builtin.debug:
+        msg: |
+          ========================================
+          NETWORK HARDENING COMPLETED SUCCESSFULLY
+          ========================================
+          All network security parameters applied
+          Configuration validated
+
+          Hardened interfaces: {{ target_interfaces | join(', ') }}
+
+          Applied hardening:
+            - Interface security: ENABLED
+            - TCP hardening: ENABLED
+            - ICMP hardening: ENABLED
+            - IPv6 hardening: {{ 'ENABLED' if ansible_facts.get('kernel', {}).get('ipv6', {}).get('enabled', false) else 'SKIPPED' }}
+
+          Marker: {{ posix_network_hardening_marker }}
+
+          To re-apply hardening:
+            Set posix_network_force_reharden: true
+          ========================================
+
+  when:
+    - not network_hardening_marker_stat.stat.exists or posix_network_force_reharden | bool
+  tags: [network, finalization, phase4]

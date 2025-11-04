@@ -1,0 +1,169 @@
+---
+# ==============================================================================
+# POSIX Kernel Hardening Role - Default Variables
+# ==============================================================================
+# These variables control kernel security parameters via sysctl
+# Override in group_vars/all.yml or host_vars/
+# ==============================================================================
+
+# ------------------------------------------------------------------------------
+# CONTROL FLAGS
+# ------------------------------------------------------------------------------
+posix_kernel_force_reharden: false  # Force re-hardening even if already completed
+posix_kernel_backup_sysctl: true  # Create backup before modifying
+posix_kernel_validate_after_apply: true  # Validate settings after applying
+posix_kernel_reload_sysctl: true  # Reload sysctl after configuration
+
+# ------------------------------------------------------------------------------
+# STATE TRACKING
+# ------------------------------------------------------------------------------
+posix_kernel_hardening_marker: "/var/lib/hardening/kernel_hardened"
+
+# ------------------------------------------------------------------------------
+# FILE PATHS
+# ------------------------------------------------------------------------------
+posix_kernel_sysctl_conf: "/etc/sysctl.conf"
+posix_kernel_backup_dir: "/var/backups/hardening"
+posix_kernel_sysctl_d_dir: "/etc/sysctl.d"
+posix_kernel_config_file: "{{ posix_kernel_sysctl_d_dir }}/99-posix-kernel-hardening.conf"
+
+# ------------------------------------------------------------------------------
+# NETWORK SECURITY PARAMETERS
+# ------------------------------------------------------------------------------
+# Enable TCP SYN cookie protection (helps prevent SYN flood attacks)
+posix_kernel_tcp_syncookies: 1
+
+# Disable IP forwarding (unless this is a router)
+posix_kernel_ip_forward: 0
+posix_kernel_ipv6_forwarding: 0
+
+# Disable sending of ICMP redirects
+posix_kernel_send_redirects_all: 0
+posix_kernel_send_redirects_default: 0
+
+# Disable acceptance of source routed packets
+posix_kernel_accept_source_route_ipv4_all: 0
+posix_kernel_accept_source_route_ipv4_default: 0
+posix_kernel_accept_source_route_ipv6_all: 0
+posix_kernel_accept_source_route_ipv6_default: 0
+
+# Disable acceptance of ICMP redirects
+posix_kernel_accept_redirects_ipv4_all: 0
+posix_kernel_accept_redirects_ipv4_default: 0
+posix_kernel_accept_redirects_ipv6_all: 0
+posix_kernel_accept_redirects_ipv6_default: 0
+
+# Disable acceptance of secure ICMP redirects
+posix_kernel_secure_redirects_all: 0
+posix_kernel_secure_redirects_default: 0
+
+# Enable logging of martian packets (packets with impossible addresses)
+posix_kernel_log_martians_all: 1
+posix_kernel_log_martians_default: 1
+
+# Enable reverse path filtering (anti-spoofing)
+posix_kernel_rp_filter_all: 1
+posix_kernel_rp_filter_default: 1
+
+# Ignore ICMP echo requests to broadcast/multicast addresses
+posix_kernel_icmp_echo_ignore_broadcasts: 1
+
+# Ignore bogus ICMP error responses
+posix_kernel_icmp_ignore_bogus_error_responses: 1
+
+# ------------------------------------------------------------------------------
+# TCP/IP STACK HARDENING
+# ------------------------------------------------------------------------------
+# Disable TCP timestamps (can leak system uptime)
+posix_kernel_tcp_timestamps: 0
+
+# Enable TCP selective acknowledgements
+posix_kernel_tcp_sack: 1
+
+# Enable forward acknowledgement
+posix_kernel_tcp_fack: 1
+
+# TCP congestion control algorithm
+posix_kernel_tcp_congestion_control: "htcp"
+
+# SYN-ACK retries (reduce to limit exposure to SYN flood)
+posix_kernel_tcp_synack_retries: 2
+
+# SYN retries
+posix_kernel_tcp_syn_retries: 2
+
+# Maximum SYN backlog
+posix_kernel_tcp_max_syn_backlog: 4096
+
+# FIN timeout (seconds)
+posix_kernel_tcp_fin_timeout: 15
+
+# TCP keepalive settings
+posix_kernel_tcp_keepalive_time: 300
+posix_kernel_tcp_keepalive_intvl: 30
+posix_kernel_tcp_keepalive_probes: 5
+
+# ------------------------------------------------------------------------------
+# MEMORY PROTECTION
+# ------------------------------------------------------------------------------
+# Enable address space layout randomization (ASLR)
+# 0 = disabled, 1 = conservative, 2 = full (recommended)
+posix_kernel_randomize_va_space: 2
+
+# Hide kernel pointers (prevent kernel address leaks)
+# 0 = allow all, 1 = hash, 2 = hide (recommended)
+posix_kernel_kptr_restrict: 2
+
+# Restrict ptrace usage (prevents debugger attachment)
+# 0 = classic, 1 = restricted, 2 = admin only, 3 = no attach
+posix_kernel_yama_ptrace_scope: 1
+
+# ------------------------------------------------------------------------------
+# CORE DUMPS
+# ------------------------------------------------------------------------------
+# Prevent SUID/SGID programs from dumping core
+posix_kernel_suid_dumpable: 0
+
+# Append PID to core filename
+posix_kernel_core_uses_pid: 1
+
+# ------------------------------------------------------------------------------
+# PROCESS SECURITY
+# ------------------------------------------------------------------------------
+# Maximum PID value
+posix_kernel_pid_max: 65536
+
+# Kernel panic timeout (seconds) - system will reboot after panic
+posix_kernel_panic: 60
+
+# Panic on oops
+posix_kernel_panic_on_oops: 1
+
+# ------------------------------------------------------------------------------
+# SHARED MEMORY
+# ------------------------------------------------------------------------------
+# Maximum shared memory segment size (bytes) - 64GB
+posix_kernel_shmmax: 68719476736
+
+# Total shared memory pages
+posix_kernel_shmall: 4294967296
+
+# ------------------------------------------------------------------------------
+# FILE DESCRIPTORS
+# ------------------------------------------------------------------------------
+# Maximum number of file descriptors
+posix_kernel_file_max: 65535
+
+# ------------------------------------------------------------------------------
+# SYSRQ
+# ------------------------------------------------------------------------------
+# Disable SysRq key (magic commands) for security
+# 0 = disabled, 1 = enabled
+posix_kernel_sysrq: 0
+
+# ------------------------------------------------------------------------------
+# IDEMPOTENCY CONFIGURATION
+# ------------------------------------------------------------------------------
+# Section markers for idempotent updates
+posix_kernel_config_begin_marker: "=== POSIX Hardening Toolkit - Kernel Parameters ==="
+posix_kernel_config_end_marker: "=== End POSIX Hardening ==="

@@ -1,0 +1,90 @@
+---
+# ==============================================================================
+# POSIX Network Stack Hardening Role - Default Variables
+# ==============================================================================
+# These variables control network interface hardening at runtime
+# This role applies network security parameters directly to interfaces
+# Override in group_vars/all.yml or host_vars/
+# ==============================================================================
+
+# ------------------------------------------------------------------------------
+# CONTROL FLAGS
+# ------------------------------------------------------------------------------
+posix_network_force_reharden: false  # Force re-hardening even if already completed
+posix_network_validate_after_apply: true  # Validate settings after applying
+posix_network_skip_loopback: true  # Skip loopback interface (lo)
+posix_network_skip_all_default: true  # Skip 'all' and 'default' pseudo-interfaces
+
+# ------------------------------------------------------------------------------
+# STATE TRACKING
+# ------------------------------------------------------------------------------
+posix_network_hardening_marker: "/var/lib/hardening/network_hardened"
+
+# ------------------------------------------------------------------------------
+# FILE PATHS
+# ------------------------------------------------------------------------------
+posix_network_backup_dir: "/var/backups/hardening"
+posix_network_sysctl_d_dir: "/etc/sysctl.d"
+posix_network_config_file: "{{ posix_network_sysctl_d_dir }}/99-posix-network-hardening.conf"
+posix_network_proc_path: "/proc/sys/net"
+
+# ------------------------------------------------------------------------------
+# INTERFACE DISCOVERY
+# ------------------------------------------------------------------------------
+# Automatically discover interfaces or use a specific list
+posix_network_auto_discover: true
+posix_network_specific_interfaces: []  # e.g., ["eth0", "ens33"]
+posix_network_exclude_interfaces: ["lo", "all", "default"]  # Interfaces to skip
+
+# ------------------------------------------------------------------------------
+# NETWORK SECURITY PARAMETERS (per interface)
+# ------------------------------------------------------------------------------
+# Disable acceptance of source routed packets
+posix_network_accept_source_route: 0
+
+# Disable acceptance of ICMP redirects
+posix_network_accept_redirects: 0
+
+# Disable sending ICMP redirects
+posix_network_send_redirects: 0
+
+# Enable source address verification (reverse path filtering)
+posix_network_rp_filter: 1
+
+# ------------------------------------------------------------------------------
+# GLOBAL TCP PARAMETERS
+# ------------------------------------------------------------------------------
+# Enable TCP SYN cookie protection
+posix_network_tcp_syncookies: 1
+
+# Disable TCP timestamps
+posix_network_tcp_timestamps: 0
+
+# TCP SYN-ACK retries
+posix_network_tcp_synack_retries: 2
+
+# ------------------------------------------------------------------------------
+# ICMP PARAMETERS
+# ------------------------------------------------------------------------------
+# Ignore ICMP echo requests to broadcast/multicast
+posix_network_icmp_echo_ignore_broadcasts: 1
+
+# Ignore bogus ICMP error responses
+posix_network_icmp_ignore_bogus_error_responses: 1
+
+# ------------------------------------------------------------------------------
+# IPv6 PARAMETERS (if IPv6 is available)
+# ------------------------------------------------------------------------------
+# Disable IPv6 router advertisements
+posix_network_ipv6_accept_ra_all: 0
+posix_network_ipv6_accept_ra_default: 0
+
+# Disable IPv6 redirects
+posix_network_ipv6_accept_redirects_all: 0
+
+# ------------------------------------------------------------------------------
+# RUNTIME APPLICATION
+# ------------------------------------------------------------------------------
+# Apply settings immediately via /proc/sys or only via sysctl config
+posix_network_apply_runtime: true  # Apply directly to /proc/sys
+posix_network_persist_config: true  # Also persist to sysctl.d config file
