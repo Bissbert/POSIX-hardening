@@ -457,6 +457,42 @@ Deployment creates reports in:
 - `/tmp/preflight_report_*.txt` on Ansible controller
 - `ansible.log` in the ansible/ directory
 
+## 🧪 Testing
+
+### Molecule Testing Framework
+
+We use Molecule for automated role testing:
+
+```bash
+# Install testing dependencies
+pip install -r requirements-dev.txt
+
+# Test SSH hardening role
+cd roles/posix_hardening_ssh
+molecule test
+
+# Development workflow
+molecule create    # Create test container
+molecule converge  # Apply role
+molecule verify    # Run tests
+molecule destroy   # Clean up
+```
+
+### Test Coverage
+
+- ✅ SSH Hardening Role - 26 tests (85% pass rate)
+- ⏳ Firewall Hardening Role - Tests planned
+
+### CI/CD Integration
+
+Tests run automatically on GitHub Actions for:
+
+- Push to main branch
+- Pull requests
+- Changes to role files
+
+See [TESTING.md](TESTING.md) for complete testing guide.
+
 ## 🤝 Support
 
 For issues:
