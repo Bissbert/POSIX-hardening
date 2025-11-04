@@ -1,0 +1,251 @@
+---
+# ==============================================================================
+# POSIX Cron Hardening - Apply Settings
+# ==============================================================================
+
+# ------------------------------------------------------------------------------
+# BACKUP EXISTING FILES
+# ------------------------------------------------------------------------------
+- name: Check if cron.allow exists
+  ansible.builtin.stat:
+    path: "{{ posix_cron_allow_path }}"
+  register: cron_allow_stat
+  tags: [cron, backup]
+
+- name: Backup existing cron.allow
+  ansible.builtin.copy:
+    src: "{{ posix_cron_allow_path }}"
+    dest: "{{ posix_cron_backup_dir }}/cron.allow.{{ ansible_date_time.iso8601_basic_short }}"
+    remote_src: true
+    mode: '0600'
+    owner: root
+    group: root
+  when:
+    - posix_cron_backup_before_changes | bool
+    - cron_allow_stat.stat.exists
+  tags: [cron, backup]
+
+- name: Check if cron.deny exists
+  ansible.builtin.stat:
+    path: "{{ posix_cron_deny_path }}"
+  register: cron_deny_stat
+  tags: [cron, backup]
+
+- name: Backup existing cron.deny
+  ansible.builtin.copy:
+    src: "{{ posix_cron_deny_path }}"
+    dest: "{{ posix_cron_backup_dir }}/cron.deny.{{ ansible_date_time.iso8601_basic_short }}"
+    remote_src: true
+    mode: '0600'
+    owner: root
+    group: root
+  when:
+    - posix_cron_backup_before_changes | bool
+    - cron_deny_stat.stat.exists
+  tags: [cron, backup]
+
+- name: Check if at.allow exists
+  ansible.builtin.stat:
+    path: "{{ posix_cron_at_allow_path }}"
+  register: at_allow_stat
+  tags: [cron, backup]
+
+- name: Backup existing at.allow
+  ansible.builtin.copy:
+    src: "{{ posix_cron_at_allow_path }}"
+    dest: "{{ posix_cron_backup_dir }}/at.allow.{{ ansible_date_time.iso8601_basic_short }}"
+    remote_src: true
+    mode: '0600'
+    owner: root
+    group: root
+  when:
+    - posix_cron_backup_before_changes | bool
+    - at_allow_stat.stat.exists
+  tags: [cron, backup]
+
+- name: Check if at.deny exists
+  ansible.builtin.stat:
+    path: "{{ posix_cron_at_deny_path }}"
+  register: at_deny_stat
+  tags: [cron, backup]
+
+- name: Backup existing at.deny
+  ansible.builtin.copy:
+    src: "{{ posix_cron_at_deny_path }}"
+    dest: "{{ posix_cron_backup_dir }}/at.deny.{{ ansible_date_time.iso8601_basic_short }}"
+    remote_src: true
+    mode: '0600'
+    owner: root
+    group: root
+  when:
+    - posix_cron_backup_before_changes | bool
+    - at_deny_stat.stat.exists
+  tags: [cron, backup]
+
+# ------------------------------------------------------------------------------
+# CONFIGURE CRON ACCESS CONTROL
+# ------------------------------------------------------------------------------
+- name: Create /etc/cron.allow with authorized users
+  ansible.builtin.copy:
+    content: |
+      # Managed by Ansible - POSIX Hardening
+      # Only users listed here can use cron
+      {% for user in posix_cron_allowed_users %}
+      {{ user }}
+      {% endfor %}
+    dest: "{{ posix_cron_allow_path }}"
+    mode: "{{ posix_cron_allow_file_mode }}"
+    owner: "{{ posix_cron_allow_file_owner }}"
+    group: "{{ posix_cron_allow_file_group }}"
+  when:
+    - posix_cron_create_allow | bool
+  tags: [cron, allow, access]
+
+- name: Remove /etc/cron.deny
+  ansible.builtin.file:
+    path: "{{ posix_cron_deny_path }}"
+    state: absent
+  when:
+    - posix_cron_remove_deny | bool
+  tags: [cron, deny, access]
+
+# ------------------------------------------------------------------------------
+# CONFIGURE AT DAEMON ACCESS CONTROL
+# ------------------------------------------------------------------------------
+- name: Create /etc/at.allow with authorized users
+  ansible.builtin.copy:
+    content: |
+      # Managed by Ansible - POSIX Hardening
+      # Only users listed here can use at daemon
+      {% for user in posix_cron_at_allowed_users %}
+      {{ user }}
+      {% endfor %}
+    dest: "{{ posix_cron_at_allow_path }}"
+    mode: "{{ posix_cron_allow_file_mode }}"
+    owner: "{{ posix_cron_allow_file_owner }}"
+    group: "{{ posix_cron_allow_file_group }}"
+  when:
+    - posix_cron_enable_at_restrictions | bool
+    - posix_cron_create_at_allow | bool
+  tags: [cron, at, allow, access]
+
+- name: Remove /etc/at.deny
+  ansible.builtin.file:
+    path: "{{ posix_cron_at_deny_path }}"
+    state: absent
+  when:
+    - posix_cron_enable_at_restrictions | bool
+    - posix_cron_at_remove_deny | bool
+  tags: [cron, at, deny, access]
+
+# ------------------------------------------------------------------------------
+# SECURE CRON FILE PERMISSIONS
+# ------------------------------------------------------------------------------
+- name: Check if /etc/crontab exists
+  ansible.builtin.stat:
+    path: "{{ posix_cron_crontab_path }}"
+  register: crontab_stat
+  tags: [cron, permissions]
+
+- name: Secure /etc/crontab permissions
+  ansible.builtin.file:
+    path: "{{ posix_cron_crontab_path }}"
+    mode: "{{ posix_cron_crontab_mode }}"
+    owner: "{{ posix_cron_crontab_owner }}"
+    group: "{{ posix_cron_crontab_group }}"
+  when:
+    - posix_cron_secure_permissions | bool
+    - crontab_stat.stat.exists
+  tags: [cron, permissions]
+
+# ------------------------------------------------------------------------------
+# SECURE CRON DIRECTORIES
+# ------------------------------------------------------------------------------
+- name: Build complete list of cron directories
+  ansible.builtin.set_fact:
+    posix_cron_all_directories: >-
+      {{ (posix_cron_directories + posix_cron_custom_directories) | unique }}
+  tags: [cron, directories]
+
+- name: Check which cron directories exist
+  ansible.builtin.stat:
+    path: "{{ item }}"
+  register: cron_dirs_stat
+  loop: "{{ posix_cron_all_directories }}"
+  tags: [cron, directories]
+
+- name: Secure cron directory permissions
+  ansible.builtin.file:
+    path: "{{ item.item }}"
+    state: directory
+    mode: "{{ posix_cron_dir_mode }}"
+    owner: "{{ posix_cron_dir_owner }}"
+    group: "{{ posix_cron_dir_group }}"
+  loop: "{{ cron_dirs_stat.results }}"
+  when:
+    - posix_cron_secure_permissions | bool
+    - item.stat.exists
+  loop_control:
+    label: "{{ item.item }}"
+  tags: [cron, directories, permissions]
+
+- name: Display warning for missing cron directories
+  ansible.builtin.debug:
+    msg: "INFO: Directory {{ item.item }} does not exist (skipped)"
+  loop: "{{ cron_dirs_stat.results }}"
+  when:
+    - not item.stat.exists
+    - not posix_cron_ignore_missing_dirs | bool
+  loop_control:
+    label: "{{ item.item }}"
+  tags: [cron, directories, info]
+
+# ------------------------------------------------------------------------------
+# LOGGING
+# ------------------------------------------------------------------------------
+- name: Log cron hardening operations
+  ansible.builtin.lineinfile:
+    path: "{{ posix_cron_log_dir }}/cron.log"
+    line: "{{ ansible_date_time.iso8601 }} - Cron access hardening on {{ ansible_hostname }} - Allowed users: {{ posix_cron_allowed_users | join(',') }}"
+    create: true
+    mode: '0640'
+    owner: root
+    group: root
+  when:
+    - posix_cron_enable_logging | bool
+  tags: [cron, logging]
+
+- name: Create detailed cron operations log
+  ansible.builtin.copy:
+    content: |
+      Cron Access Hardening Operations
+      =================================
+      Date: {{ ansible_date_time.iso8601 }}
+      Host: {{ ansible_hostname }}
+
+      Cron Access Control:
+        - /etc/cron.allow created: {{ posix_cron_create_allow }}
+        - /etc/cron.deny removed: {{ posix_cron_remove_deny }}
+        - Allowed users: {{ posix_cron_allowed_users | join(', ') }}
+
+      At Daemon Access Control:
+        - /etc/at.allow created: {{ posix_cron_create_at_allow }}
+        - /etc/at.deny removed: {{ posix_cron_at_remove_deny }}
+        - Allowed users: {{ posix_cron_at_allowed_users | join(', ') }}
+
+      File Permissions:
+        - /etc/crontab: {{ posix_cron_crontab_mode }}
+        - Cron directories: {{ posix_cron_dir_mode }}
+        - Allow files: {{ posix_cron_allow_file_mode }}
+
+      Secured Directories:
+      {% for dir in posix_cron_all_directories %}
+        - {{ dir }}
+      {% endfor %}
+    dest: "{{ posix_cron_backup_dir }}/cron_operations.{{ ansible_date_time.iso8601_basic_short }}.log"
+    mode: '0640'
+    owner: root
+    group: root
+  when:
+    - posix_cron_backup_before_changes | bool
+  tags: [cron, logging, backup]

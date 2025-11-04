@@ -1,0 +1,216 @@
+---
+# ==============================================================================
+# POSIX File Integrity Monitoring Role - Default Variables
+# ==============================================================================
+# These variables control AIDE configuration and integrity checking
+# Override in group_vars/all.yml or host_vars/
+# ==============================================================================
+
+# ------------------------------------------------------------------------------
+# CONTROL FLAGS
+# ------------------------------------------------------------------------------
+posix_integrity_force_reharden: false  # Force re-hardening even if already completed
+posix_integrity_backup_before_changes: true  # Create backup before modifying
+posix_integrity_validate_after_apply: true  # Validate settings after applying
+
+# ------------------------------------------------------------------------------
+# STATE TRACKING
+# ------------------------------------------------------------------------------
+posix_integrity_hardening_marker: "/var/lib/hardening/integrity_hardened"
+
+# ------------------------------------------------------------------------------
+# FILE PATHS
+# ------------------------------------------------------------------------------
+posix_integrity_backup_dir: "/var/backups/hardening"
+posix_integrity_log_dir: "/var/log/hardening"
+
+# ------------------------------------------------------------------------------
+# PACKAGE INSTALLATION
+# ------------------------------------------------------------------------------
+# Install AIDE package if not present
+posix_integrity_install_package: true
+
+# Package names per distribution
+posix_integrity_package_name: "{{ _posix_integrity_package_name[ansible_os_family] | default('aide') }}"
+_posix_integrity_package_name:
+  Debian: aide
+  Ubuntu: aide
+  Kali: aide
+  RedHat: aide
+  CentOS: aide
+  Rocky: aide
+  AlmaLinux: aide
+
+# ------------------------------------------------------------------------------
+# AIDE CONFIGURATION
+# ------------------------------------------------------------------------------
+# AIDE configuration file location
+posix_integrity_aide_conf: "/etc/aide/aide.conf"
+posix_integrity_aide_conf_alt: "/etc/aide.conf"  # Alternative location
+
+# AIDE database location
+posix_integrity_aide_db_dir: "/var/lib/aide"
+posix_integrity_aide_db: "{{ posix_integrity_aide_db_dir }}/aide.db"
+posix_integrity_aide_db_new: "{{ posix_integrity_aide_db_dir }}/aide.db.new"
+
+# AIDE log file
+posix_integrity_aide_log: "/var/log/aide/aide.log"
+
+# ------------------------------------------------------------------------------
+# DATABASE INITIALIZATION
+# ------------------------------------------------------------------------------
+# Initialize AIDE database (WARNING: Can take 10-30 minutes)
+posix_integrity_init_database: false  # Set to true to initialize on first run
+posix_integrity_init_async: true  # Run initialization asynchronously
+posix_integrity_init_timeout: 3600  # Timeout for database initialization (seconds)
+
+# Update existing database instead of creating new
+posix_integrity_update_database: false
+
+# ------------------------------------------------------------------------------
+# INTEGRITY CHECK SCHEDULING
+# ------------------------------------------------------------------------------
+# Schedule daily integrity checks via cron
+posix_integrity_enable_cron: true
+
+# Cron schedule for integrity checks
+posix_integrity_cron_hour: "2"  # 2 AM
+posix_integrity_cron_minute: "0"
+posix_integrity_cron_day: "*"
+posix_integrity_cron_month: "*"
+posix_integrity_cron_weekday: "*"
+
+# Cron user
+posix_integrity_cron_user: root
+
+# ------------------------------------------------------------------------------
+# MONITORED DIRECTORIES
+# ------------------------------------------------------------------------------
+# Critical directories to monitor for changes
+
+# System directories (always monitored)
+posix_integrity_monitor_etc: true
+posix_integrity_monitor_bin: true
+posix_integrity_monitor_sbin: true
+posix_integrity_monitor_usr_bin: true
+posix_integrity_monitor_usr_sbin: true
+posix_integrity_monitor_lib: true
+posix_integrity_monitor_boot: true
+
+# Optional directories
+posix_integrity_monitor_opt: false
+posix_integrity_monitor_root: true
+posix_integrity_monitor_home: false  # Can be large
+
+# Custom directories to monitor
+posix_integrity_custom_dirs: []
+# Example:
+# posix_integrity_custom_dirs:
+#   - /opt/app
+#   - /srv/data
+
+# ------------------------------------------------------------------------------
+# EXCLUDED DIRECTORIES
+# ------------------------------------------------------------------------------
+# Directories to exclude from monitoring (frequently changing)
+posix_integrity_exclude_dirs:
+  - /var/log
+  - /var/cache
+  - /var/spool
+  - /var/tmp
+  - /tmp
+  - /proc
+  - /sys
+  - /dev
+  - /run
+  - /media
+  - /mnt
+
+# Custom exclusions
+posix_integrity_custom_excludes: []
+
+# ------------------------------------------------------------------------------
+# AIDE RULES
+# ------------------------------------------------------------------------------
+# Define custom AIDE rules for file monitoring
+# Default rules check: permissions, inode, links, user, group, size, mtime, ctime, hash
+
+# Standard rule sets
+posix_integrity_rule_binaries: "p+i+n+u+g+s+b+m+c+sha256"  # For executables
+posix_integrity_rule_configs: "p+i+n+u+g+s+b+m+c+sha256"  # For configs
+posix_integrity_rule_logs: "p+u+g+i+n+S"  # For log files (size only)
+posix_integrity_rule_databases: "p+i+n+u+g+s+b+m+c+sha256"  # For data
+
+# ------------------------------------------------------------------------------
+# NOTIFICATION SETTINGS
+# ------------------------------------------------------------------------------
+# Email notifications for integrity violations
+posix_integrity_enable_email: false
+posix_integrity_email_recipient: "root@localhost"
+posix_integrity_email_subject: "AIDE Integrity Check Report - {{ ansible_hostname }}"
+
+# Syslog notifications
+posix_integrity_enable_syslog: true
+
+# ------------------------------------------------------------------------------
+# REPORTING
+# ------------------------------------------------------------------------------
+# Report format
+posix_integrity_report_format: "plain"  # plain, html
+
+# Report location
+posix_integrity_report_dir: "/var/log/aide"
+posix_integrity_report_file: "{{ posix_integrity_report_dir }}/aide_report.txt"
+
+# Keep report history
+posix_integrity_keep_reports: true
+posix_integrity_max_reports: 30
+
+# ------------------------------------------------------------------------------
+# PERFORMANCE SETTINGS
+# ------------------------------------------------------------------------------
+# Gzip database to save space
+posix_integrity_gzip_database: true
+
+# Number of parallel processes for database generation
+posix_integrity_parallel_jobs: 2
+
+# ------------------------------------------------------------------------------
+# VALIDATION SETTINGS
+# ------------------------------------------------------------------------------
+# Verify AIDE is installed
+posix_integrity_validate_installed: true
+
+# Verify configuration file exists
+posix_integrity_validate_config: true
+
+# Verify database exists
+posix_integrity_validate_database: true
+
+# Verify cron job is scheduled
+posix_integrity_validate_cron: true
+
+# ------------------------------------------------------------------------------
+# BEHAVIOR SETTINGS
+# ------------------------------------------------------------------------------
+# Create AIDE directories if they don't exist
+posix_integrity_create_dirs: true
+
+# Create initial database during role execution (not recommended for large systems)
+posix_integrity_create_initial_db: false
+
+# Use aideinit wrapper if available (Debian/Ubuntu)
+posix_integrity_use_aideinit: true
+
+# ------------------------------------------------------------------------------
+# TRIPWIRE SUPPORT (alternative to AIDE)
+# ------------------------------------------------------------------------------
+# Enable Tripwire instead of AIDE
+posix_integrity_use_tripwire: false
+posix_integrity_tripwire_package: tripwire
+
+# ------------------------------------------------------------------------------
+# LOGGING
+# ------------------------------------------------------------------------------
+# Log all integrity hardening operations
+posix_integrity_enable_logging: true

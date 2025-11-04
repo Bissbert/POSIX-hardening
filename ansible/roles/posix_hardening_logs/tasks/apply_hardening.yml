@@ -1,0 +1,206 @@
+---
+# ==============================================================================
+# POSIX Log Retention Hardening - Apply Configuration
+# ==============================================================================
+
+# ------------------------------------------------------------------------------
+# Backup Existing Configurations
+# ------------------------------------------------------------------------------
+- name: Check if logrotate.conf exists
+  ansible.builtin.stat:
+    path: "{{ posix_logs_logrotate_conf }}"
+  register: logrotate_conf_stat
+  tags: [logs, logrotate]
+
+- name: Backup logrotate.conf
+  ansible.builtin.copy:
+    src: "{{ posix_logs_logrotate_conf }}"
+    dest: "{{ posix_logs_backup_dir }}/logrotate.conf.backup.{{ ansible_date_time.epoch }}"
+    mode: '0644'
+    remote_src: true
+  when:
+    - posix_logs_backup_before_changes | bool
+    - logrotate_conf_stat.stat.exists
+  tags: [logs, logrotate, backup]
+
+# ------------------------------------------------------------------------------
+# Update Global Logrotate Configuration
+# ------------------------------------------------------------------------------
+- name: Update global rotation count in logrotate.conf
+  ansible.builtin.lineinfile:
+    path: "{{ posix_logs_logrotate_conf }}"
+    regexp: '^rotate\s+'
+    line: "rotate {{ posix_logs_global_rotate }}"
+    state: present
+    create: false
+  when:
+    - posix_logs_update_global_config | bool
+    - logrotate_conf_stat.stat.exists
+  tags: [logs, logrotate]
+
+- name: Ensure compression is enabled in logrotate.conf
+  ansible.builtin.lineinfile:
+    path: "{{ posix_logs_logrotate_conf }}"
+    regexp: '^#?\s*compress'
+    line: "compress"
+    state: present
+    create: false
+  when:
+    - posix_logs_update_global_config | bool
+    - posix_logs_global_compress | bool
+    - logrotate_conf_stat.stat.exists
+  tags: [logs, logrotate]
+
+# ------------------------------------------------------------------------------
+# Deploy Security Log Rotation
+# ------------------------------------------------------------------------------
+- name: Deploy security log rotation configuration
+  ansible.builtin.template:
+    src: logrotate-security.j2
+    dest: "{{ posix_logs_logrotate_d }}/security"
+    mode: '0644'
+    owner: root
+    group: root
+    validate: 'logrotate -d %s || echo "Warning: logrotate validation failed"'
+  when: posix_logs_configure_security | bool
+  register: security_logrotate_deployed
+  tags: [logs, logrotate, security]
+
+# ------------------------------------------------------------------------------
+# Deploy Syslog Rotation
+# ------------------------------------------------------------------------------
+- name: Deploy syslog rotation configuration
+  ansible.builtin.template:
+    src: logrotate-syslog.j2
+    dest: "{{ posix_logs_logrotate_d }}/syslog"
+    mode: '0644'
+    owner: root
+    group: root
+    validate: 'logrotate -d %s || echo "Warning: logrotate validation failed"'
+  when: posix_logs_configure_syslog | bool
+  register: syslog_logrotate_deployed
+  tags: [logs, logrotate, syslog]
+
+# ------------------------------------------------------------------------------
+# Deploy Custom Log Rotation Configs
+# ------------------------------------------------------------------------------
+- name: Deploy custom logrotate configurations
+  ansible.builtin.copy:
+    content: |
+      # {{ ansible_managed }}
+      # Custom log rotation for {{ item.name }}
+      {% for file in item.files %}
+      {{ file }}
+      {% endfor %}
+      {
+          {{ item.frequency | default(posix_logs_rotate_frequency) }}
+          rotate {{ item.rotate | default(posix_logs_rotate_count) }}
+      {% if item.compress | default(posix_logs_compress) | bool %}
+          compress
+      {% endif %}
+      {% if item.delaycompress | default(posix_logs_delaycompress) | bool %}
+          delaycompress
+      {% endif %}
+          missingok
+          notifempty
+      {% if item.create_mode is defined %}
+          create {{ item.create_mode }} {{ item.create_owner | default('root') }} {{ item.create_group | default('root') }}
+      {% endif %}
+      }
+    dest: "{{ posix_logs_logrotate_d }}/{{ item.name }}"
+    mode: '0644'
+    owner: root
+    group: root
+  loop: "{{ posix_logs_custom_configs }}"
+  when: posix_logs_custom_configs | length > 0
+  tags: [logs, logrotate, custom]
+
+# ------------------------------------------------------------------------------
+# Rsyslog Configuration
+# ------------------------------------------------------------------------------
+- name: Check if rsyslog.conf exists
+  ansible.builtin.stat:
+    path: "{{ posix_logs_rsyslog_conf }}"
+  register: rsyslog_conf_stat
+  when: posix_logs_configure_rsyslog | bool
+  tags: [logs, rsyslog]
+
+- name: Backup rsyslog.conf
+  ansible.builtin.copy:
+    src: "{{ posix_logs_rsyslog_conf }}"
+    dest: "{{ posix_logs_backup_dir }}/rsyslog.conf.backup.{{ ansible_date_time.epoch }}"
+    mode: '0644'
+    remote_src: true
+  when:
+    - posix_logs_configure_rsyslog | bool
+    - posix_logs_backup_before_changes | bool
+    - rsyslog_conf_stat.stat.exists
+  tags: [logs, rsyslog, backup]
+
+- name: Deploy rsyslog file permissions configuration
+  ansible.builtin.template:
+    src: rsyslog-permissions.conf.j2
+    dest: "{{ posix_logs_rsyslog_d }}/10-hardening-permissions.conf"
+    mode: '0644'
+    owner: root
+    group: root
+  when:
+    - posix_logs_configure_rsyslog | bool
+    - rsyslog_conf_stat.stat.exists
+  notify: restart rsyslog
+  tags: [logs, rsyslog]
+
+# ------------------------------------------------------------------------------
+# Fix Log Directory Permissions
+# ------------------------------------------------------------------------------
+- name: Secure log directories
+  ansible.builtin.file:
+    path: "{{ item.path }}"
+    state: directory
+    mode: "{{ item.mode }}"
+    owner: "{{ item.owner }}"
+    group: "{{ item.group }}"
+  loop: "{{ posix_logs_directories }}"
+  when: posix_logs_fix_permissions | bool
+  failed_when: false
+  tags: [logs, permissions]
+
+# ------------------------------------------------------------------------------
+# Fix Log File Permissions
+# ------------------------------------------------------------------------------
+- name: Secure individual log files
+  ansible.builtin.file:
+    path: "{{ item.path }}"
+    state: file
+    mode: "{{ item.mode }}"
+    owner: "{{ item.owner }}"
+    group: "{{ item.group }}"
+  loop: "{{ posix_logs_files_to_secure }}"
+  when: posix_logs_fix_permissions | bool
+  failed_when: false
+  tags: [logs, permissions]
+
+# ------------------------------------------------------------------------------
+# Test Logrotate Configuration
+# ------------------------------------------------------------------------------
+- name: Test logrotate configuration
+  ansible.builtin.command:
+    cmd: logrotate -d {{ posix_logs_logrotate_conf }}
+  register: logrotate_test
+  changed_when: false
+  failed_when: false
+  when: posix_logs_test_logrotate | bool
+  tags: [logs, logrotate, test]
+
+- name: Display logrotate test results
+  ansible.builtin.debug:
+    msg: |
+      Logrotate configuration test:
+      {{ 'PASSED' if logrotate_test.rc == 0 else 'FAILED' }}
+      {% if logrotate_test.rc != 0 %}
+      Error: {{ logrotate_test.stderr }}
+      {% endif %}
+  when:
+    - posix_logs_test_logrotate | bool
+    - logrotate_test is defined
+  tags: [logs, logrotate, test]

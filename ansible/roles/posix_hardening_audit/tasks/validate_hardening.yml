@@ -1,0 +1,115 @@
+---
+# ==============================================================================
+# POSIX Audit Logging Hardening - Validation
+# ==============================================================================
+
+- name: Validate audit rules file exists
+  ansible.builtin.stat:
+    path: "{{ posix_audit_rules_file }}"
+  register: audit_rules_validation
+  failed_when: false
+  tags: [audit, validate, rules]
+
+- name: Display audit rules file validation
+  ansible.builtin.debug:
+    msg: |
+      Audit rules file: {{ 'EXISTS' if audit_rules_validation.stat.exists else 'MISSING' }}
+      Path: {{ posix_audit_rules_file }}
+  tags: [audit, validate, rules]
+
+- name: Validate audit rules are loaded
+  ansible.builtin.command:
+    cmd: auditctl -l
+  register: audit_rules_loaded
+  changed_when: false
+  failed_when: false
+  when: posix_audit_validate_rules_loaded | bool
+  tags: [audit, validate, rules]
+
+- name: Display loaded audit rules count
+  ansible.builtin.debug:
+    msg: |
+      Loaded audit rules: {{ audit_rules_loaded.stdout_lines | default([]) | length }} rules
+      {% if audit_rules_loaded.stdout_lines | default([]) | length == 0 %}
+      WARNING: No audit rules loaded. Check auditd service status.
+      {% endif %}
+  when:
+    - posix_audit_validate_rules_loaded | bool
+    - audit_rules_loaded is defined
+  tags: [audit, validate, rules]
+
+- name: Validate auditd service status
+  ansible.builtin.systemd:
+    name: "{{ posix_audit_service_name }}"
+  register: auditd_service_status
+  failed_when: false
+  when: posix_audit_validate_service_running | bool
+  tags: [audit, validate, service]
+
+- name: Display auditd service status
+  ansible.builtin.debug:
+    msg: |
+      Auditd service: {{ auditd_service_status.status.ActiveState | default('UNKNOWN') }}
+      Enabled: {{ auditd_service_status.status.UnitFileState | default('UNKNOWN') }}
+  when:
+    - posix_audit_validate_service_running | bool
+    - auditd_service_status is defined
+  tags: [audit, validate, service]
+
+- name: Validate audit log file exists
+  ansible.builtin.stat:
+    path: "{{ posix_audit_log_file }}"
+  register: audit_log_validation
+  failed_when: false
+  when: posix_audit_validate_log_permissions | bool
+  tags: [audit, validate, logs]
+
+- name: Display audit log file validation
+  ansible.builtin.debug:
+    msg: |
+      Audit log file: {{ 'EXISTS' if audit_log_validation.stat.exists else 'MISSING' }}
+      Path: {{ posix_audit_log_file }}
+      {% if audit_log_validation.stat.exists %}
+      Permissions: {{ audit_log_validation.stat.mode }}
+      Owner: {{ audit_log_validation.stat.pw_name }}
+      Group: {{ audit_log_validation.stat.gr_name }}
+      {% endif %}
+  when:
+    - posix_audit_validate_log_permissions | bool
+    - audit_log_validation is defined
+  tags: [audit, validate, logs]
+
+- name: Validate rsyslog auth logging configuration
+  ansible.builtin.command:
+    cmd: grep -E "^auth,authpriv\.\*" {{ posix_audit_rsyslog_conf }}
+  register: rsyslog_auth_validation
+  changed_when: false
+  failed_when: false
+  when: posix_audit_configure_rsyslog | bool
+  tags: [audit, validate, rsyslog]
+
+- name: Display rsyslog auth logging status
+  ansible.builtin.debug:
+    msg: |
+      Rsyslog auth logging: {{ 'CONFIGURED' if rsyslog_auth_validation.rc == 0 else 'NOT CONFIGURED' }}
+      {% if rsyslog_auth_validation.rc == 0 %}
+      Config: {{ rsyslog_auth_validation.stdout }}
+      {% endif %}
+  when:
+    - posix_audit_configure_rsyslog | bool
+    - rsyslog_auth_validation is defined
+  tags: [audit, validate, rsyslog]
+
+- name: Final validation summary
+  ansible.builtin.debug:
+    msg: |
+      ========================================
+      AUDIT HARDENING VALIDATION SUMMARY
+      ========================================
+      Rules file: {{ 'OK' if audit_rules_validation.stat.exists else 'FAIL' }}
+      Rules loaded: {{ 'OK' if (audit_rules_loaded.stdout_lines | default([]) | length > 0) else 'CHECK' }}
+      Auditd service: {{ 'OK' if (auditd_service_status.status.ActiveState | default('') == 'active') else 'CHECK' }}
+      Log file: {{ 'OK' if audit_log_validation.stat.exists else 'CHECK' }}
+      Rsyslog config: {{ 'OK' if rsyslog_auth_validation.rc == 0 else 'CHECK' }}
+      ========================================
+  tags: [audit, validate, summary]

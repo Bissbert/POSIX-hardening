@@ -1,0 +1,137 @@
+---
+# ==============================================================================
+# POSIX Cron Access Restriction Hardening Role - Default Variables
+# ==============================================================================
+# These variables control cron and at daemon access restrictions
+# Override in group_vars/all.yml or host_vars/
+# ==============================================================================
+
+# ------------------------------------------------------------------------------
+# CONTROL FLAGS
+# ------------------------------------------------------------------------------
+posix_cron_force_reharden: false  # Force re-hardening even if already completed
+posix_cron_backup_before_changes: true  # Create backup before modifying
+posix_cron_validate_after_apply: true  # Validate settings after applying
+
+# ------------------------------------------------------------------------------
+# STATE TRACKING
+# ------------------------------------------------------------------------------
+posix_cron_hardening_marker: "/var/lib/hardening/cron_hardened"
+
+# ------------------------------------------------------------------------------
+# FILE PATHS
+# ------------------------------------------------------------------------------
+posix_cron_backup_dir: "/var/backups/hardening"
+posix_cron_log_dir: "/var/log/hardening"
+
+# ------------------------------------------------------------------------------
+# CRON ACCESS CONTROL
+# ------------------------------------------------------------------------------
+# Enable cron access restrictions
+posix_cron_enable_restrictions: true
+
+# Users allowed to use cron (written to /etc/cron.allow)
+# Default: only root can use cron
+# Add other users as needed:
+# posix_cron_allowed_users:
+#   - root
+#   - backup
+#   - monitor
+posix_cron_allowed_users:
+  - root
+
+# Remove /etc/cron.deny if it exists
+# When cron.allow exists, cron.deny is ignored
+posix_cron_remove_deny: true
+
+# ------------------------------------------------------------------------------
+# AT DAEMON ACCESS CONTROL
+# ------------------------------------------------------------------------------
+# Enable at daemon access restrictions
+posix_cron_enable_at_restrictions: true
+
+# Users allowed to use at daemon (written to /etc/at.allow)
+# Default: only root can use at
+posix_cron_at_allowed_users:
+  - root
+
+# Remove /etc/at.deny if it exists
+posix_cron_at_remove_deny: true
+
+# ------------------------------------------------------------------------------
+# FILE PERMISSIONS
+# ------------------------------------------------------------------------------
+# Secure cron configuration files and directories
+posix_cron_secure_permissions: true
+
+# Cron file permissions
+posix_cron_crontab_mode: "0600"        # /etc/crontab
+posix_cron_crontab_owner: root
+posix_cron_crontab_group: root
+
+# Cron directory permissions
+posix_cron_dir_mode: "0700"            # /etc/cron.* directories
+posix_cron_dir_owner: root
+posix_cron_dir_group: root
+
+# cron.allow and at.allow permissions
+posix_cron_allow_file_mode: "0600"
+posix_cron_allow_file_owner: root
+posix_cron_allow_file_group: root
+
+# ------------------------------------------------------------------------------
+# CRON DIRECTORIES
+# ------------------------------------------------------------------------------
+# List of cron directories to secure
+posix_cron_directories:
+  - /etc/cron.d
+  - /etc/cron.daily
+  - /etc/cron.hourly
+  - /etc/cron.monthly
+  - /etc/cron.weekly
+
+# Additional custom cron directories to secure
+posix_cron_custom_directories: []
+
+# ------------------------------------------------------------------------------
+# FILE PATHS - Advanced
+# ------------------------------------------------------------------------------
+posix_cron_crontab_path: "/etc/crontab"
+posix_cron_allow_path: "/etc/cron.allow"
+posix_cron_deny_path: "/etc/cron.deny"
+posix_cron_at_allow_path: "/etc/at.allow"
+posix_cron_at_deny_path: "/etc/at.deny"
+
+# ------------------------------------------------------------------------------
+# VALIDATION SETTINGS
+# ------------------------------------------------------------------------------
+# Verify that cron.allow exists and has correct permissions
+posix_cron_validate_allow: true
+
+# Verify that cron.deny is removed
+posix_cron_validate_deny_removed: true
+
+# Verify directory permissions
+posix_cron_validate_permissions: true
+
+# ------------------------------------------------------------------------------
+# BEHAVIOR SETTINGS
+# ------------------------------------------------------------------------------
+# Create cron.allow even if it doesn't exist
+posix_cron_create_allow: true
+
+# Create at.allow even if it doesn't exist
+posix_cron_create_at_allow: true
+
+# Ignore errors if directories don't exist
+# Some minimal systems may not have all cron directories
+posix_cron_ignore_missing_dirs: true
+
+# Check if cron service is installed before applying
+posix_cron_check_service_exists: true
+
+# ------------------------------------------------------------------------------
+# LOGGING
+# ------------------------------------------------------------------------------
+# Log all cron hardening operations
+posix_cron_enable_logging: true

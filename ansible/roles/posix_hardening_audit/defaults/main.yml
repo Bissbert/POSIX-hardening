@@ -1,0 +1,198 @@
+---
+# ==============================================================================
+# POSIX Audit Logging Hardening Role - Default Variables
+# ==============================================================================
+# These variables control auditd configuration and audit rules
+# Override in group_vars/all.yml or host_vars/
+# ==============================================================================
+
+# ------------------------------------------------------------------------------
+# CONTROL FLAGS
+# ------------------------------------------------------------------------------
+posix_audit_force_reharden: false  # Force re-hardening even if already completed
+posix_audit_backup_before_changes: true  # Create backup before modifying
+posix_audit_validate_after_apply: true  # Validate settings after applying
+
+# ------------------------------------------------------------------------------
+# STATE TRACKING
+# ------------------------------------------------------------------------------
+posix_audit_hardening_marker: "/var/lib/hardening/audit_hardened"
+
+# ------------------------------------------------------------------------------
+# FILE PATHS
+# ------------------------------------------------------------------------------
+posix_audit_backup_dir: "/var/backups/hardening"
+posix_audit_log_dir: "/var/log/hardening"
+
+# ------------------------------------------------------------------------------
+# PACKAGE INSTALLATION
+# ------------------------------------------------------------------------------
+# Install auditd package if not present
+posix_audit_install_package: true
+
+# Package names per distribution
+posix_audit_package_name: "{{ _posix_audit_package_name[ansible_os_family] | default('auditd') }}"
+_posix_audit_package_name:
+  Debian: auditd
+  Ubuntu: auditd
+  Kali: auditd
+  RedHat: audit
+  CentOS: audit
+  Rocky: audit
+  AlmaLinux: audit
+
+# ------------------------------------------------------------------------------
+# AUDITD SERVICE
+# ------------------------------------------------------------------------------
+# Enable and start auditd service
+posix_audit_enable_service: true
+posix_audit_start_service: true
+
+# Service name per distribution
+posix_audit_service_name: auditd
+
+# ------------------------------------------------------------------------------
+# AUDIT RULES CONFIGURATION
+# ------------------------------------------------------------------------------
+# Enable creation of audit rules
+posix_audit_enable_rules: true
+
+# Rules file location
+posix_audit_rules_dir: "/etc/audit/rules.d"
+posix_audit_rules_file: "{{ posix_audit_rules_dir }}/hardening.rules"
+
+# Backup location for existing rules
+posix_audit_rules_backup: "{{ posix_audit_backup_dir }}/audit-rules.backup"
+
+# ------------------------------------------------------------------------------
+# AUDIT RULES - FILE MONITORING
+# ------------------------------------------------------------------------------
+# Monitor critical system files for changes
+
+# Authentication files
+posix_audit_watch_passwd: true
+posix_audit_watch_shadow: true
+posix_audit_watch_group: true
+posix_audit_watch_gshadow: true
+posix_audit_watch_sudoers: true
+
+# SSH configuration
+posix_audit_watch_sshd_config: true
+
+# PAM configuration
+posix_audit_watch_pam: true
+
+# Network configuration
+posix_audit_watch_hosts: true
+posix_audit_watch_network: true
+
+# System configuration
+posix_audit_watch_sysctl: true
+posix_audit_watch_modprobe: true
+
+# ------------------------------------------------------------------------------
+# AUDIT RULES - SYSCALL MONITORING
+# ------------------------------------------------------------------------------
+# Monitor system calls for security events
+
+# Command execution
+posix_audit_monitor_execve: true
+
+# File operations
+posix_audit_monitor_unlink: true
+posix_audit_monitor_rename: true
+
+# Privilege changes
+posix_audit_monitor_setuid: true
+posix_audit_monitor_setgid: true
+
+# Kernel module operations
+posix_audit_monitor_modules: true
+
+# Network operations
+posix_audit_monitor_network: false  # Can be verbose, disabled by default
+
+# ------------------------------------------------------------------------------
+# AUDIT RULES - CUSTOM
+# ------------------------------------------------------------------------------
+# Additional custom audit rules (raw format)
+# Example:
+# posix_audit_custom_rules:
+#   - "-w /custom/path -p wa -k custom_watch"
+#   - "-a always,exit -F arch=b64 -S open -k file_open"
+posix_audit_custom_rules: []
+
+# ------------------------------------------------------------------------------
+# AUDITD CONFIGURATION (/etc/audit/auditd.conf)
+# ------------------------------------------------------------------------------
+# Configure audit daemon behavior
+
+# Log file location
+posix_audit_log_file: "/var/log/audit/audit.log"
+
+# Log file permissions
+posix_audit_log_mode: "0600"
+posix_audit_log_owner: root
+posix_audit_log_group: root
+
+# Log rotation settings
+posix_audit_max_log_file: 10  # MB
+posix_audit_num_logs: 5  # Number of rotated logs to keep
+posix_audit_max_log_file_action: "ROTATE"  # ROTATE, SYSLOG, SUSPEND, IGNORE
+
+# Disk space management
+posix_audit_space_left: 75  # MB - trigger action when space falls below
+posix_audit_space_left_action: "SYSLOG"  # SYSLOG, EMAIL, SUSPEND, SINGLE, HALT
+posix_audit_admin_space_left: 50  # MB - trigger admin action
+posix_audit_admin_space_left_action: "SUSPEND"
+posix_audit_disk_full_action: "SUSPEND"  # SUSPEND, SINGLE, HALT
+posix_audit_disk_error_action: "SUSPEND"
+
+# Flush settings
+posix_audit_flush: "INCREMENTAL_ASYNC"  # NONE, INCREMENTAL, INCREMENTAL_ASYNC, DATA, SYNC
+
+# Format
+posix_audit_log_format: "ENRICHED"  # RAW, ENRICHED
+
+# ------------------------------------------------------------------------------
+# RSYSLOG CONFIGURATION
+# ------------------------------------------------------------------------------
+# Configure rsyslog to log authentication events
+
+posix_audit_configure_rsyslog: true
+posix_audit_rsyslog_conf: "/etc/rsyslog.conf"
+posix_audit_auth_log: "/var/log/auth.log"
+
+# ------------------------------------------------------------------------------
+# VALIDATION SETTINGS
+# ------------------------------------------------------------------------------
+# Verify audit rules are loaded
+posix_audit_validate_rules_loaded: true
+
+# Verify auditd service is running
+posix_audit_validate_service_running: true
+
+# Verify log files exist with correct permissions
+posix_audit_validate_log_permissions: true
+
+# ------------------------------------------------------------------------------
+# BEHAVIOR SETTINGS
+# ------------------------------------------------------------------------------
+# Create audit rules directory if it doesn't exist
+posix_audit_create_rules_dir: true
+
+# Reload audit rules after changes
+posix_audit_reload_rules: true
+
+# Use auditctl to load rules instead of service restart
+posix_audit_use_auditctl: true
+
+# Architecture detection for syscall rules
+posix_audit_arch_b64: "{{ ansible_architecture == 'x86_64' }}"
+posix_audit_arch_b32: "{{ ansible_architecture in ['i386', 'i686'] }}"
+
+# ------------------------------------------------------------------------------
+# LOGGING
+# ------------------------------------------------------------------------------
+# Log all audit hardening operations
+posix_audit_enable_logging: true

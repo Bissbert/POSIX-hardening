@@ -1,0 +1,23 @@
+---
+# ==============================================================================
+# POSIX Audit Logging Hardening - Handlers
+# ==============================================================================
+
+- name: restart auditd
+  ansible.builtin.systemd:
+    name: "{{ posix_audit_service_name }}"
+    state: restarted
+  listen: restart auditd
+
+- name: reload audit rules
+  ansible.builtin.command:
+    cmd: auditctl -R {{ posix_audit_rules_file }}
+  changed_when: true
+  failed_when: false
+  listen: reload audit rules
+
+- name: restart rsyslog
+  ansible.builtin.systemd:
+    name: rsyslog
+    state: restarted
+  listen: restart rsyslog

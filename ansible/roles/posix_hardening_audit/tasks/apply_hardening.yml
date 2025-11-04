@@ -1,0 +1,183 @@
+---
+# ==============================================================================
+# POSIX Audit Logging Hardening - Apply Configuration
+# ==============================================================================
+
+# ------------------------------------------------------------------------------
+# Package Installation
+# ------------------------------------------------------------------------------
+- name: Install auditd package
+  ansible.builtin.package:
+    name: "{{ posix_audit_package_name }}"
+    state: present
+  when: posix_audit_install_package | bool
+  register: audit_package_installed
+  tags: [audit, install]
+
+# ------------------------------------------------------------------------------
+# Rsyslog Configuration
+# ------------------------------------------------------------------------------
+- name: Check if rsyslog configuration exists
+  ansible.builtin.stat:
+    path: "{{ posix_audit_rsyslog_conf }}"
+  register: rsyslog_conf_stat
+  when: posix_audit_configure_rsyslog | bool
+  tags: [audit, rsyslog]
+
+- name: Backup rsyslog.conf
+  ansible.builtin.copy:
+    src: "{{ posix_audit_rsyslog_conf }}"
+    dest: "{{ posix_audit_backup_dir }}/rsyslog.conf.backup.{{ ansible_date_time.epoch }}"
+    mode: '0644'
+    remote_src: true
+  when:
+    - posix_audit_configure_rsyslog | bool
+    - posix_audit_backup_before_changes | bool
+    - rsyslog_conf_stat.stat.exists
+  tags: [audit, rsyslog, backup]
+
+- name: Configure authentication logging in rsyslog
+  ansible.builtin.lineinfile:
+    path: "{{ posix_audit_rsyslog_conf }}"
+    regexp: '^auth,authpriv\.\*\s+.*'
+    line: "auth,authpriv.* {{ posix_audit_auth_log }}"
+    create: false
+    state: present
+  when:
+    - posix_audit_configure_rsyslog | bool
+    - rsyslog_conf_stat.stat.exists
+  notify: restart rsyslog
+  tags: [audit, rsyslog]
+
+# ------------------------------------------------------------------------------
+# Audit Rules Directory
+# ------------------------------------------------------------------------------
+- name: Ensure audit rules directory exists
+  ansible.builtin.file:
+    path: "{{ posix_audit_rules_dir }}"
+    state: directory
+    mode: '0750'
+    owner: root
+    group: root
+  when:
+    - posix_audit_enable_rules | bool
+    - posix_audit_create_rules_dir | bool
+  tags: [audit, rules]
+
+- name: Check if existing audit rules exist
+  ansible.builtin.stat:
+    path: "{{ posix_audit_rules_file }}"
+  register: audit_rules_stat
+  when: posix_audit_enable_rules | bool
+  tags: [audit, rules]
+
+- name: Backup existing audit rules
+  ansible.builtin.copy:
+    src: "{{ posix_audit_rules_file }}"
+    dest: "{{ posix_audit_rules_backup }}.{{ ansible_date_time.epoch }}"
+    mode: '0600'
+    remote_src: true
+  when:
+    - posix_audit_enable_rules | bool
+    - posix_audit_backup_before_changes | bool
+    - audit_rules_stat.stat.exists
+  tags: [audit, rules, backup]
+
+# ------------------------------------------------------------------------------
+# Deploy Audit Rules
+# ------------------------------------------------------------------------------
+- name: Deploy audit rules from template
+  ansible.builtin.template:
+    src: audit-rules.j2
+    dest: "{{ posix_audit_rules_file }}"
+    mode: '0640'
+    owner: root
+    group: root
+    validate: 'augenrules --check || echo "Warning: augenrules validation failed"'
+  when: posix_audit_enable_rules | bool
+  notify: reload audit rules
+  register: audit_rules_deployed
+  tags: [audit, rules]
+
+# ------------------------------------------------------------------------------
+# Auditd Configuration (optional)
+# ------------------------------------------------------------------------------
+- name: Check if auditd.conf exists
+  ansible.builtin.stat:
+    path: /etc/audit/auditd.conf
+  register: auditd_conf_stat
+  tags: [audit, config]
+
+- name: Backup auditd.conf
+  ansible.builtin.copy:
+    src: /etc/audit/auditd.conf
+    dest: "{{ posix_audit_backup_dir }}/auditd.conf.backup.{{ ansible_date_time.epoch }}"
+    mode: '0644'
+    remote_src: true
+  when:
+    - posix_audit_backup_before_changes | bool
+    - auditd_conf_stat.stat.exists
+  tags: [audit, config, backup]
+
+- name: Deploy auditd configuration
+  ansible.builtin.template:
+    src: auditd.conf.j2
+    dest: /etc/audit/auditd.conf
+    mode: '0640'
+    owner: root
+    group: root
+  when: auditd_conf_stat.stat.exists
+  notify: restart auditd
+  tags: [audit, config]
+
+# ------------------------------------------------------------------------------
+# Ensure Audit Log Directory Exists
+# ------------------------------------------------------------------------------
+- name: Ensure audit log directory exists
+  ansible.builtin.file:
+    path: "{{ posix_audit_log_file | dirname }}"
+    state: directory
+    mode: '0750'
+    owner: root
+    group: root
+  tags: [audit, logs]
+
+# ------------------------------------------------------------------------------
+# Service Management
+# ------------------------------------------------------------------------------
+- name: Enable and start auditd service
+  ansible.builtin.systemd:
+    name: "{{ posix_audit_service_name }}"
+    enabled: "{{ posix_audit_enable_service | bool }}"
+    state: "{{ 'started' if posix_audit_start_service | bool else 'stopped' }}"
+  when:
+    - posix_audit_install_package | bool
+    - audit_package_installed is succeeded
+  tags: [audit, service]
+
+# ------------------------------------------------------------------------------
+# Load Audit Rules (if using auditctl)
+# ------------------------------------------------------------------------------
+- name: Load audit rules using auditctl
+  ansible.builtin.command:
+    cmd: auditctl -R {{ posix_audit_rules_file }}
+  when:
+    - posix_audit_enable_rules | bool
+    - posix_audit_use_auditctl | bool
+    - audit_rules_deployed is changed
+  register: auditctl_load
+  changed_when: auditctl_load.rc == 0
+  failed_when: false
+  tags: [audit, rules, load]
+
+- name: Display auditctl load result
+  ansible.builtin.debug:
+    msg: |
+      Audit rules loaded via auditctl
+      Result: {{ auditctl_load.stdout | default('Success') }}
+  when:
+    - posix_audit_enable_rules | bool
+    - posix_audit_use_auditctl | bool
+    - auditctl_load is defined
+    - auditctl_load.rc == 0
+  tags: [audit, rules, load]

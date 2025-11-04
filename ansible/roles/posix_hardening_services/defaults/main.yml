@@ -1,0 +1,132 @@
+---
+# ==============================================================================
+# POSIX Service Disabling Hardening Role - Default Variables
+# ==============================================================================
+# These variables control which services are disabled for security hardening
+# Override in group_vars/all.yml or host_vars/
+# ==============================================================================
+
+# ------------------------------------------------------------------------------
+# CONTROL FLAGS
+# ------------------------------------------------------------------------------
+posix_services_force_reharden: false  # Force re-hardening even if already completed
+posix_services_backup_before_changes: true  # Create backup before modifying
+posix_services_validate_after_apply: true  # Validate settings after applying
+
+# ------------------------------------------------------------------------------
+# STATE TRACKING
+# ------------------------------------------------------------------------------
+posix_services_hardening_marker: "/var/lib/hardening/services_hardened"
+
+# ------------------------------------------------------------------------------
+# FILE PATHS
+# ------------------------------------------------------------------------------
+posix_services_backup_dir: "/var/backups/hardening"
+posix_services_log_dir: "/var/log/hardening"
+
+# ------------------------------------------------------------------------------
+# SERVICE DISABLING CONFIGURATION
+# ------------------------------------------------------------------------------
+# Enable or disable service hardening entirely
+posix_services_enable_hardening: true
+
+# Use systemd masking for extra security (prevents services from starting)
+# Masking is stronger than disabling - service cannot be started manually
+posix_services_use_masking: true
+
+# Services that will be masked (highest security level)
+# These services cannot be started even manually
+posix_services_to_mask:
+  - avahi-daemon       # mDNS/DNS-SD service (often unnecessary)
+  - cups               # Printing service (not needed on servers)
+  - bluetooth          # Bluetooth service (not needed on servers)
+  - iscsid             # iSCSI initiator (only needed for iSCSI storage)
+  - rpcbind            # RPC port mapper (needed only for NFS)
+
+# Services to disable and stop (but not mask)
+# These can still be started manually if needed
+posix_services_to_disable:
+  - cups-browsed       # CUPS printer browsing
+  - telnet             # Insecure telnet service
+  - rsh                # Insecure remote shell
+  - rlogin             # Insecure remote login
+  - rexec              # Remote execution
+  - talk               # Talk daemon
+  - ntalk              # Network talk
+  - tftp               # TFTP server
+  - rsync              # Rsync daemon (client is usually sufficient)
+  - snmpd              # SNMP daemon (monitoring)
+  - nfs-server         # NFS server
+  - rpc-bind           # RPC bind (alternate name)
+
+# Services that should NEVER be disabled (safety list)
+# These are critical system services
+posix_services_never_disable:
+  - sshd               # SSH daemon (remote access)
+  - ssh                # SSH service (alternate name)
+  - systemd-journald   # System logging
+  - systemd-logind     # Login management
+  - systemd-resolved   # DNS resolution
+  - systemd-networkd   # Network management
+  - systemd-timesyncd  # Time synchronization
+  - systemd-udevd      # Device management
+  - dbus               # D-Bus message bus
+  - cron               # Cron daemon
+  - crond              # Cron daemon (RHEL name)
+  - rsyslog            # System logging
+  - syslog-ng          # System logging (alternate)
+  - networking         # Network service
+  - network            # Network service (alternate)
+  - NetworkManager     # Network management (desktop)
+
+# Override list: Services to keep enabled (whitelist)
+# Add services here that you need but are in the disable/mask lists
+# Example:
+# posix_services_keep_enabled:
+#   - cups              # Keep printing if needed
+#   - bluetooth         # Keep bluetooth if needed
+posix_services_keep_enabled: []
+
+# Custom services to disable (in addition to defaults)
+# Add your own services here
+posix_services_custom_disable: []
+
+# Custom services to mask (in addition to defaults)
+posix_services_custom_mask: []
+
+# ------------------------------------------------------------------------------
+# BEHAVIOR SETTINGS
+# ------------------------------------------------------------------------------
+# Stop services before disabling them
+posix_services_stop_before_disable: true
+
+# Check if service exists before attempting to disable
+# This prevents errors on systems where services are not installed
+posix_services_check_existence: true
+
+# Continue on errors (don't fail if a service cannot be disabled)
+posix_services_ignore_errors: true
+
+# ------------------------------------------------------------------------------
+# SYSTEMD VS SYSVINIT
+# ------------------------------------------------------------------------------
+# Prefer systemd over sysvinit when both are available
+posix_services_prefer_systemd: true
+
+# Fallback to sysvinit commands if systemd is not available
+posix_services_enable_sysvinit_fallback: true
+
+# ------------------------------------------------------------------------------
+# VALIDATION SETTINGS
+# ------------------------------------------------------------------------------
+# Verify that disabled services are actually disabled
+posix_services_validate_disabled: true
+
+# Verify that masked services are actually masked
+posix_services_validate_masked: true
+
+# ------------------------------------------------------------------------------
+# LOGGING
+# ------------------------------------------------------------------------------
+# Log all service operations
+posix_services_enable_logging: true

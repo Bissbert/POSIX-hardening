@@ -1,0 +1,154 @@
+---
+# ==============================================================================
+# POSIX File Integrity Monitoring - Validation
+# ==============================================================================
+
+- name: Validate AIDE is installed
+  ansible.builtin.command:
+    cmd: which aide
+  register: aide_installed
+  changed_when: false
+  failed_when: false
+  when: posix_integrity_validate_installed | bool
+  tags: [integrity, validate, install]
+
+- name: Display AIDE installation status
+  ansible.builtin.debug:
+    msg: |
+      AIDE installation: {{ 'INSTALLED' if aide_installed.rc == 0 else 'NOT INSTALLED' }}
+      {% if aide_installed.rc == 0 %}
+      Path: {{ aide_installed.stdout }}
+      {% endif %}
+  when:
+    - posix_integrity_validate_installed | bool
+    - aide_installed is defined
+  tags: [integrity, validate, install]
+
+- name: Validate AIDE configuration exists
+  ansible.builtin.stat:
+    path: "{{ aide_conf_path | default(posix_integrity_aide_conf) }}"
+  register: aide_config_validation
+  failed_when: false
+  when: posix_integrity_validate_config | bool
+  tags: [integrity, validate, config]
+
+- name: Display AIDE configuration validation
+  ansible.builtin.debug:
+    msg: |
+      AIDE configuration: {{ 'EXISTS' if aide_config_validation.stat.exists else 'MISSING' }}
+      Path: {{ aide_conf_path | default(posix_integrity_aide_conf) }}
+      {% if aide_config_validation.stat.exists %}
+      Permissions: {{ aide_config_validation.stat.mode }}
+      Owner: {{ aide_config_validation.stat.pw_name }}
+      {% endif %}
+  when:
+    - posix_integrity_validate_config | bool
+    - aide_config_validation is defined
+  tags: [integrity, validate, config]
+
+- name: Validate AIDE database exists
+  ansible.builtin.stat:
+    path: "{{ posix_integrity_aide_db }}"
+  register: aide_db_validation
+  failed_when: false
+  when: posix_integrity_validate_database | bool
+  tags: [integrity, validate, database]
+
+- name: Validate compressed AIDE database exists
+  ansible.builtin.stat:
+    path: "{{ posix_integrity_aide_db }}.gz"
+  register: aide_db_gz_validation
+  failed_when: false
+  when: posix_integrity_validate_database | bool
+  tags: [integrity, validate, database]
+
+- name: Display AIDE database validation
+  ansible.builtin.debug:
+    msg: |
+      AIDE database: {{ 'EXISTS' if (aide_db_validation.stat.exists or aide_db_gz_validation.stat.exists) else 'MISSING' }}
+      Path: {{ posix_integrity_aide_db }}
+      {% if aide_db_validation.stat.exists %}
+      Size: {{ aide_db_validation.stat.size | default(0) }} bytes
+      {% elif aide_db_gz_validation.stat.exists %}
+      Compressed size: {{ aide_db_gz_validation.stat.size | default(0) }} bytes
+      {% else %}
+      NOTE: Initialize database with: aide --init
+      {% endif %}
+  when:
+    - posix_integrity_validate_database | bool
+    - aide_db_validation is defined
+  tags: [integrity, validate, database]
+
+- name: Validate AIDE check script exists
+  ansible.builtin.stat:
+    path: /usr/local/bin/aide-check.sh
+  register: aide_script_validation
+  failed_when: false
+  tags: [integrity, validate, script]
+
+- name: Display AIDE script validation
+  ansible.builtin.debug:
+    msg: |
+      AIDE check script: {{ 'EXISTS' if aide_script_validation.stat.exists else 'MISSING' }}
+      Path: /usr/local/bin/aide-check.sh
+      {% if aide_script_validation.stat.exists %}
+      Permissions: {{ aide_script_validation.stat.mode }}
+      Executable: {{ 'YES' if aide_script_validation.stat.executable else 'NO' }}
+      {% endif %}
+  when: aide_script_validation is defined
+  tags: [integrity, validate, script]
+
+- name: Validate AIDE cron job is scheduled
+  ansible.builtin.shell:
+    cmd: crontab -l -u {{ posix_integrity_cron_user }} | grep -c "aide-check.sh" || true
+  register: aide_cron_validation
+  changed_when: false
+  failed_when: false
+  when: posix_integrity_validate_cron | bool
+  tags: [integrity, validate, cron]
+
+- name: Display AIDE cron validation
+  ansible.builtin.debug:
+    msg: |
+      AIDE cron job: {{ 'SCHEDULED' if (aide_cron_validation.stdout | int > 0) else 'NOT SCHEDULED' }}
+      Schedule: {{ posix_integrity_cron_hour }}:{{ posix_integrity_cron_minute }} daily
+  when:
+    - posix_integrity_validate_cron | bool
+    - aide_cron_validation is defined
+  tags: [integrity, validate, cron]
+
+- name: Test AIDE configuration syntax
+  ansible.builtin.command:
+    cmd: aide --config={{ aide_conf_path | default(posix_integrity_aide_conf) }} --config-check
+  register: aide_config_test
+  changed_when: false
+  failed_when: false
+  when: posix_integrity_validate_config | bool
+  tags: [integrity, validate, syntax]
+
+- name: Display AIDE configuration test
+  ansible.builtin.debug:
+    msg: |
+      AIDE config syntax: {{ 'VALID' if aide_config_test.rc == 0 else 'INVALID' }}
+      {% if aide_config_test.rc != 0 %}
+      Error: {{ aide_config_test.stderr }}
+      {% endif %}
+  when:
+    - posix_integrity_validate_config | bool
+    - aide_config_test is defined
+  tags: [integrity, validate, syntax]
+
+- name: Final validation summary
+  ansible.builtin.debug:
+    msg: |
+      ========================================
+      INTEGRITY MONITORING VALIDATION SUMMARY
+      ========================================
+      AIDE installed: {{ 'OK' if (aide_installed.rc | default(1) == 0) else 'FAIL' }}
+      Configuration: {{ 'OK' if aide_config_validation.stat.exists else 'FAIL' }}
+      Database: {{ 'OK' if (aide_db_validation.stat.exists or aide_db_gz_validation.stat.exists) else 'MISSING - Initialize manually' }}
+      Check script: {{ 'OK' if aide_script_validation.stat.exists else 'FAIL' }}
+      Cron job: {{ 'OK' if (aide_cron_validation.stdout | int > 0) else 'CHECK' }}
+      Config syntax: {{ 'OK' if (aide_config_test.rc | default(1) == 0) else 'CHECK' }}
+      ========================================
+  tags: [integrity, validate, summary]

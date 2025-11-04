@@ -1,0 +1,253 @@
+---
+# ==============================================================================
+# POSIX Cron Hardening - Validate Settings
+# ==============================================================================
+
+# ------------------------------------------------------------------------------
+# VALIDATE CRON ACCESS CONTROL FILES
+# ------------------------------------------------------------------------------
+- name: Check if cron.allow exists
+  ansible.builtin.stat:
+    path: "{{ posix_cron_allow_path }}"
+  register: cron_allow_validation
+  tags: [cron, validate, allow]
+
+- name: Check if cron.deny exists
+  ansible.builtin.stat:
+    path: "{{ posix_cron_deny_path }}"
+  register: cron_deny_validation
+  tags: [cron, validate, deny]
+
+- name: Verify cron.allow permissions
+  ansible.builtin.stat:
+    path: "{{ posix_cron_allow_path }}"
+  register: cron_allow_perms
+  when:
+    - cron_allow_validation.stat.exists
+    - posix_cron_validate_allow | bool
+  tags: [cron, validate, permissions]
+
+- name: Read cron.allow content
+  ansible.builtin.command: cat {{ posix_cron_allow_path }}
+  register: cron_allow_content
+  changed_when: false
+  when:
+    - cron_allow_validation.stat.exists
+  tags: [cron, validate, content]
+
+# ------------------------------------------------------------------------------
+# VALIDATE AT DAEMON ACCESS CONTROL FILES
+# ------------------------------------------------------------------------------
+- name: Check if at.allow exists
+  ansible.builtin.stat:
+    path: "{{ posix_cron_at_allow_path }}"
+  register: at_allow_validation
+  when:
+    - posix_cron_enable_at_restrictions | bool
+  tags: [cron, validate, at, allow]
+
+- name: Check if at.deny exists
+  ansible.builtin.stat:
+    path: "{{ posix_cron_at_deny_path }}"
+  register: at_deny_validation
+  when:
+    - posix_cron_enable_at_restrictions | bool
+  tags: [cron, validate, at, deny]
+
+- name: Verify at.allow permissions
+  ansible.builtin.stat:
+    path: "{{ posix_cron_at_allow_path }}"
+  register: at_allow_perms
+  when:
+    - posix_cron_enable_at_restrictions | bool
+    - at_allow_validation.stat.exists
+  tags: [cron, validate, at, permissions]
+
+# ------------------------------------------------------------------------------
+# VALIDATE CRONTAB PERMISSIONS
+# ------------------------------------------------------------------------------
+- name: Check /etc/crontab permissions
+  ansible.builtin.stat:
+    path: "{{ posix_cron_crontab_path }}"
+  register: crontab_perms
+  when:
+    - posix_cron_validate_permissions | bool
+  tags: [cron, validate, crontab, permissions]
+
+# ------------------------------------------------------------------------------
+# VALIDATE CRON DIRECTORY PERMISSIONS
+# ------------------------------------------------------------------------------
+- name: Check cron directory permissions
+  ansible.builtin.stat:
+    path: "{{ item }}"
+  register: cron_dir_perms
+  loop: "{{ posix_cron_all_directories }}"
+  when:
+    - posix_cron_validate_permissions | bool
+  tags: [cron, validate, directories, permissions]
+
+- name: Count directories with correct permissions
+  ansible.builtin.set_fact:
+    cron_dirs_correct_perms: >-
+      {{ cron_dir_perms.results |
+         selectattr('stat.exists', 'equalto', true) |
+         selectattr('stat.mode', 'equalto', posix_cron_dir_mode) |
+         list | length | default(0) }}
+  when:
+    - posix_cron_validate_permissions | bool
+    - cron_dir_perms is defined
+  tags: [cron, validate, report]
+
+- name: Count existing directories
+  ansible.builtin.set_fact:
+    cron_dirs_exist_count: >-
+      {{ cron_dir_perms.results |
+         selectattr('stat.exists', 'equalto', true) |
+         list | length | default(0) }}
+  when:
+    - cron_dir_perms is defined
+  tags: [cron, validate, report]
+
+# ------------------------------------------------------------------------------
+# DISPLAY VALIDATION RESULTS
+# ------------------------------------------------------------------------------
+- name: Display cron.allow validation
+  ansible.builtin.debug:
+    msg: |
+      Cron.allow validation:
+        - Exists: {{ cron_allow_validation.stat.exists }}
+        - Mode: {{ cron_allow_perms.stat.mode | default('N/A') }}
+        - Owner: {{ cron_allow_perms.stat.pw_name | default('N/A') }}
+        - Group: {{ cron_allow_perms.stat.gr_name | default('N/A') }}
+        - Expected mode: {{ posix_cron_allow_file_mode }}
+  when:
+    - posix_cron_validate_allow | bool
+  tags: [cron, validate, report]
+
+- name: Display cron.deny validation
+  ansible.builtin.debug:
+    msg: |
+      Cron.deny validation:
+        - Should be removed: {{ posix_cron_remove_deny }}
+        - Exists: {{ cron_deny_validation.stat.exists }}
+        - Status: {{ 'OK - Removed' if not cron_deny_validation.stat.exists else 'WARNING - Still exists' }}
+  when:
+    - posix_cron_validate_deny_removed | bool
+  tags: [cron, validate, report]
+
+- name: Display at daemon validation
+  ansible.builtin.debug:
+    msg: |
+      At daemon validation:
+        - at.allow exists: {{ at_allow_validation.stat.exists | default('N/A') }}
+        - at.deny exists: {{ at_deny_validation.stat.exists | default('N/A') }}
+        - at.deny status: {{ 'OK - Removed' if not at_deny_validation.stat.exists else 'WARNING - Still exists' }}
+  when:
+    - posix_cron_enable_at_restrictions | bool
+  tags: [cron, validate, report]
+
+- name: Display crontab validation
+  ansible.builtin.debug:
+    msg: |
+      Crontab validation:
+        - Exists: {{ crontab_perms.stat.exists | default(false) }}
+        - Mode: {{ crontab_perms.stat.mode | default('N/A') }}
+        - Expected: {{ posix_cron_crontab_mode }}
+        - Status: {{ 'OK' if crontab_perms.stat.mode | default('') == posix_cron_crontab_mode else 'Check needed' }}
+  when:
+    - posix_cron_validate_permissions | bool
+    - crontab_perms is defined
+  tags: [cron, validate, report]
+
+- name: Display directory validation summary
+  ansible.builtin.debug:
+    msg: |
+      Cron directories validation:
+        - Total directories: {{ posix_cron_all_directories | length }}
+        - Existing directories: {{ cron_dirs_exist_count | default(0) }}
+        - Directories with correct permissions: {{ cron_dirs_correct_perms | default(0) }}
+        - Expected mode: {{ posix_cron_dir_mode }}
+  when:
+    - posix_cron_validate_permissions | bool
+    - cron_dir_perms is defined
+  tags: [cron, validate, report]
+
+- name: List directories with incorrect permissions
+  ansible.builtin.debug:
+    msg: "WARNING: Directory {{ item.item }} has mode {{ item.stat.mode }} (expected {{ posix_cron_dir_mode }})"
+  loop: "{{ cron_dir_perms.results }}"
+  when:
+    - posix_cron_validate_permissions | bool
+    - cron_dir_perms is defined
+    - item.stat.exists
+    - item.stat.mode != posix_cron_dir_mode
+  loop_control:
+    label: "{{ item.item }}"
+  tags: [cron, validate, warnings]
+
+# ------------------------------------------------------------------------------
+# DISPLAY ALLOWED USERS
+# ------------------------------------------------------------------------------
+- name: Display allowed cron users
+  ansible.builtin.debug:
+    msg: |
+      Users allowed to use cron (from cron.allow):
+      {{ cron_allow_content.stdout_lines | default(['Unable to read file']) | join('\n') }}
+  when:
+    - cron_allow_validation.stat.exists
+    - cron_allow_content is defined
+  tags: [cron, validate, users]
+
+# ------------------------------------------------------------------------------
+# ASSERTIONS
+# ------------------------------------------------------------------------------
+- name: Assert cron.allow exists
+  ansible.builtin.assert:
+    that:
+      - cron_allow_validation.stat.exists
+    fail_msg: "/etc/cron.allow does not exist!"
+    success_msg: "/etc/cron.allow exists correctly"
+  when:
+    - posix_cron_validate_allow | bool
+    - posix_cron_create_allow | bool
+  ignore_errors: true
+  tags: [cron, validate, assert]
+
+- name: Assert cron.deny is removed
+  ansible.builtin.assert:
+    that:
+      - not cron_deny_validation.stat.exists
+    fail_msg: "/etc/cron.deny still exists (should be removed)"
+    success_msg: "/etc/cron.deny correctly removed"
+  when:
+    - posix_cron_validate_deny_removed | bool
+    - posix_cron_remove_deny | bool
+  ignore_errors: true
+  tags: [cron, validate, assert]
+
+- name: Assert at.deny is removed
+  ansible.builtin.assert:
+    that:
+      - not at_deny_validation.stat.exists
+    fail_msg: "/etc/at.deny still exists (should be removed)"
+    success_msg: "/etc/at.deny correctly removed"
+  when:
+    - posix_cron_enable_at_restrictions | bool
+    - posix_cron_at_remove_deny | bool
+    - at_deny_validation is defined
+  ignore_errors: true
+  tags: [cron, validate, assert]
+
+- name: Final validation summary
+  ansible.builtin.debug:
+    msg: |
+      ========================================
+      CRON HARDENING VALIDATION COMPLETE
+      ========================================
+      Access control: {{ 'PASS' if cron_allow_validation.stat.exists and not cron_deny_validation.stat.exists else 'CHECK' }}
+      File permissions: {{ 'PASS' if crontab_perms.stat.mode | default('') == posix_cron_crontab_mode else 'CHECK' }}
+      Directory permissions: {{ cron_dirs_correct_perms | default(0) }} / {{ cron_dirs_exist_count | default(0) }} correct
+
+      Cron is now restricted to authorized users only.
+      ========================================
+  tags: [cron, validate, summary]

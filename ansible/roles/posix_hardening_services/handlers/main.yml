@@ -1,0 +1,11 @@
+---
+# ==============================================================================
+# POSIX Service Hardening Role - Handlers
+# ==============================================================================
+# Service disabling is a one-time operation
+# No dynamic handlers required as services are permanently disabled
+# ==============================================================================
+
+# No handlers required for service disabling
+# Services are stopped and disabled/masked directly in tasks
+# Changes take effect immediately and persist across reboots

@@ -1,0 +1,36 @@
+---
+galaxy_info:
+  role_name: posix_hardening_cron
+  namespace: posix
+  author: POSIX Hardening Team
+  description: Cron and at daemon access restriction hardening to limit scheduled task creation
+  company: Internal
+  license: MIT
+  min_ansible_version: 2.9
+  platforms:
+    - name: Debian
+      versions:
+        - bullseye
+        - bookworm
+    - name: Ubuntu
+      versions:
+        - focal
+        - jammy
+        - noble
+    - name: Kali
+      versions:
+        - all
+    - name: RedHat
+      versions:
+        - 8
+        - 9
+  galaxy_tags:
+    - security
+    - hardening
+    - posix
+    - cron
+    - at
+    - access-control
+    - scheduling
+
+dependencies: []

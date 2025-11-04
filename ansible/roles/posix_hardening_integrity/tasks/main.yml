@@ -1,0 +1,147 @@
+---
+# ==============================================================================
+# POSIX File Integrity Monitoring Role - Main Tasks
+# ==============================================================================
+# CRITICAL: This role configures file integrity monitoring with AIDE
+# Converted from: scripts/20-integrity-baseline.sh
+# ==============================================================================
+
+- name: Display integrity monitoring hardening warning
+  ansible.builtin.debug:
+    msg: |
+      ========================================
+      FILE INTEGRITY MONITORING IN PROGRESS
+      ========================================
+      This role will configure file integrity monitoring
+
+      Applied hardening:
+        - Install AIDE package
+        - Configure AIDE for system file monitoring
+        - Monitor critical directories (/etc, /bin, /sbin, etc.)
+        - Schedule daily integrity checks via cron
+        - Configure alerting for violations
+
+      WARNING: Database initialization can take 10-30 minutes
+      Set posix_integrity_init_database=true to initialize now
+      Otherwise, run manually: aide --init
+
+      AIDE database: {{ posix_integrity_aide_db }}
+      Configuration: {{ posix_integrity_aide_conf }}
+      Cron schedule: {{ posix_integrity_cron_hour }}:{{ posix_integrity_cron_minute }}
+      Backup location: {{ posix_integrity_backup_dir }}
+      Marker file: {{ posix_integrity_hardening_marker }}
+      ========================================
+  tags: [integrity, warning]
+
+- name: Check if integrity monitoring already applied
+  ansible.builtin.stat:
+    path: "{{ posix_integrity_hardening_marker }}"
+  register: integrity_hardening_marker_stat
+  tags: [integrity, check]
+
+- name: Display skip message if already hardened
+  ansible.builtin.debug:
+    msg: |
+      Integrity monitoring hardening already applied (marker exists).
+      Set posix_integrity_force_reharden=true to re-apply.
+  when:
+    - integrity_hardening_marker_stat.stat.exists
+    - not posix_integrity_force_reharden | bool
+  tags: [integrity, check]
+
+- name: Phase 1 - Preparation
+  block:
+    - name: Ensure backup directory exists
+      ansible.builtin.file:
+        path: "{{ posix_integrity_backup_dir }}"
+        state: directory
+        mode: '0700'
+        owner: root
+        group: root
+
+    - name: Ensure log directory exists
+      ansible.builtin.file:
+        path: "{{ posix_integrity_log_dir }}"
+        state: directory
+        mode: '0755'
+        owner: root
+        group: root
+
+    - name: Ensure marker directory exists
+      ansible.builtin.file:
+        path: "{{ posix_integrity_hardening_marker | dirname }}"
+        state: directory
+        mode: '0755'
+        owner: root
+        group: root
+
+    - name: Check if AIDE package is available
+      ansible.builtin.package:
+        name: "{{ posix_integrity_package_name }}"
+        state: present
+      check_mode: true
+      register: aide_package_check
+      failed_when: false
+      when: posix_integrity_install_package | bool
+
+    - name: Display warning if AIDE package not available
+      ansible.builtin.debug:
+        msg: |
+          WARNING: AIDE package ({{ posix_integrity_package_name }}) not available.
+          File integrity monitoring will not function without AIDE installed.
+      when:
+        - posix_integrity_install_package | bool
+        - aide_package_check is failed
+
+  when:
+    - not integrity_hardening_marker_stat.stat.exists or posix_integrity_force_reharden | bool
+  tags: [integrity, preparation, phase1]
+
+- name: Phase 2 - Apply integrity monitoring hardening
+  ansible.builtin.include_tasks: apply_hardening.yml
+  when:
+    - not integrity_hardening_marker_stat.stat.exists or posix_integrity_force_reharden | bool
+  tags: [integrity, apply, phase2]
+
+- name: Phase 3 - Validate settings
+  ansible.builtin.include_tasks: validate_hardening.yml
+  when:
+    - not integrity_hardening_marker_stat.stat.exists or posix_integrity_force_reharden | bool
+    - posix_integrity_validate_after_apply | bool
+  tags: [integrity, validate, phase3]
+
+- name: Phase 4 - Finalization
+  block:
+    - name: Create hardening marker file
+      ansible.builtin.copy:
+        content: |
+          File integrity monitoring hardening applied on: {{ ansible_date_time.iso8601 }}
+          Applied by: Ansible role posix_hardening_integrity
+          Hostname: {{ ansible_hostname }}
+          Backup location: {{ posix_integrity_backup_dir }}
+          AIDE database: {{ posix_integrity_aide_db }}
+          Cron enabled: {{ posix_integrity_enable_cron | bool }}
+          Database initialized: {{ posix_integrity_init_database | bool }}
+        dest: "{{ posix_integrity_hardening_marker }}"
+        mode: '0644'
+        owner: root
+        group: root
+
+    - name: Display integrity monitoring success
+      ansible.builtin.debug:
+        msg: |
+          ========================================
+          INTEGRITY MONITORING HARDENING COMPLETED
+          ========================================
+          File integrity monitoring configured successfully
+          {% if not posix_integrity_init_database | bool %}
+
+          IMPORTANT: Initialize AIDE database manually with:
+            aide --init
+            mv {{ posix_integrity_aide_db_new }} {{ posix_integrity_aide_db }}
+          {% endif %}
+          ========================================
+
+  when:
+    - not integrity_hardening_marker_stat.stat.exists or posix_integrity_force_reharden | bool
+  tags: [integrity, finalization, phase4]

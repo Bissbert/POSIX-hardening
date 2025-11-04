@@ -1,0 +1,200 @@
+---
+# ==============================================================================
+# POSIX Log Retention Hardening Role - Default Variables
+# ==============================================================================
+# These variables control log rotation and retention policies
+# Override in group_vars/all.yml or host_vars/
+# ==============================================================================
+
+# ------------------------------------------------------------------------------
+# CONTROL FLAGS
+# ------------------------------------------------------------------------------
+posix_logs_force_reharden: false  # Force re-hardening even if already completed
+posix_logs_backup_before_changes: true  # Create backup before modifying
+posix_logs_validate_after_apply: true  # Validate settings after applying
+
+# ------------------------------------------------------------------------------
+# STATE TRACKING
+# ------------------------------------------------------------------------------
+posix_logs_hardening_marker: "/var/lib/hardening/logs_hardened"
+
+# ------------------------------------------------------------------------------
+# FILE PATHS
+# ------------------------------------------------------------------------------
+posix_logs_backup_dir: "/var/backups/hardening"
+posix_logs_log_dir: "/var/log/hardening"
+
+# ------------------------------------------------------------------------------
+# LOGROTATE CONFIGURATION
+# ------------------------------------------------------------------------------
+# Main logrotate configuration file
+posix_logs_logrotate_conf: "/etc/logrotate.conf"
+
+# Logrotate directory for service-specific configs
+posix_logs_logrotate_d: "/etc/logrotate.d"
+
+# ------------------------------------------------------------------------------
+# LOG RETENTION SETTINGS
+# ------------------------------------------------------------------------------
+# Default rotation settings
+posix_logs_rotate_count: 90  # Number of rotations to keep (days if daily)
+posix_logs_rotate_frequency: "daily"  # daily, weekly, monthly
+posix_logs_compress: true  # Compress rotated logs
+posix_logs_delaycompress: true  # Delay compression by one rotation
+posix_logs_missingok: true  # Don't error if log file is missing
+posix_logs_notifempty: true  # Don't rotate empty logs
+posix_logs_create: true  # Create new log file after rotation
+posix_logs_create_mode: "0640"  # Mode for new log files
+posix_logs_create_owner: "root"
+posix_logs_create_group: "adm"
+
+# Size-based rotation (alternative to time-based)
+posix_logs_size_based_rotation: false
+posix_logs_max_size: "100M"  # Rotate when log exceeds this size
+
+# ------------------------------------------------------------------------------
+# SECURITY LOG ROTATION
+# ------------------------------------------------------------------------------
+# Configure rotation for security-sensitive logs
+posix_logs_configure_security: true
+
+# Security logs to rotate
+posix_logs_security_files:
+  - /var/log/auth.log
+  - /var/log/secure
+  - /var/log/audit/audit.log
+
+# Security log retention (separate from default)
+posix_logs_security_rotate_count: 90
+posix_logs_security_frequency: "daily"
+posix_logs_security_compress: true
+posix_logs_security_create_mode: "0600"  # More restrictive for security logs
+posix_logs_security_create_owner: "root"
+posix_logs_security_create_group: "root"
+
+# ------------------------------------------------------------------------------
+# SYSLOG ROTATION
+# ------------------------------------------------------------------------------
+# Configure rotation for system logs
+posix_logs_configure_syslog: true
+
+# Syslog files to rotate
+posix_logs_syslog_files:
+  - /var/log/syslog
+  - /var/log/messages
+  - /var/log/kern.log
+  - /var/log/daemon.log
+
+# Syslog retention
+posix_logs_syslog_rotate_count: 30
+posix_logs_syslog_frequency: "daily"
+posix_logs_syslog_compress: true
+posix_logs_syslog_create_mode: "0640"
+posix_logs_syslog_create_owner: "root"
+posix_logs_syslog_create_group: "adm"
+
+# ------------------------------------------------------------------------------
+# CUSTOM LOG ROTATION
+# ------------------------------------------------------------------------------
+# Additional logs to configure rotation for
+# Example:
+# posix_logs_custom_configs:
+#   - name: application
+#     files:
+#       - /var/log/app/*.log
+#     rotate: 30
+#     frequency: daily
+#     create_mode: "0644"
+posix_logs_custom_configs: []
+
+# ------------------------------------------------------------------------------
+# LOGROTATE GLOBAL SETTINGS
+# ------------------------------------------------------------------------------
+# Update main logrotate.conf with these settings
+posix_logs_update_global_config: true
+
+# Global settings to apply
+posix_logs_global_rotate: 4  # Default weekly rotation count in main config
+posix_logs_global_create: true
+posix_logs_global_compress: true
+
+# ------------------------------------------------------------------------------
+# RSYSLOG CONFIGURATION
+# ------------------------------------------------------------------------------
+# Configure rsyslog for better log management
+posix_logs_configure_rsyslog: true
+posix_logs_rsyslog_conf: "/etc/rsyslog.conf"
+posix_logs_rsyslog_d: "/etc/rsyslog.d"
+
+# Rsyslog file permissions template
+posix_logs_rsyslog_file_create_mode: "0640"
+posix_logs_rsyslog_file_owner: "root"
+posix_logs_rsyslog_file_group: "adm"
+
+# ------------------------------------------------------------------------------
+# SYSLOG-NG CONFIGURATION (alternative to rsyslog)
+# ------------------------------------------------------------------------------
+posix_logs_configure_syslog_ng: false
+posix_logs_syslog_ng_conf: "/etc/syslog-ng/syslog-ng.conf"
+
+# ------------------------------------------------------------------------------
+# LOG FILE PERMISSIONS
+# ------------------------------------------------------------------------------
+# Ensure existing log files have correct permissions
+posix_logs_fix_permissions: true
+
+# Directories to secure
+posix_logs_directories:
+  - path: /var/log
+    mode: "0755"
+    owner: root
+    group: root
+  - path: /var/log/audit
+    mode: "0750"
+    owner: root
+    group: root
+
+# Individual log files to secure
+posix_logs_files_to_secure:
+  - path: /var/log/auth.log
+    mode: "0640"
+    owner: root
+    group: adm
+  - path: /var/log/syslog
+    mode: "0640"
+    owner: root
+    group: adm
+  - path: /var/log/kern.log
+    mode: "0640"
+    owner: root
+    group: adm
+
+# ------------------------------------------------------------------------------
+# VALIDATION SETTINGS
+# ------------------------------------------------------------------------------
+# Verify logrotate configuration syntax
+posix_logs_validate_logrotate: true
+
+# Verify rsyslog configuration syntax
+posix_logs_validate_rsyslog: true
+
+# Verify log files exist with correct permissions
+posix_logs_validate_permissions: true
+
+# ------------------------------------------------------------------------------
+# BEHAVIOR SETTINGS
+# ------------------------------------------------------------------------------
+# Test logrotate configuration after changes
+posix_logs_test_logrotate: true
+
+# Restart rsyslog after configuration changes
+posix_logs_restart_rsyslog: true
+
+# Create logrotate configs even if they don't exist
+posix_logs_create_configs: true
+
+# ------------------------------------------------------------------------------
+# LOGGING
+# ------------------------------------------------------------------------------
+# Log all log retention hardening operations
+posix_logs_enable_logging: true

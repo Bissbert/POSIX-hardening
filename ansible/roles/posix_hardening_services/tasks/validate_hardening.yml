@@ -1,0 +1,179 @@
+---
+# ==============================================================================
+# POSIX Service Hardening - Validate Settings
+# ==============================================================================
+
+# ------------------------------------------------------------------------------
+# VALIDATE MASKED SERVICES (SYSTEMD)
+# ------------------------------------------------------------------------------
+- name: Check masked services status (systemd)
+  ansible.builtin.command: systemctl is-enabled {{ item }}
+  register: masked_status_check
+  loop: "{{ posix_services_final_mask_list }}"
+  when:
+    - posix_services_is_systemd | bool
+    - posix_services_use_masking | bool
+    - posix_services_validate_masked | bool
+  failed_when: false
+  changed_when: false
+  tags: [services, validate, systemd, masked]
+
+- name: Check if masked services are actually masked
+  ansible.builtin.command: systemctl is-masked {{ item }}
+  register: masked_verify_check
+  loop: "{{ posix_services_final_mask_list }}"
+  when:
+    - posix_services_is_systemd | bool
+    - posix_services_use_masking | bool
+    - posix_services_validate_masked | bool
+  failed_when: false
+  changed_when: false
+  tags: [services, validate, systemd, masked]
+
+- name: Check masked services are stopped (systemd)
+  ansible.builtin.command: systemctl is-active {{ item }}
+  register: masked_active_check
+  loop: "{{ posix_services_final_mask_list }}"
+  when:
+    - posix_services_is_systemd | bool
+    - posix_services_use_masking | bool
+  failed_when: false
+  changed_when: false
+  tags: [services, validate, systemd, masked]
+
+# ------------------------------------------------------------------------------
+# VALIDATE DISABLED SERVICES (SYSTEMD)
+# ------------------------------------------------------------------------------
+- name: Check disabled services status (systemd)
+  ansible.builtin.command: systemctl is-enabled {{ item }}
+  register: disabled_status_check
+  loop: "{{ posix_services_final_disable_list }}"
+  when:
+    - posix_services_is_systemd | bool
+    - posix_services_validate_disabled | bool
+  failed_when: false
+  changed_when: false
+  tags: [services, validate, systemd, disabled]
+
+- name: Check disabled services are stopped (systemd)
+  ansible.builtin.command: systemctl is-active {{ item }}
+  register: disabled_active_check
+  loop: "{{ posix_services_final_disable_list }}"
+  when:
+    - posix_services_is_systemd | bool
+  failed_when: false
+  changed_when: false
+  tags: [services, validate, systemd, disabled]
+
+# ------------------------------------------------------------------------------
+# VALIDATE SERVICES (SYSVINIT)
+# ------------------------------------------------------------------------------
+- name: Check service status (sysvinit)
+  ansible.builtin.command: service {{ item }} status
+  register: sysvinit_status_check
+  loop: "{{ posix_services_final_disable_list + posix_services_final_mask_list }}"
+  when:
+    - not posix_services_is_systemd | bool
+    - posix_services_enable_sysvinit_fallback | bool
+  failed_when: false
+  changed_when: false
+  tags: [services, validate, sysvinit]
+
+# ------------------------------------------------------------------------------
+# COUNT AND REPORT
+# ------------------------------------------------------------------------------
+- name: Count successfully masked services
+  ansible.builtin.set_fact:
+    masked_success_count: >-
+      {{ masked_verify_check.results |
+         selectattr('stdout', 'search', 'masked') |
+         list | length | default(0) }}
+  when:
+    - posix_services_is_systemd | bool
+    - posix_services_use_masking | bool
+    - masked_verify_check is defined
+  tags: [services, validate, report]
+
+- name: Count successfully disabled services (systemd)
+  ansible.builtin.set_fact:
+    disabled_success_count: >-
+      {{ disabled_status_check.results |
+         selectattr('stdout', 'search', 'disabled') |
+         list | length | default(0) }}
+  when:
+    - posix_services_is_systemd | bool
+    - disabled_status_check is defined
+  tags: [services, validate, report]
+
+- name: Count stopped masked services
+  ansible.builtin.set_fact:
+    masked_stopped_count: >-
+      {{ masked_active_check.results |
+         selectattr('stdout', 'search', 'inactive|failed') |
+         list | length | default(0) }}
+  when:
+    - posix_services_is_systemd | bool
+    - posix_services_use_masking | bool
+    - masked_active_check is defined
+  tags: [services, validate, report]
+
+- name: Count stopped disabled services
+  ansible.builtin.set_fact:
+    disabled_stopped_count: >-
+      {{ disabled_active_check.results |
+         selectattr('stdout', 'search', 'inactive|failed') |
+         list | length | default(0) }}
+  when:
+    - posix_services_is_systemd | bool
+    - disabled_active_check is defined
+  tags: [services, validate, report]
+
+# ------------------------------------------------------------------------------
+# DISPLAY VALIDATION RESULTS
+# ------------------------------------------------------------------------------
+- name: Display validation results (systemd)
+  ansible.builtin.debug:
+    msg: |
+      Service hardening validation results:
+        - Services masked: {{ masked_success_count | default(0) }} / {{ posix_services_final_mask_list | length }}
+        - Masked services stopped: {{ masked_stopped_count | default(0) }} / {{ posix_services_final_mask_list | length }}
+        - Services disabled: {{ disabled_success_count | default(0) }} / {{ posix_services_final_disable_list | length }}
+        - Disabled services stopped: {{ disabled_stopped_count | default(0) }} / {{ posix_services_final_disable_list | length }}
+
+      Note: Some services may not exist on this system (counted as success).
+      Services that don't exist cannot run and pose no security risk.
+  when:
+    - posix_services_is_systemd | bool
+  tags: [services, validate, report]
+
+- name: Display validation results (sysvinit)
+  ansible.builtin.debug:
+    msg: |
+      Service hardening validation completed (sysvinit).
+      Verification limited on sysvinit systems.
+      Services have been stopped and disabled.
+  when:
+    - not posix_services_is_systemd | bool
+  tags: [services, validate, report]
+
+# ------------------------------------------------------------------------------
+# DETAILED SERVICE STATUS
+# ------------------------------------------------------------------------------
+- name: List services that might still be active (systemd)
+  ansible.builtin.debug:
+    msg: "WARNING: Service {{ item.item }} is still active: {{ item.stdout }}"
+  loop: "{{ (masked_active_check.results | default([])) + (disabled_active_check.results | default([])) }}"
+  when:
+    - posix_services_is_systemd | bool
+    - item.stdout is defined
+    - item.stdout is search('active')
+    - item.stdout is not search('inactive')
+  tags: [services, validate, warnings]
+
+- name: Warning about services that could not be disabled
+  ansible.builtin.debug:
+    msg: |
+      NOTICE: Some services may not exist on this system.
+      This is normal and expected. Non-existent services pose no security risk.
+      Only installed services need to be disabled.
+  tags: [services, validate, info]

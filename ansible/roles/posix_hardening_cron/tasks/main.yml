@@ -1,0 +1,158 @@
+---
+# ==============================================================================
+# POSIX Cron Access Restriction Hardening Role - Main Tasks
+# ==============================================================================
+# CRITICAL: This role restricts cron and at daemon access to authorized users
+# Converted from: scripts/15-cron-restrictions.sh
+# ==============================================================================
+
+- name: Display cron hardening warning
+  ansible.builtin.debug:
+    msg: |
+      ========================================
+      CRON ACCESS RESTRICTION IN PROGRESS
+      ========================================
+      This role will restrict cron and at daemon access
+
+      Applied hardening:
+        - Create /etc/cron.allow with authorized users: {{ posix_cron_allowed_users | join(', ') }}
+        - Remove /etc/cron.deny (if exists)
+        - Create /etc/at.allow with authorized users: {{ posix_cron_at_allowed_users | join(', ') }}
+        - Remove /etc/at.deny (if exists)
+        - Secure cron directories with restrictive permissions
+
+      Directories to secure:
+        {{ (posix_cron_directories + posix_cron_custom_directories) | join(', ') }}
+
+      WARNING: Only listed users will be able to use cron and at!
+      Other users will be denied access to scheduled tasks.
+
+      Backup location: {{ posix_cron_backup_dir }}
+      Marker file: {{ posix_cron_hardening_marker }}
+      ========================================
+  tags: [cron, warning]
+
+- name: Check if cron hardening already applied
+  ansible.builtin.stat:
+    path: "{{ posix_cron_hardening_marker }}"
+  register: cron_hardening_marker_stat
+  tags: [cron, check]
+
+- name: Display skip message if already hardened
+  ansible.builtin.debug:
+    msg: |
+      Cron hardening already applied (marker exists).
+      Set posix_cron_force_reharden=true to re-apply.
+  when:
+    - cron_hardening_marker_stat.stat.exists
+    - not posix_cron_force_reharden | bool
+  tags: [cron, check]
+
+- name: Phase 1 - Preparation
+  block:
+    - name: Ensure backup directory exists
+      ansible.builtin.file:
+        path: "{{ posix_cron_backup_dir }}"
+        state: directory
+        mode: '0700'
+        owner: root
+        group: root
+
+    - name: Ensure log directory exists
+      ansible.builtin.file:
+        path: "{{ posix_cron_log_dir }}"
+        state: directory
+        mode: '0755'
+        owner: root
+        group: root
+
+    - name: Ensure marker directory exists
+      ansible.builtin.file:
+        path: "{{ posix_cron_hardening_marker | dirname }}"
+        state: directory
+        mode: '0755'
+        owner: root
+        group: root
+
+    - name: Check if cron service exists
+      ansible.builtin.command: systemctl list-unit-files cron.service
+      register: cron_service_check
+      changed_when: false
+      failed_when: false
+      when:
+        - posix_cron_check_service_exists | bool
+
+    - name: Check if crond service exists (RedHat/CentOS)
+      ansible.builtin.command: systemctl list-unit-files crond.service
+      register: crond_service_check
+      changed_when: false
+      failed_when: false
+      when:
+        - posix_cron_check_service_exists | bool
+        - cron_service_check.rc | default(1) != 0
+
+    - name: Set cron service installed fact
+      ansible.builtin.set_fact:
+        posix_cron_service_installed: >-
+          {{ (cron_service_check.rc | default(1) == 0) or
+             (crond_service_check.rc | default(1) == 0) }}
+
+    - name: Display warning if cron not installed
+      ansible.builtin.debug:
+        msg: |
+          WARNING: Cron service not detected on this system.
+          Hardening will continue but may not be necessary.
+      when:
+        - posix_cron_check_service_exists | bool
+        - not posix_cron_service_installed | default(true) | bool
+
+  when:
+    - not cron_hardening_marker_stat.stat.exists or posix_cron_force_reharden | bool
+    - posix_cron_enable_restrictions | bool
+  tags: [cron, preparation, phase1]
+
+- name: Phase 2 - Apply cron hardening
+  ansible.builtin.include_tasks: apply_hardening.yml
+  when:
+    - not cron_hardening_marker_stat.stat.exists or posix_cron_force_reharden | bool
+    - posix_cron_enable_restrictions | bool
+  tags: [cron, apply, phase2]
+
+- name: Phase 3 - Validate settings
+  ansible.builtin.include_tasks: validate_hardening.yml
+  when:
+    - not cron_hardening_marker_stat.stat.exists or posix_cron_force_reharden | bool
+    - posix_cron_enable_restrictions | bool
+    - posix_cron_validate_after_apply | bool
+  tags: [cron, validate, phase3]
+
+- name: Phase 4 - Finalization
+  block:
+    - name: Create hardening marker file
+      ansible.builtin.copy:
+        content: |
+          Cron access hardening applied on: {{ ansible_date_time.iso8601 }}
+          Applied by: Ansible role posix_hardening_cron
+          Hostname: {{ ansible_hostname }}
+          Backup location: {{ posix_cron_backup_dir }}
+          Allowed cron users: {{ posix_cron_allowed_users | join(', ') }}
+          Allowed at users: {{ posix_cron_at_allowed_users | join(', ') }}
+        dest: "{{ posix_cron_hardening_marker }}"
+        mode: '0644'
+        owner: root
+        group: root
+
+    - name: Display cron hardening success
+      ansible.builtin.debug:
+        msg: |
+          ========================================
+          CRON HARDENING COMPLETED
+          ========================================
+          Cron and at daemon access restricted successfully
+          Only authorized users can create scheduled tasks
+          ========================================
+
+  when:
+    - not cron_hardening_marker_stat.stat.exists or posix_cron_force_reharden | bool
+    - posix_cron_enable_restrictions | bool
+  tags: [cron, finalization, phase4]

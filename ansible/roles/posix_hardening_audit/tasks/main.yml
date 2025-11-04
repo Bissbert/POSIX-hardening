@@ -1,0 +1,143 @@
+---
+# ==============================================================================
+# POSIX Audit Logging Hardening Role - Main Tasks
+# ==============================================================================
+# CRITICAL: This role configures audit logging for security monitoring
+# Converted from: scripts/07-audit-logging.sh
+# ==============================================================================
+
+- name: Display audit logging hardening warning
+  ansible.builtin.debug:
+    msg: |
+      ========================================
+      AUDIT LOGGING CONFIGURATION IN PROGRESS
+      ========================================
+      This role will configure audit logging and monitoring
+
+      Applied hardening:
+        - Install auditd package (if enabled)
+        - Configure audit rules for security monitoring
+        - Monitor file access to critical system files
+        - Monitor syscalls (execve, unlink, setuid, etc.)
+        - Configure rsyslog for authentication logging
+        - Set log rotation and retention policies
+
+      Monitored files:
+        - /etc/passwd, /etc/shadow, /etc/group
+        - /etc/sudoers, /etc/ssh/sshd_config
+        - /etc/pam.d/, /etc/security/
+        - Kernel modules and network config
+
+      Audit log: {{ posix_audit_log_file }}
+      Rules file: {{ posix_audit_rules_file }}
+      Backup location: {{ posix_audit_backup_dir }}
+      Marker file: {{ posix_audit_hardening_marker }}
+      ========================================
+  tags: [audit, warning]
+
+- name: Check if audit hardening already applied
+  ansible.builtin.stat:
+    path: "{{ posix_audit_hardening_marker }}"
+  register: audit_hardening_marker_stat
+  tags: [audit, check]
+
+- name: Display skip message if already hardened
+  ansible.builtin.debug:
+    msg: |
+      Audit hardening already applied (marker exists).
+      Set posix_audit_force_reharden=true to re-apply.
+  when:
+    - audit_hardening_marker_stat.stat.exists
+    - not posix_audit_force_reharden | bool
+  tags: [audit, check]
+
+- name: Phase 1 - Preparation
+  block:
+    - name: Ensure backup directory exists
+      ansible.builtin.file:
+        path: "{{ posix_audit_backup_dir }}"
+        state: directory
+        mode: '0700'
+        owner: root
+        group: root
+
+    - name: Ensure log directory exists
+      ansible.builtin.file:
+        path: "{{ posix_audit_log_dir }}"
+        state: directory
+        mode: '0755'
+        owner: root
+        group: root
+
+    - name: Ensure marker directory exists
+      ansible.builtin.file:
+        path: "{{ posix_audit_hardening_marker | dirname }}"
+        state: directory
+        mode: '0755'
+        owner: root
+        group: root
+
+    - name: Check if auditd package is available
+      ansible.builtin.package:
+        name: "{{ posix_audit_package_name }}"
+        state: present
+      check_mode: true
+      register: audit_package_check
+      failed_when: false
+      when: posix_audit_install_package | bool
+
+    - name: Display warning if audit package not available
+      ansible.builtin.debug:
+        msg: |
+          WARNING: Audit package ({{ posix_audit_package_name }}) not available.
+          Some features may not work without auditd installed.
+      when:
+        - posix_audit_install_package | bool
+        - audit_package_check is failed
+
+  when:
+    - not audit_hardening_marker_stat.stat.exists or posix_audit_force_reharden | bool
+  tags: [audit, preparation, phase1]
+
+- name: Phase 2 - Apply audit hardening
+  ansible.builtin.include_tasks: apply_hardening.yml
+  when:
+    - not audit_hardening_marker_stat.stat.exists or posix_audit_force_reharden | bool
+  tags: [audit, apply, phase2]
+
+- name: Phase 3 - Validate settings
+  ansible.builtin.include_tasks: validate_hardening.yml
+  when:
+    - not audit_hardening_marker_stat.stat.exists or posix_audit_force_reharden | bool
+    - posix_audit_validate_after_apply | bool
+  tags: [audit, validate, phase3]
+
+- name: Phase 4 - Finalization
+  block:
+    - name: Create hardening marker file
+      ansible.builtin.copy:
+        content: |
+          Audit logging hardening applied on: {{ ansible_date_time.iso8601 }}
+          Applied by: Ansible role posix_hardening_audit
+          Hostname: {{ ansible_hostname }}
+          Backup location: {{ posix_audit_backup_dir }}
+          Rules file: {{ posix_audit_rules_file }}
+          Auditd installed: {{ posix_audit_install_package | bool }}
+        dest: "{{ posix_audit_hardening_marker }}"
+        mode: '0644'
+        owner: root
+        group: root
+
+    - name: Display audit hardening success
+      ansible.builtin.debug:
+        msg: |
+          ========================================
+          AUDIT HARDENING COMPLETED
+          ========================================
+          Audit logging configured successfully
+          Security monitoring is now active
+          ========================================
+
+  when:
+    - not audit_hardening_marker_stat.stat.exists or posix_audit_force_reharden | bool
+  tags: [audit, finalization, phase4]

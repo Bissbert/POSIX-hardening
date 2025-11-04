@@ -1,0 +1,23 @@
+---
+# ==============================================================================
+# POSIX Log Retention Hardening - Handlers
+# ==============================================================================
+
+- name: restart rsyslog
+  ansible.builtin.systemd:
+    name: rsyslog
+    state: restarted
+  listen: restart rsyslog
+
+- name: restart syslog-ng
+  ansible.builtin.systemd:
+    name: syslog-ng
+    state: restarted
+  listen: restart syslog-ng
+
+- name: test logrotate
+  ansible.builtin.command:
+    cmd: logrotate -d {{ posix_logs_logrotate_conf }}
+  changed_when: false
+  failed_when: false
+  listen: test logrotate

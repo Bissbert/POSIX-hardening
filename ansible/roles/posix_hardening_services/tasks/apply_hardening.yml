@@ -1,0 +1,208 @@
+---
+# ==============================================================================
+# POSIX Service Hardening - Apply Settings
+# ==============================================================================
+
+# ------------------------------------------------------------------------------
+# PREPARE SERVICE LISTS
+# ------------------------------------------------------------------------------
+- name: Build final list of services to mask
+  ansible.builtin.set_fact:
+    posix_services_final_mask_list: >-
+      {{ (posix_services_to_mask + posix_services_custom_mask) |
+         difference(posix_services_keep_enabled) |
+         difference(posix_services_never_disable) |
+         unique }}
+  tags: [services, prepare]
+
+- name: Build final list of services to disable
+  ansible.builtin.set_fact:
+    posix_services_final_disable_list: >-
+      {{ (posix_services_to_disable + posix_services_custom_disable) |
+         difference(posix_services_keep_enabled) |
+         difference(posix_services_never_disable) |
+         unique }}
+  tags: [services, prepare]
+
+- name: Display service operation summary
+  ansible.builtin.debug:
+    msg: |
+      Service operations to perform:
+        - Services to mask: {{ posix_services_final_mask_list | length }}
+        - Services to disable: {{ posix_services_final_disable_list | length }}
+        - Service manager: {{ 'systemd' if posix_services_is_systemd else 'sysvinit' }}
+  tags: [services, prepare]
+
+# ------------------------------------------------------------------------------
+# SYSTEMD - MASK SERVICES (Highest Security)
+# ------------------------------------------------------------------------------
+- name: Check if services to mask exist (systemd)
+  ansible.builtin.systemd:
+    name: "{{ item }}"
+  register: mask_service_check
+  loop: "{{ posix_services_final_mask_list }}"
+  when:
+    - posix_services_is_systemd | bool
+    - posix_services_use_masking | bool
+    - posix_services_check_existence | bool
+  failed_when: false
+  changed_when: false
+  tags: [services, systemd, mask]
+
+- name: Stop services before masking (systemd)
+  ansible.builtin.systemd:
+    name: "{{ item }}"
+    state: stopped
+  loop: "{{ posix_services_final_mask_list }}"
+  when:
+    - posix_services_is_systemd | bool
+    - posix_services_use_masking | bool
+    - posix_services_stop_before_disable | bool
+  ignore_errors: "{{ posix_services_ignore_errors }}"
+  tags: [services, systemd, mask, stop]
+
+- name: Mask services (systemd - highest security)
+  ansible.builtin.systemd:
+    name: "{{ item }}"
+    masked: true
+    enabled: false
+  loop: "{{ posix_services_final_mask_list }}"
+  when:
+    - posix_services_is_systemd | bool
+    - posix_services_use_masking | bool
+  ignore_errors: "{{ posix_services_ignore_errors }}"
+  register: mask_result
+  tags: [services, systemd, mask]
+
+# ------------------------------------------------------------------------------
+# SYSTEMD - DISABLE SERVICES
+# ------------------------------------------------------------------------------
+- name: Check if services to disable exist (systemd)
+  ansible.builtin.command: systemctl list-unit-files {{ item }}.service
+  register: disable_service_check
+  loop: "{{ posix_services_final_disable_list }}"
+  when:
+    - posix_services_is_systemd | bool
+    - posix_services_check_existence | bool
+  failed_when: false
+  changed_when: false
+  tags: [services, systemd, disable]
+
+- name: Stop services (systemd)
+  ansible.builtin.systemd:
+    name: "{{ item }}"
+    state: stopped
+  loop: "{{ posix_services_final_disable_list }}"
+  when:
+    - posix_services_is_systemd | bool
+    - posix_services_stop_before_disable | bool
+  ignore_errors: "{{ posix_services_ignore_errors }}"
+  tags: [services, systemd, disable, stop]
+
+- name: Disable services (systemd)
+  ansible.builtin.systemd:
+    name: "{{ item }}"
+    enabled: false
+  loop: "{{ posix_services_final_disable_list }}"
+  when:
+    - posix_services_is_systemd | bool
+  ignore_errors: "{{ posix_services_ignore_errors }}"
+  register: disable_result
+  tags: [services, systemd, disable]
+
+# ------------------------------------------------------------------------------
+# SYSVINIT - DISABLE SERVICES (Fallback)
+# ------------------------------------------------------------------------------
+- name: Check if services exist (sysvinit)
+  ansible.builtin.command: service {{ item }} status
+  register: sysvinit_service_check
+  loop: "{{ posix_services_final_disable_list + posix_services_final_mask_list }}"
+  when:
+    - not posix_services_is_systemd | bool
+    - posix_services_enable_sysvinit_fallback | bool
+    - posix_services_check_existence | bool
+  failed_when: false
+  changed_when: false
+  tags: [services, sysvinit, check]
+
+- name: Stop services (sysvinit)
+  ansible.builtin.service:
+    name: "{{ item }}"
+    state: stopped
+  loop: "{{ posix_services_final_disable_list + posix_services_final_mask_list }}"
+  when:
+    - not posix_services_is_systemd | bool
+    - posix_services_enable_sysvinit_fallback | bool
+    - posix_services_stop_before_disable | bool
+  ignore_errors: "{{ posix_services_ignore_errors }}"
+  tags: [services, sysvinit, stop]
+
+- name: Disable services (sysvinit - Debian/Ubuntu)
+  ansible.builtin.command: update-rc.d {{ item }} disable
+  loop: "{{ posix_services_final_disable_list + posix_services_final_mask_list }}"
+  when:
+    - not posix_services_is_systemd | bool
+    - posix_services_enable_sysvinit_fallback | bool
+    - ansible_os_family == "Debian"
+  ignore_errors: "{{ posix_services_ignore_errors }}"
+  register: sysvinit_debian_result
+  changed_when: sysvinit_debian_result.rc == 0
+  tags: [services, sysvinit, disable, debian]
+
+- name: Disable services (sysvinit - RedHat/CentOS)
+  ansible.builtin.command: chkconfig {{ item }} off
+  loop: "{{ posix_services_final_disable_list + posix_services_final_mask_list }}"
+  when:
+    - not posix_services_is_systemd | bool
+    - posix_services_enable_sysvinit_fallback | bool
+    - ansible_os_family == "RedHat"
+  ignore_errors: "{{ posix_services_ignore_errors }}"
+  register: sysvinit_redhat_result
+  changed_when: sysvinit_redhat_result.rc == 0
+  tags: [services, sysvinit, disable, redhat]
+
+# ------------------------------------------------------------------------------
+# LOGGING
+# ------------------------------------------------------------------------------
+- name: Log service hardening operations
+  ansible.builtin.lineinfile:
+    path: "{{ posix_services_log_dir }}/services.log"
+    line: "{{ ansible_date_time.iso8601 }} - Service hardening on {{ ansible_hostname }} - Masked: {{ posix_services_final_mask_list | length }}, Disabled: {{ posix_services_final_disable_list | length }}"
+    create: true
+    mode: '0640'
+    owner: root
+    group: root
+  when:
+    - posix_services_enable_logging | bool
+  tags: [services, logging]
+
+- name: Create detailed service operations log
+  ansible.builtin.copy:
+    content: |
+      Service Hardening Operations
+      ============================
+      Date: {{ ansible_date_time.iso8601 }}
+      Host: {{ ansible_hostname }}
+      Service Manager: {{ 'systemd' if posix_services_is_systemd else 'sysvinit' }}
+
+      Services Masked ({{ posix_services_final_mask_list | length }}):
+      {% for service in posix_services_final_mask_list %}
+        - {{ service }}
+      {% endfor %}
+
+      Services Disabled ({{ posix_services_final_disable_list | length }}):
+      {% for service in posix_services_final_disable_list %}
+        - {{ service }}
+      {% endfor %}
+
+      Services Protected (never disabled):
+      {% for service in posix_services_never_disable %}
+        - {{ service }}
+      {% endfor %}
+    dest: "{{ posix_services_backup_dir }}/services_operations.{{ ansible_date_time.iso8601_basic_short }}.log"
+    mode: '0640'
+    owner: root
+    group: root
+  when:
+    - posix_services_backup_before_changes | bool
+  tags: [services, logging, backup]

@@ -1,0 +1,133 @@
+---
+# ==============================================================================
+# POSIX Log Retention Hardening Role - Main Tasks
+# ==============================================================================
+# CRITICAL: This role configures log rotation and retention policies
+# Converted from: scripts/19-log-retention.sh
+# ==============================================================================
+
+- name: Display log retention hardening warning
+  ansible.builtin.debug:
+    msg: |
+      ========================================
+      LOG RETENTION CONFIGURATION IN PROGRESS
+      ========================================
+      This role will configure log rotation and retention
+
+      Applied hardening:
+        - Configure logrotate for system logs
+        - Set retention policies ({{ posix_logs_rotate_count }} {{ posix_logs_rotate_frequency }})
+        - Compress old logs
+        - Protect logs from unauthorized access
+        - Configure rsyslog file permissions
+
+      Security logs retention: {{ posix_logs_security_rotate_count }} days
+      System logs retention: {{ posix_logs_syslog_rotate_count }} days
+
+      Logrotate config: {{ posix_logs_logrotate_conf }}
+      Backup location: {{ posix_logs_backup_dir }}
+      Marker file: {{ posix_logs_hardening_marker }}
+      ========================================
+  tags: [logs, warning]
+
+- name: Check if log retention hardening already applied
+  ansible.builtin.stat:
+    path: "{{ posix_logs_hardening_marker }}"
+  register: logs_hardening_marker_stat
+  tags: [logs, check]
+
+- name: Display skip message if already hardened
+  ansible.builtin.debug:
+    msg: |
+      Log retention hardening already applied (marker exists).
+      Set posix_logs_force_reharden=true to re-apply.
+  when:
+    - logs_hardening_marker_stat.stat.exists
+    - not posix_logs_force_reharden | bool
+  tags: [logs, check]
+
+- name: Phase 1 - Preparation
+  block:
+    - name: Ensure backup directory exists
+      ansible.builtin.file:
+        path: "{{ posix_logs_backup_dir }}"
+        state: directory
+        mode: '0700'
+        owner: root
+        group: root
+
+    - name: Ensure log directory exists
+      ansible.builtin.file:
+        path: "{{ posix_logs_log_dir }}"
+        state: directory
+        mode: '0755'
+        owner: root
+        group: root
+
+    - name: Ensure marker directory exists
+      ansible.builtin.file:
+        path: "{{ posix_logs_hardening_marker | dirname }}"
+        state: directory
+        mode: '0755'
+        owner: root
+        group: root
+
+    - name: Check if logrotate is installed
+      ansible.builtin.command: which logrotate
+      register: logrotate_check
+      changed_when: false
+      failed_when: false
+
+    - name: Display warning if logrotate not installed
+      ansible.builtin.debug:
+        msg: |
+          WARNING: logrotate not found on this system.
+          Log rotation may not function properly.
+      when: logrotate_check.rc != 0
+
+  when:
+    - not logs_hardening_marker_stat.stat.exists or posix_logs_force_reharden | bool
+  tags: [logs, preparation, phase1]
+
+- name: Phase 2 - Apply log retention hardening
+  ansible.builtin.include_tasks: apply_hardening.yml
+  when:
+    - not logs_hardening_marker_stat.stat.exists or posix_logs_force_reharden | bool
+  tags: [logs, apply, phase2]
+
+- name: Phase 3 - Validate settings
+  ansible.builtin.include_tasks: validate_hardening.yml
+  when:
+    - not logs_hardening_marker_stat.stat.exists or posix_logs_force_reharden | bool
+    - posix_logs_validate_after_apply | bool
+  tags: [logs, validate, phase3]
+
+- name: Phase 4 - Finalization
+  block:
+    - name: Create hardening marker file
+      ansible.builtin.copy:
+        content: |
+          Log retention hardening applied on: {{ ansible_date_time.iso8601 }}
+          Applied by: Ansible role posix_hardening_logs
+          Hostname: {{ ansible_hostname }}
+          Backup location: {{ posix_logs_backup_dir }}
+          Security logs retention: {{ posix_logs_security_rotate_count }} days
+          System logs retention: {{ posix_logs_syslog_rotate_count }} days
+        dest: "{{ posix_logs_hardening_marker }}"
+        mode: '0644'
+        owner: root
+        group: root
+
+    - name: Display log retention hardening success
+      ansible.builtin.debug:
+        msg: |
+          ========================================
+          LOG RETENTION HARDENING COMPLETED
+          ========================================
+          Log rotation and retention configured successfully
+          Logs will be retained according to policy
+          ========================================
+
+  when:
+    - not logs_hardening_marker_stat.stat.exists or posix_logs_force_reharden | bool
+  tags: [logs, finalization, phase4]

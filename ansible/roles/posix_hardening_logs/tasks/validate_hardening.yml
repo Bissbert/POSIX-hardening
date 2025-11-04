@@ -1,0 +1,130 @@
+---
+# ==============================================================================
+# POSIX Log Retention Hardening - Validation
+# ==============================================================================
+
+- name: Validate logrotate.conf exists
+  ansible.builtin.stat:
+    path: "{{ posix_logs_logrotate_conf }}"
+  register: logrotate_conf_validation
+  failed_when: false
+  tags: [logs, validate]
+
+- name: Display logrotate.conf validation
+  ansible.builtin.debug:
+    msg: |
+      Logrotate configuration: {{ 'EXISTS' if logrotate_conf_validation.stat.exists else 'MISSING' }}
+      Path: {{ posix_logs_logrotate_conf }}
+  tags: [logs, validate]
+
+- name: Validate security logrotate config exists
+  ansible.builtin.stat:
+    path: "{{ posix_logs_logrotate_d }}/security"
+  register: security_logrotate_validation
+  failed_when: false
+  when: posix_logs_configure_security | bool
+  tags: [logs, validate, security]
+
+- name: Display security logrotate validation
+  ansible.builtin.debug:
+    msg: |
+      Security logrotate config: {{ 'EXISTS' if security_logrotate_validation.stat.exists else 'MISSING' }}
+      Path: {{ posix_logs_logrotate_d }}/security
+  when: posix_logs_configure_security | bool
+  tags: [logs, validate, security]
+
+- name: Validate syslog logrotate config exists
+  ansible.builtin.stat:
+    path: "{{ posix_logs_logrotate_d }}/syslog"
+  register: syslog_logrotate_validation
+  failed_when: false
+  when: posix_logs_configure_syslog | bool
+  tags: [logs, validate, syslog]
+
+- name: Display syslog logrotate validation
+  ansible.builtin.debug:
+    msg: |
+      Syslog logrotate config: {{ 'EXISTS' if syslog_logrotate_validation.stat.exists else 'MISSING' }}
+      Path: {{ posix_logs_logrotate_d }}/syslog
+  when: posix_logs_configure_syslog | bool
+  tags: [logs, validate, syslog]
+
+- name: Validate logrotate configuration syntax
+  ansible.builtin.command:
+    cmd: logrotate -d {{ posix_logs_logrotate_conf }}
+  register: logrotate_syntax_check
+  changed_when: false
+  failed_when: false
+  when: posix_logs_validate_logrotate | bool
+  tags: [logs, validate, syntax]
+
+- name: Display logrotate syntax validation
+  ansible.builtin.debug:
+    msg: |
+      Logrotate syntax check: {{ 'PASSED' if logrotate_syntax_check.rc == 0 else 'FAILED' }}
+      {% if logrotate_syntax_check.rc != 0 %}
+      Error: {{ logrotate_syntax_check.stderr }}
+      {% endif %}
+  when:
+    - posix_logs_validate_logrotate | bool
+    - logrotate_syntax_check is defined
+  tags: [logs, validate, syntax]
+
+- name: Validate rsyslog configuration syntax
+  ansible.builtin.command:
+    cmd: rsyslogd -N1
+  register: rsyslog_syntax_check
+  changed_when: false
+  failed_when: false
+  when: posix_logs_validate_rsyslog | bool
+  tags: [logs, validate, rsyslog]
+
+- name: Display rsyslog syntax validation
+  ansible.builtin.debug:
+    msg: |
+      Rsyslog syntax check: {{ 'PASSED' if rsyslog_syntax_check.rc == 0 else 'FAILED' }}
+      {% if rsyslog_syntax_check.rc != 0 %}
+      Error: {{ rsyslog_syntax_check.stderr }}
+      {% endif %}
+  when:
+    - posix_logs_validate_rsyslog | bool
+    - rsyslog_syntax_check is defined
+  tags: [logs, validate, rsyslog]
+
+- name: Validate log directory permissions
+  ansible.builtin.stat:
+    path: "{{ item.path }}"
+  register: log_dir_permissions
+  loop: "{{ posix_logs_directories }}"
+  failed_when: false
+  when: posix_logs_validate_permissions | bool
+  tags: [logs, validate, permissions]
+
+- name: Display log directory permissions
+  ansible.builtin.debug:
+    msg: |
+      Directory: {{ item.item.path }}
+      Status: {{ 'EXISTS' if item.stat.exists else 'MISSING' }}
+      {% if item.stat.exists %}
+      Permissions: {{ item.stat.mode }}
+      Owner: {{ item.stat.pw_name }}:{{ item.stat.gr_name }}
+      {% endif %}
+  loop: "{{ log_dir_permissions.results }}"
+  when:
+    - posix_logs_validate_permissions | bool
+    - log_dir_permissions is defined
+  tags: [logs, validate, permissions]
+
+- name: Final validation summary
+  ansible.builtin.debug:
+    msg: |
+      ========================================
+      LOG RETENTION VALIDATION SUMMARY
+      ========================================
+      Logrotate config: {{ 'OK' if logrotate_conf_validation.stat.exists else 'FAIL' }}
+      Security config: {{ 'OK' if (security_logrotate_validation.stat.exists | default(false)) else 'CHECK' }}
+      Syslog config: {{ 'OK' if (syslog_logrotate_validation.stat.exists | default(false)) else 'CHECK' }}
+      Logrotate syntax: {{ 'OK' if (logrotate_syntax_check.rc | default(1) == 0) else 'FAIL' }}
+      Rsyslog syntax: {{ 'OK' if (rsyslog_syntax_check.rc | default(1) == 0) else 'CHECK' }}
+      ========================================
+  tags: [logs, validate, summary]

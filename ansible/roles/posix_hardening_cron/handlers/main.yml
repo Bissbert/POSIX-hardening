@@ -1,0 +1,11 @@
+---
+# ==============================================================================
+# POSIX Cron Hardening Role - Handlers
+# ==============================================================================
+# Cron access control changes take effect immediately
+# No service restart required (cron checks files on each execution)
+# ==============================================================================
+
+# No handlers required for cron access control
+# Changes to /etc/cron.allow and /etc/cron.deny take effect immediately
+# The cron daemon checks these files when users attempt to submit jobs

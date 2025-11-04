@@ -1,0 +1,223 @@
+---
+# ==============================================================================
+# POSIX File Integrity Monitoring - Apply Configuration
+# ==============================================================================
+
+# ------------------------------------------------------------------------------
+# Package Installation
+# ------------------------------------------------------------------------------
+- name: Install AIDE package
+  ansible.builtin.package:
+    name: "{{ posix_integrity_package_name }}"
+    state: present
+  when:
+    - posix_integrity_install_package | bool
+    - not posix_integrity_use_tripwire | bool
+  register: aide_package_installed
+  tags: [integrity, install]
+
+- name: Install Tripwire package (alternative)
+  ansible.builtin.package:
+    name: "{{ posix_integrity_tripwire_package }}"
+    state: present
+  when:
+    - posix_integrity_install_package | bool
+    - posix_integrity_use_tripwire | bool
+  tags: [integrity, install, tripwire]
+
+# ------------------------------------------------------------------------------
+# Create Required Directories
+# ------------------------------------------------------------------------------
+- name: Ensure AIDE database directory exists
+  ansible.builtin.file:
+    path: "{{ posix_integrity_aide_db_dir }}"
+    state: directory
+    mode: '0700'
+    owner: root
+    group: root
+  when: posix_integrity_create_dirs | bool
+  tags: [integrity, directories]
+
+- name: Ensure AIDE log directory exists
+  ansible.builtin.file:
+    path: "{{ posix_integrity_aide_log | dirname }}"
+    state: directory
+    mode: '0750'
+    owner: root
+    group: root
+  when: posix_integrity_create_dirs | bool
+  tags: [integrity, directories]
+
+- name: Ensure AIDE report directory exists
+  ansible.builtin.file:
+    path: "{{ posix_integrity_report_dir }}"
+    state: directory
+    mode: '0750'
+    owner: root
+    group: root
+  when: posix_integrity_create_dirs | bool
+  tags: [integrity, directories]
+
+# ------------------------------------------------------------------------------
+# Determine AIDE Configuration Path
+# ------------------------------------------------------------------------------
+- name: Check if primary AIDE config path exists
+  ansible.builtin.stat:
+    path: "{{ posix_integrity_aide_conf | dirname }}"
+  register: aide_conf_dir_stat
+  tags: [integrity, config]
+
+- name: Set AIDE config path
+  ansible.builtin.set_fact:
+    aide_conf_path: "{{ posix_integrity_aide_conf if aide_conf_dir_stat.stat.exists else posix_integrity_aide_conf_alt }}"
+  tags: [integrity, config]
+
+- name: Ensure AIDE config directory exists
+  ansible.builtin.file:
+    path: "{{ aide_conf_path | dirname }}"
+    state: directory
+    mode: '0755'
+    owner: root
+    group: root
+  when: posix_integrity_create_dirs | bool
+  tags: [integrity, config]
+
+# ------------------------------------------------------------------------------
+# Backup Existing Configuration
+# ------------------------------------------------------------------------------
+- name: Check if AIDE configuration exists
+  ansible.builtin.stat:
+    path: "{{ aide_conf_path }}"
+  register: aide_conf_stat
+  tags: [integrity, config]
+
+- name: Backup existing AIDE configuration
+  ansible.builtin.copy:
+    src: "{{ aide_conf_path }}"
+    dest: "{{ posix_integrity_backup_dir }}/aide.conf.backup.{{ ansible_date_time.epoch }}"
+    mode: '0644'
+    remote_src: true
+  when:
+    - posix_integrity_backup_before_changes | bool
+    - aide_conf_stat.stat.exists
+  tags: [integrity, config, backup]
+
+# ------------------------------------------------------------------------------
+# Deploy AIDE Configuration
+# ------------------------------------------------------------------------------
+- name: Deploy AIDE configuration from template
+  ansible.builtin.template:
+    src: aide.conf.j2
+    dest: "{{ aide_conf_path }}"
+    mode: '0600'
+    owner: root
+    group: root
+  register: aide_config_deployed
+  tags: [integrity, config]
+
+# ------------------------------------------------------------------------------
+# Initialize AIDE Database
+# ------------------------------------------------------------------------------
+- name: Check if AIDE database exists
+  ansible.builtin.stat:
+    path: "{{ posix_integrity_aide_db }}"
+  register: aide_db_stat
+  tags: [integrity, database]
+
+- name: Check if compressed AIDE database exists
+  ansible.builtin.stat:
+    path: "{{ posix_integrity_aide_db }}.gz"
+  register: aide_db_gz_stat
+  tags: [integrity, database]
+
+- name: Display database initialization warning
+  ansible.builtin.debug:
+    msg: |
+      WARNING: AIDE database initialization will start.
+      This can take 10-30 minutes depending on system size.
+      {% if posix_integrity_init_async | bool %}
+      Running asynchronously in background...
+      {% endif %}
+  when:
+    - posix_integrity_init_database | bool
+    - not aide_db_stat.stat.exists
+    - not aide_db_gz_stat.stat.exists
+  tags: [integrity, database]
+
+- name: Initialize AIDE database (synchronous)
+  ansible.builtin.command:
+    cmd: aide --init --config={{ aide_conf_path }}
+  when:
+    - posix_integrity_init_database | bool
+    - not posix_integrity_init_async | bool
+    - not aide_db_stat.stat.exists
+    - not aide_db_gz_stat.stat.exists
+  register: aide_init_sync
+  changed_when: aide_init_sync.rc == 0
+  tags: [integrity, database, init]
+
+- name: Initialize AIDE database (asynchronous)
+  ansible.builtin.command:
+    cmd: aide --init --config={{ aide_conf_path }}
+  async: "{{ posix_integrity_init_timeout }}"
+  poll: 0
+  when:
+    - posix_integrity_init_database | bool
+    - posix_integrity_init_async | bool
+    - not aide_db_stat.stat.exists
+    - not aide_db_gz_stat.stat.exists
+  register: aide_init_async
+  changed_when: true
+  tags: [integrity, database, init]
+
+- name: Display async initialization message
+  ansible.builtin.debug:
+    msg: |
+      AIDE database initialization started in background.
+      Job ID: {{ aide_init_async.ansible_job_id | default('N/A') }}
+      Check progress with: ps aux | grep aide
+      When complete, move database: mv {{ posix_integrity_aide_db_new }} {{ posix_integrity_aide_db }}
+  when:
+    - posix_integrity_init_database | bool
+    - posix_integrity_init_async | bool
+    - aide_init_async is changed
+  tags: [integrity, database, init]
+
+- name: Move new AIDE database to active location (sync mode)
+  ansible.builtin.command:
+    cmd: mv {{ posix_integrity_aide_db_new }} {{ posix_integrity_aide_db }}
+  when:
+    - posix_integrity_init_database | bool
+    - not posix_integrity_init_async | bool
+    - aide_init_sync is succeeded
+  changed_when: true
+  tags: [integrity, database, init]
+
+# ------------------------------------------------------------------------------
+# Deploy AIDE Check Script
+# ------------------------------------------------------------------------------
+- name: Deploy AIDE check script
+  ansible.builtin.template:
+    src: aide-check.sh.j2
+    dest: /usr/local/bin/aide-check.sh
+    mode: '0750'
+    owner: root
+    group: root
+  tags: [integrity, script]
+
+# ------------------------------------------------------------------------------
+# Schedule AIDE Cron Job
+# ------------------------------------------------------------------------------
+- name: Schedule daily AIDE integrity check
+  ansible.builtin.cron:
+    name: "AIDE file integrity check"
+    minute: "{{ posix_integrity_cron_minute }}"
+    hour: "{{ posix_integrity_cron_hour }}"
+    day: "{{ posix_integrity_cron_day }}"
+    month: "{{ posix_integrity_cron_month }}"
+    weekday: "{{ posix_integrity_cron_weekday }}"
+    user: "{{ posix_integrity_cron_user }}"
+    job: "/usr/local/bin/aide-check.sh"
+    state: "{{ 'present' if posix_integrity_enable_cron else 'absent' }}"
+  when: posix_integrity_enable_cron | bool
+  tags: [integrity, cron]

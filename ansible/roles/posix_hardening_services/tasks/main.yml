@@ -1,0 +1,130 @@
+---
+# ==============================================================================
+# POSIX Service Disabling Hardening Role - Main Tasks
+# ==============================================================================
+# CRITICAL: This role disables unnecessary services to reduce attack surface
+# Converted from: scripts/11-service-disable.sh
+# ==============================================================================
+
+- name: Display service hardening warning
+  ansible.builtin.debug:
+    msg: |
+      ========================================
+      SERVICE HARDENING IN PROGRESS
+      ========================================
+      This role will disable unnecessary services
+
+      Applied hardening:
+        - Stop and disable {{ (posix_services_to_disable + posix_services_custom_disable) | difference(posix_services_keep_enabled) | length }} services
+        - Mask {{ (posix_services_to_mask + posix_services_custom_mask) | difference(posix_services_keep_enabled) | length }} services (systemd only)
+
+      Protected services (never disabled):
+        {{ posix_services_never_disable | join(', ') }}
+
+      Backup location: {{ posix_services_backup_dir }}
+      Marker file: {{ posix_services_hardening_marker }}
+      ========================================
+  tags: [services, warning]
+
+- name: Check if service hardening already applied
+  ansible.builtin.stat:
+    path: "{{ posix_services_hardening_marker }}"
+  register: services_hardening_marker_stat
+  tags: [services, check]
+
+- name: Display skip message if already hardened
+  ansible.builtin.debug:
+    msg: |
+      Service hardening already applied (marker exists).
+      Set posix_services_force_reharden=true to re-apply.
+  when:
+    - services_hardening_marker_stat.stat.exists
+    - not posix_services_force_reharden | bool
+  tags: [services, check]
+
+- name: Phase 1 - Preparation
+  block:
+    - name: Ensure backup directory exists
+      ansible.builtin.file:
+        path: "{{ posix_services_backup_dir }}"
+        state: directory
+        mode: '0700'
+        owner: root
+        group: root
+
+    - name: Ensure log directory exists
+      ansible.builtin.file:
+        path: "{{ posix_services_log_dir }}"
+        state: directory
+        mode: '0755'
+        owner: root
+        group: root
+
+    - name: Ensure marker directory exists
+      ansible.builtin.file:
+        path: "{{ posix_services_hardening_marker | dirname }}"
+        state: directory
+        mode: '0755'
+        owner: root
+        group: root
+
+    - name: Detect service manager
+      ansible.builtin.command: systemctl --version
+      register: systemd_check
+      changed_when: false
+      failed_when: false
+
+    - name: Set service manager fact
+      ansible.builtin.set_fact:
+        posix_services_is_systemd: "{{ systemd_check.rc == 0 }}"
+
+  when:
+    - not services_hardening_marker_stat.stat.exists or posix_services_force_reharden | bool
+    - posix_services_enable_hardening | bool
+  tags: [services, preparation, phase1]
+
+- name: Phase 2 - Apply service hardening
+  ansible.builtin.include_tasks: apply_hardening.yml
+  when:
+    - not services_hardening_marker_stat.stat.exists or posix_services_force_reharden | bool
+    - posix_services_enable_hardening | bool
+  tags: [services, apply, phase2]
+
+- name: Phase 3 - Validate settings
+  ansible.builtin.include_tasks: validate_hardening.yml
+  when:
+    - not services_hardening_marker_stat.stat.exists or posix_services_force_reharden | bool
+    - posix_services_enable_hardening | bool
+    - posix_services_validate_after_apply | bool
+  tags: [services, validate, phase3]
+
+- name: Phase 4 - Finalization
+  block:
+    - name: Create hardening marker file
+      ansible.builtin.copy:
+        content: |
+          Service hardening applied on: {{ ansible_date_time.iso8601 }}
+          Applied by: Ansible role posix_hardening_services
+          Hostname: {{ ansible_hostname }}
+          Backup location: {{ posix_services_backup_dir }}
+          Services disabled: {{ (posix_services_to_disable + posix_services_custom_disable) | difference(posix_services_keep_enabled) | length }}
+          Services masked: {{ (posix_services_to_mask + posix_services_custom_mask) | difference(posix_services_keep_enabled) | length }}
+        dest: "{{ posix_services_hardening_marker }}"
+        mode: '0644'
+        owner: root
+        group: root
+
+    - name: Display service hardening success
+      ansible.builtin.debug:
+        msg: |
+          ========================================
+          SERVICE HARDENING COMPLETED
+          ========================================
+          Unnecessary services disabled successfully
+          Services are stopped and will not start on boot
+          ========================================
+
+  when:
+    - not services_hardening_marker_stat.stat.exists or posix_services_force_reharden | bool
+    - posix_services_enable_hardening | bool
+  tags: [services, finalization, phase4]

@@ -1,0 +1,18 @@
+---
+# ==============================================================================
+# POSIX File Integrity Monitoring - Handlers
+# ==============================================================================
+
+- name: update aide database
+  ansible.builtin.command:
+    cmd: aide --update
+  changed_when: true
+  failed_when: false
+  listen: update aide database
+
+- name: run aide check
+  ansible.builtin.command:
+    cmd: /usr/local/bin/aide-check.sh
+  changed_when: false
+  failed_when: false
+  listen: run aide check
