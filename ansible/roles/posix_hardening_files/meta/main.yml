@@ -1,0 +1,34 @@
+---
+galaxy_info:
+  role_name: posix_hardening_files
+  namespace: posix
+  author: POSIX Hardening Team
+  description: File and directory permissions hardening for system security
+  company: Internal
+  license: MIT
+  min_ansible_version: 2.9
+  platforms:
+    - name: Debian
+      versions:
+        - bullseye
+        - bookworm
+    - name: Ubuntu
+      versions:
+        - focal
+        - jammy
+        - noble
+    - name: Kali
+      versions:
+        - all
+    - name: RedHat
+      versions:
+        - 8
+        - 9
+  galaxy_tags:
+    - security
+    - hardening
+    - posix
+    - permissions
+    - files
+
+dependencies: []

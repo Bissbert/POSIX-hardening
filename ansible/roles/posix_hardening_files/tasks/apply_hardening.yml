@@ -1,0 +1,253 @@
+---
+# ==============================================================================
+# Apply File Permissions Hardening
+# ==============================================================================
+# Uses ansible.builtin.file module for idempotent permission changes
+# ==============================================================================
+
+# ------------------------------------------------------------------------------
+# SYSTEM AUTHENTICATION FILES
+# ------------------------------------------------------------------------------
+
+- name: Secure /etc/passwd
+  ansible.builtin.file:
+    path: /etc/passwd
+    mode: "{{ posix_files_passwd_mode }}"
+    owner: root
+    group: root
+    state: file
+  when: ansible_facts['os_family'] != "Windows"
+
+- name: Secure /etc/shadow
+  ansible.builtin.file:
+    path: /etc/shadow
+    mode: "{{ posix_files_shadow_mode }}"
+    owner: root
+    group: root
+    state: file
+  when: ansible_facts['os_family'] != "Windows"
+  failed_when: false  # May not exist on all systems
+
+- name: Secure /etc/group
+  ansible.builtin.file:
+    path: /etc/group
+    mode: "{{ posix_files_group_mode }}"
+    owner: root
+    group: root
+    state: file
+  when: ansible_facts['os_family'] != "Windows"
+
+- name: Secure /etc/gshadow
+  ansible.builtin.file:
+    path: /etc/gshadow
+    mode: "{{ posix_files_gshadow_mode }}"
+    owner: root
+    group: root
+    state: file
+  when: ansible_facts['os_family'] != "Windows"
+  failed_when: false  # May not exist on all systems
+
+# ------------------------------------------------------------------------------
+# SSH CONFIGURATION FILES
+# ------------------------------------------------------------------------------
+
+- name: Secure /etc/ssh/sshd_config
+  ansible.builtin.file:
+    path: /etc/ssh/sshd_config
+    mode: "{{ posix_files_sshd_config_mode }}"
+    owner: "{{ posix_files_sshd_config_owner }}"
+    group: "{{ posix_files_sshd_config_group }}"
+    state: file
+  when: ansible_facts['os_family'] != "Windows"
+  failed_when: false  # May not exist if SSH not installed
+
+# ------------------------------------------------------------------------------
+# CRON FILES AND DIRECTORIES
+# ------------------------------------------------------------------------------
+
+- name: Secure /etc/crontab
+  ansible.builtin.file:
+    path: /etc/crontab
+    mode: "{{ posix_files_crontab_mode }}"
+    owner: root
+    group: root
+    state: file
+  when: ansible_facts['os_family'] != "Windows"
+  failed_when: false
+
+- name: Secure /etc/cron.d directory
+  ansible.builtin.file:
+    path: /etc/cron.d
+    mode: "{{ posix_files_cron_d_mode }}"
+    owner: root
+    group: root
+    state: directory
+  when: ansible_facts['os_family'] != "Windows"
+  failed_when: false
+
+- name: Secure /etc/cron.daily directory
+  ansible.builtin.file:
+    path: /etc/cron.daily
+    mode: "{{ posix_files_cron_daily_mode }}"
+    owner: root
+    group: root
+    state: directory
+  when: ansible_facts['os_family'] != "Windows"
+  failed_when: false
+
+- name: Secure /etc/cron.hourly directory
+  ansible.builtin.file:
+    path: /etc/cron.hourly
+    mode: "{{ posix_files_cron_hourly_mode }}"
+    owner: root
+    group: root
+    state: directory
+  when: ansible_facts['os_family'] != "Windows"
+  failed_when: false
+
+- name: Secure /etc/cron.monthly directory
+  ansible.builtin.file:
+    path: /etc/cron.monthly
+    mode: "{{ posix_files_cron_monthly_mode }}"
+    owner: root
+    group: root
+    state: directory
+  when: ansible_facts['os_family'] != "Windows"
+  failed_when: false
+
+- name: Secure /etc/cron.weekly directory
+  ansible.builtin.file:
+    path: /etc/cron.weekly
+    mode: "{{ posix_files_cron_weekly_mode }}"
+    owner: root
+    group: root
+    state: directory
+  when: ansible_facts['os_family'] != "Windows"
+  failed_when: false
+
+# ------------------------------------------------------------------------------
+# LOG DIRECTORY AND FILES
+# ------------------------------------------------------------------------------
+
+- name: Secure /var/log directory
+  ansible.builtin.file:
+    path: /var/log
+    mode: "{{ posix_files_log_dir_mode }}"
+    owner: root
+    group: root
+    state: directory
+  when: ansible_facts['os_family'] != "Windows"
+
+- name: Find all log files in /var/log
+  ansible.builtin.find:
+    paths: /var/log
+    file_type: file
+    recurse: yes
+  register: log_files
+  when: ansible_facts['os_family'] != "Windows"
+
+- name: Secure log file permissions
+  ansible.builtin.file:
+    path: "{{ item.path }}"
+    mode: "{{ posix_files_log_file_mode }}"
+    owner: "{{ posix_files_log_file_owner }}"
+    group: "{{ posix_files_log_file_group }}"
+    state: file
+  loop: "{{ log_files.files }}"
+  when:
+    - ansible_facts['os_family'] != "Windows"
+    - log_files.matched > 0
+  failed_when: false  # Some log files may be in use
+
+# ------------------------------------------------------------------------------
+# SENSITIVE DIRECTORIES
+# ------------------------------------------------------------------------------
+
+- name: Secure sensitive directories
+  ansible.builtin.file:
+    path: "{{ item.path }}"
+    mode: "{{ item.mode }}"
+    owner: "{{ item.owner }}"
+    group: "{{ item.group }}"
+    state: directory
+  loop: "{{ posix_files_sensitive_dirs }}"
+  when: ansible_facts['os_family'] != "Windows"
+  failed_when: false
+
+# ------------------------------------------------------------------------------
+# SENSITIVE FILES
+# ------------------------------------------------------------------------------
+
+- name: Secure sensitive files
+  ansible.builtin.file:
+    path: "{{ item.path }}"
+    mode: "{{ item.mode }}"
+    owner: "{{ item.owner }}"
+    group: "{{ item.group }}"
+    state: file
+  loop: "{{ posix_files_sensitive_files }}"
+  when: ansible_facts['os_family'] != "Windows"
+  failed_when: false
+
+# ------------------------------------------------------------------------------
+# REMOVE WORLD-WRITABLE PERMISSIONS
+# ------------------------------------------------------------------------------
+
+- name: Find world-writable files (excluding common mount points)
+  ansible.builtin.find:
+    paths: /
+    file_type: file
+    recurse: yes
+    use_regex: no
+    patterns: '*'
+    excludes: "{{ posix_files_world_writable_exclude_paths }}"
+  register: potential_world_writable
+  when:
+    - ansible_facts['os_family'] != "Windows"
+    - posix_files_remove_world_writable | bool
+  failed_when: false
+  async: "{{ posix_files_world_writable_timeout }}"
+  poll: 30
+
+- name: Check which files are actually world-writable
+  ansible.builtin.stat:
+    path: "{{ item.path }}"
+  loop: "{{ potential_world_writable.files | default([]) }}"
+  register: file_stats
+  when:
+    - ansible_facts['os_family'] != "Windows"
+    - posix_files_remove_world_writable | bool
+    - potential_world_writable.matched is defined
+    - potential_world_writable.matched > 0
+  failed_when: false
+
+- name: Remove world-writable permissions from files
+  ansible.builtin.file:
+    path: "{{ item.item.path }}"
+    mode: "{{ item.stat.mode | int - 2 }}"
+    state: file
+  loop: "{{ file_stats.results | default([]) }}"
+  when:
+    - ansible_facts['os_family'] != "Windows"
+    - posix_files_remove_world_writable | bool
+    - item.stat is defined
+    - item.stat.exists
+    - item.stat.mode is defined
+    - item.stat.mode | string | regex_search('...2$|...3$|...6$|...7$')
+  failed_when: false
+
+- name: Log world-writable file removal
+  ansible.builtin.lineinfile:
+    path: "{{ posix_files_log_dir }}/world_writable_removed.log"
+    line: "{{ ansible_date_time.iso8601 }} - Removed world-writable permission: {{ item.item.path }}"
+    create: yes
+    mode: '0600'
+  loop: "{{ file_stats.results | default([]) }}"
+  when:
+    - ansible_facts['os_family'] != "Windows"
+    - posix_files_remove_world_writable | bool
+    - item.stat is defined
+    - item.stat.exists
+    - item.stat.mode is defined
+    - item.stat.mode | string | regex_search('...2$|...3$|...6$|...7$')
+  failed_when: false

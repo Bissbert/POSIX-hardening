@@ -1,0 +1,57 @@
+---
+# ==============================================================================
+# POSIX Mount Hardening Role - Handlers
+# ==============================================================================
+
+- name: log mount change
+  ansible.builtin.lineinfile:
+    path: "{{ posix_mount_log_dir }}/mount_changes.log"
+    line: "{{ ansible_date_time.iso8601 }} - Mount options changed"
+    create: yes
+    mode: '0600'
+  listen: log mount change
+
+- name: remount proc
+  ansible.builtin.command: mount -o remount /proc
+  listen: remount proc
+  changed_when: true
+  failed_when: false
+
+- name: remount dev shm
+  ansible.builtin.command: mount -o remount /dev/shm
+  listen: remount dev shm
+  changed_when: true
+  failed_when: false
+
+- name: remount home
+  ansible.builtin.command: mount -o remount /home
+  listen: remount home
+  changed_when: true
+  failed_when: false
+
+- name: find latest fstab backup
+  ansible.builtin.find:
+    paths: "{{ posix_mount_backup_dir }}"
+    patterns: "fstab.mount.*.bak"
+    file_type: file
+  register: mount_fstab_backups
+  listen: rollback mount settings
+
+- name: restore fstab from backup
+  ansible.builtin.copy:
+    src: "{{ (mount_fstab_backups.files | sort(attribute='mtime') | last).path }}"
+    dest: /etc/fstab
+    remote_src: yes
+    mode: '0644'
+    owner: root
+    group: root
+  when: mount_fstab_backups.matched > 0
+  listen: rollback mount settings
+
+- name: log rollback event
+  ansible.builtin.lineinfile:
+    path: "{{ posix_mount_log_dir }}/mount_hardening.log"
+    line: "{{ ansible_date_time.iso8601 }} - EMERGENCY ROLLBACK: fstab restored from backup"
+    create: yes
+    mode: '0600'
+  listen: rollback mount settings

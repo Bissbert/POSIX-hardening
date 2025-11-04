@@ -1,0 +1,122 @@
+---
+# ==============================================================================
+# POSIX Tmp Hardening Role - Main Tasks
+# ==============================================================================
+# CRITICAL: This role modifies temporary directory mount options
+# Converted from: scripts/12-tmp-hardening.sh
+# ==============================================================================
+
+- name: Display tmp hardening warning
+  ansible.builtin.debug:
+    msg: |
+      ========================================
+      TEMPORARY DIRECTORY HARDENING
+      ========================================
+      This role will harden temporary directories
+      
+      Directories affected:
+        - /tmp: {{ posix_tmp_mount_options }}
+        - /var/tmp: {{ posix_var_tmp_mount_options }}
+        - /dev/shm: {{ posix_dev_shm_mount_options }}
+      
+      Backup location: {{ posix_tmp_backup_dir }}
+      Marker file: {{ posix_tmp_hardening_marker }}
+      ========================================
+  tags: [tmp, warning]
+
+- name: Check if tmp hardening already applied
+  ansible.builtin.stat:
+    path: "{{ posix_tmp_hardening_marker }}"
+  register: tmp_hardening_marker_stat
+  tags: [tmp, check]
+
+- name: Display skip message if already hardened
+  ansible.builtin.debug:
+    msg: |
+      Tmp hardening already applied (marker exists).
+      Set posix_tmp_force_reharden=true to re-apply.
+  when:
+    - tmp_hardening_marker_stat.stat.exists
+    - not posix_tmp_force_reharden | bool
+  tags: [tmp, check]
+
+- name: Phase 1 - Preparation
+  block:
+    - name: Ensure backup directory exists
+      ansible.builtin.file:
+        path: "{{ posix_tmp_backup_dir }}"
+        state: directory
+        mode: '0700'
+        owner: root
+        group: root
+
+    - name: Ensure log directory exists
+      ansible.builtin.file:
+        path: "{{ posix_tmp_log_dir }}"
+        state: directory
+        mode: '0755'
+        owner: root
+        group: root
+
+    - name: Ensure marker directory exists
+      ansible.builtin.file:
+        path: "{{ posix_tmp_hardening_marker | dirname }}"
+        state: directory
+        mode: '0755'
+        owner: root
+        group: root
+
+    - name: Backup /etc/fstab
+      ansible.builtin.copy:
+        src: /etc/fstab
+        dest: "{{ posix_tmp_backup_dir }}/fstab.{{ ansible_date_time.iso8601_basic_short }}.bak"
+        remote_src: yes
+        mode: '0600'
+        owner: root
+        group: root
+      when: posix_tmp_backup_fstab | bool
+      failed_when: false
+
+  when:
+    - not tmp_hardening_marker_stat.stat.exists or posix_tmp_force_reharden | bool
+  tags: [tmp, preparation, phase1]
+
+- name: Phase 2 - Apply tmp hardening
+  ansible.builtin.include_tasks: apply_hardening.yml
+  when:
+    - not tmp_hardening_marker_stat.stat.exists or posix_tmp_force_reharden | bool
+  tags: [tmp, apply, phase2]
+
+- name: Phase 3 - Validate settings
+  ansible.builtin.include_tasks: validate_hardening.yml
+  when:
+    - not tmp_hardening_marker_stat.stat.exists or posix_tmp_force_reharden | bool
+    - posix_tmp_validate_after_apply | bool
+  tags: [tmp, validate, phase3]
+
+- name: Phase 4 - Finalization
+  block:
+    - name: Create hardening marker file
+      ansible.builtin.copy:
+        content: |
+          Tmp hardening applied on: {{ ansible_date_time.iso8601 }}
+          Applied by: Ansible role posix_hardening_tmp
+          Hostname: {{ ansible_hostname }}
+          Backup location: {{ posix_tmp_backup_dir }}
+        dest: "{{ posix_tmp_hardening_marker }}"
+        mode: '0644'
+        owner: root
+        group: root
+
+    - name: Display tmp hardening success
+      ansible.builtin.debug:
+        msg: |
+          ========================================
+          TMP HARDENING COMPLETED
+          ========================================
+          Temporary directories secured
+          ========================================
+
+  when:
+    - not tmp_hardening_marker_stat.stat.exists or posix_tmp_force_reharden | bool
+  tags: [tmp, finalization, phase4]

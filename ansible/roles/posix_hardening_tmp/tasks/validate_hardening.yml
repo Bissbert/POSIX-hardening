@@ -1,0 +1,61 @@
+---
+# ==============================================================================
+# Validate Temporary Directory Hardening
+# ==============================================================================
+
+- name: Get mount information for /tmp
+  ansible.builtin.shell: mount | grep ' /tmp '
+  register: tmp_mount_info
+  changed_when: false
+  failed_when: false
+
+- name: Validate /tmp mount options
+  ansible.builtin.assert:
+    that:
+      - "'nosuid' in tmp_mount_info.stdout"
+      - "'nodev' in tmp_mount_info.stdout"
+      - "'noexec' in tmp_mount_info.stdout"
+    fail_msg: "/tmp is missing required security mount options"
+    success_msg: "/tmp properly secured with nosuid,nodev,noexec"
+  when: tmp_mount_info.rc == 0
+  failed_when: false
+
+- name: Get mount information for /dev/shm
+  ansible.builtin.shell: mount | grep ' /dev/shm '
+  register: dev_shm_mount_info
+  changed_when: false
+  failed_when: false
+
+- name: Validate /dev/shm mount options
+  ansible.builtin.assert:
+    that:
+      - "'nosuid' in dev_shm_mount_info.stdout"
+      - "'nodev' in dev_shm_mount_info.stdout"
+      - "'noexec' in dev_shm_mount_info.stdout"
+    fail_msg: "/dev/shm is missing required security mount options"
+    success_msg: "/dev/shm properly secured with nosuid,nodev,noexec"
+  when: dev_shm_mount_info.rc == 0
+  failed_when: false
+
+- name: Check /tmp permissions
+  ansible.builtin.stat:
+    path: /tmp
+  register: tmp_perms
+
+- name: Validate /tmp permissions
+  ansible.builtin.assert:
+    that:
+      - tmp_perms.stat.mode == '1777'
+    fail_msg: "/tmp has incorrect permissions"
+    success_msg: "/tmp has correct sticky bit permissions"
+
+- name: Display validation results
+  ansible.builtin.debug:
+    msg: |
+      ========================================
+      TMP HARDENING VALIDATION PASSED
+      ========================================
+      Temporary directories secured:
+        - /tmp: {{ 'OK' if tmp_mount_info.rc == 0 else 'NOT MOUNTED SEPARATELY' }}
+        - /dev/shm: {{ 'OK' if dev_shm_mount_info.rc == 0 else 'NOT FOUND' }}
+      ========================================

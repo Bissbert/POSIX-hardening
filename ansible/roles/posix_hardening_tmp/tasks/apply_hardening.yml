@@ -1,0 +1,127 @@
+---
+# ==============================================================================
+# Apply Temporary Directory Hardening
+# ==============================================================================
+
+# ------------------------------------------------------------------------------
+# SET DIRECTORY PERMISSIONS
+# ------------------------------------------------------------------------------
+
+- name: Set secure permissions on /tmp
+  ansible.builtin.file:
+    path: "{{ posix_tmp_path }}"
+    mode: "{{ posix_tmp_mode }}"
+    state: directory
+
+- name: Set secure permissions on /var/tmp
+  ansible.builtin.file:
+    path: "{{ posix_var_tmp_path }}"
+    mode: "{{ posix_var_tmp_mode }}"
+    state: directory
+
+# ------------------------------------------------------------------------------
+# CHECK CURRENT MOUNT STATUS
+# ------------------------------------------------------------------------------
+
+- name: Get current mount information
+  ansible.builtin.shell: mount | grep -E '({{ posix_tmp_path }}|{{ posix_var_tmp_path }}|{{ posix_dev_shm_path }})' || true
+  register: current_mounts
+  changed_when: false
+
+- name: Display current mount status
+  ansible.builtin.debug:
+    var: current_mounts.stdout_lines
+
+# ------------------------------------------------------------------------------
+# HARDEN /tmp MOUNT
+# ------------------------------------------------------------------------------
+
+- name: Check if /tmp is a separate mount
+  ansible.builtin.shell: mount | grep ' /tmp ' || echo "not_mounted"
+  register: tmp_mount_check
+  changed_when: false
+
+- name: Add /tmp to /etc/fstab with secure options
+  ansible.posix.mount:
+    path: "{{ posix_tmp_path }}"
+    src: tmpfs
+    fstype: tmpfs
+    opts: "{{ posix_tmp_mount_options }},size={{ posix_tmp_tmpfs_size }},mode={{ posix_tmp_tmpfs_mode }}"
+    state: mounted
+  when:
+    - posix_tmp_update_fstab | bool
+    - '"not_mounted" in tmp_mount_check.stdout'
+  notify: remount tmp
+
+- name: Remount /tmp with secure options (if already mounted)
+  ansible.posix.mount:
+    path: "{{ posix_tmp_path }}"
+    src: tmpfs
+    fstype: tmpfs
+    opts: "{{ posix_tmp_mount_options }},size={{ posix_tmp_tmpfs_size }},mode={{ posix_tmp_tmpfs_mode }}"
+    state: remounted
+  when:
+    - '"not_mounted" not in tmp_mount_check.stdout'
+    - posix_tmp_remount_immediately | bool
+  failed_when: false
+
+# ------------------------------------------------------------------------------
+# HARDEN /var/tmp MOUNT (if separate partition)
+# ------------------------------------------------------------------------------
+
+- name: Check if /var/tmp is a separate mount
+  ansible.builtin.shell: mount | grep ' /var/tmp ' || echo "not_mounted"
+  register: var_tmp_mount_check
+  changed_when: false
+
+- name: Remount /var/tmp with secure options (if mounted)
+  ansible.builtin.command: mount -o remount,{{ posix_var_tmp_mount_options }} {{ posix_var_tmp_path }}
+  when:
+    - '"not_mounted" not in var_tmp_mount_check.stdout'
+    - posix_tmp_remount_immediately | bool
+  changed_when: true
+  failed_when: false
+
+# ------------------------------------------------------------------------------
+# HARDEN /dev/shm MOUNT
+# ------------------------------------------------------------------------------
+
+- name: Check if /dev/shm exists
+  ansible.builtin.stat:
+    path: "{{ posix_dev_shm_path }}"
+  register: dev_shm_stat
+
+- name: Remount /dev/shm with secure options
+  ansible.posix.mount:
+    path: "{{ posix_dev_shm_path }}"
+    src: tmpfs
+    fstype: tmpfs
+    opts: "{{ posix_dev_shm_mount_options }}"
+    state: remounted
+  when:
+    - dev_shm_stat.stat.exists
+    - posix_tmp_remount_immediately | bool
+  failed_when: false
+
+# ------------------------------------------------------------------------------
+# CLEANUP OLD FILES (OPTIONAL)
+# ------------------------------------------------------------------------------
+
+- name: Clean old temporary files (optional)
+  ansible.builtin.find:
+    paths: "{{ item }}"
+    age: "{{ posix_tmp_cleanup_days }}d"
+    age_stamp: atime
+  register: old_tmp_files
+  loop: "{{ posix_tmp_cleanup_paths }}"
+  when: posix_tmp_cleanup_enabled | bool
+
+- name: Remove old temporary files
+  ansible.builtin.file:
+    path: "{{ item.path }}"
+    state: absent
+  loop: "{{ old_tmp_files.results | map(attribute='files') | flatten }}"
+  when:
+    - posix_tmp_cleanup_enabled | bool
+    - old_tmp_files.results is defined
+  failed_when: false

@@ -1,0 +1,28 @@
+---
+# ==============================================================================
+# POSIX File Permissions Hardening Role - Handlers
+# ==============================================================================
+
+- name: log permission change
+  ansible.builtin.lineinfile:
+    path: "{{ posix_files_log_dir }}/permission_changes.log"
+    line: "{{ ansible_date_time.iso8601 }} - Permission changed: {{ permission_change_path | default('unknown') }}"
+    create: yes
+    mode: '0600'
+  listen: log permission change
+
+- name: find latest permission backup
+  ansible.builtin.find:
+    paths: "{{ posix_files_backup_dir }}"
+    patterns: "file_permissions.backup.*"
+    file_type: file
+  register: permission_backups
+  listen: rollback file permissions
+
+- name: log rollback event
+  ansible.builtin.lineinfile:
+    path: "{{ posix_files_log_dir }}/permission_changes.log"
+    line: "{{ ansible_date_time.iso8601 }} - EMERGENCY ROLLBACK: File permissions restored from backup"
+    create: yes
+    mode: '0600'
+  listen: rollback file permissions

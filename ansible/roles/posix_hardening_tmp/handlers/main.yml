@@ -1,0 +1,49 @@
+---
+# ==============================================================================
+# POSIX Tmp Hardening Role - Handlers
+# ==============================================================================
+
+- name: remount tmp
+  ansible.builtin.command: mount -o remount /tmp
+  listen: remount tmp
+  changed_when: true
+  failed_when: false
+
+- name: remount var tmp
+  ansible.builtin.command: mount -o remount /var/tmp
+  listen: remount var tmp
+  changed_when: true
+  failed_when: false
+
+- name: remount dev shm
+  ansible.builtin.command: mount -o remount /dev/shm
+  listen: remount dev shm
+  changed_when: true
+  failed_when: false
+
+- name: find latest fstab backup
+  ansible.builtin.find:
+    paths: "{{ posix_tmp_backup_dir }}"
+    patterns: "fstab.*.bak"
+    file_type: file
+  register: fstab_backups
+  listen: rollback tmp settings
+
+- name: restore fstab from backup
+  ansible.builtin.copy:
+    src: "{{ (fstab_backups.files | sort(attribute='mtime') | last).path }}"
+    dest: /etc/fstab
+    remote_src: yes
+    mode: '0644'
+    owner: root
+    group: root
+  when: fstab_backups.matched > 0
+  listen: rollback tmp settings
+
+- name: log rollback event
+  ansible.builtin.lineinfile:
+    path: "{{ posix_tmp_log_dir }}/tmp_hardening.log"
+    line: "{{ ansible_date_time.iso8601 }} - EMERGENCY ROLLBACK: fstab restored from backup"
+    create: yes
+    mode: '0600'
+  listen: rollback tmp settings

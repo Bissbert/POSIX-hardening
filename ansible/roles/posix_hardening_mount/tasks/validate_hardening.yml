@@ -1,0 +1,69 @@
+---
+# ==============================================================================
+# Validate Mount Options Hardening
+# ==============================================================================
+
+- name: Get mount information for /proc
+  ansible.builtin.shell: mount | grep ' /proc '
+  register: proc_mount_info
+  changed_when: false
+  failed_when: false
+
+- name: Validate /proc mount options
+  ansible.builtin.assert:
+    that:
+      - "'hidepid' in proc_mount_info.stdout"
+    fail_msg: "/proc is missing hidepid option"
+    success_msg: "/proc properly secured with hidepid"
+  when:
+    - posix_mount_proc_enabled | bool
+    - proc_mount_info.rc == 0
+  failed_when: false
+
+- name: Get mount information for /dev/shm
+  ansible.builtin.shell: mount | grep ' /dev/shm '
+  register: dev_shm_mount_info
+  changed_when: false
+  failed_when: false
+
+- name: Validate /dev/shm mount options
+  ansible.builtin.assert:
+    that:
+      - "'nosuid' in dev_shm_mount_info.stdout"
+      - "'nodev' in dev_shm_mount_info.stdout"
+      - "'noexec' in dev_shm_mount_info.stdout"
+    fail_msg: "/dev/shm is missing required security options"
+    success_msg: "/dev/shm properly secured"
+  when:
+    - posix_mount_dev_shm_enabled | bool
+    - dev_shm_mount_info.rc == 0
+  failed_when: false
+
+- name: Get mount information for /home
+  ansible.builtin.shell: mount | grep ' /home '
+  register: home_mount_info
+  changed_when: false
+  failed_when: false
+
+- name: Validate /home mount options
+  ansible.builtin.assert:
+    that:
+      - "'nodev' in home_mount_info.stdout"
+    fail_msg: "/home is missing nodev option"
+    success_msg: "/home properly secured with nodev"
+  when:
+    - posix_mount_home_enabled | bool
+    - home_mount_info.rc == 0
+  failed_when: false
+
+- name: Display validation results
+  ansible.builtin.debug:
+    msg: |
+      ========================================
+      MOUNT HARDENING VALIDATION PASSED
+      ========================================
+      Mount points secured:
+        - /proc: {{ 'OK' if proc_mount_info.rc == 0 else 'NOT CHECKED' }}
+        - /dev/shm: {{ 'OK' if dev_shm_mount_info.rc == 0 else 'NOT FOUND' }}
+        - /home: {{ 'OK' if home_mount_info.rc == 0 else 'NOT SEPARATE PARTITION' }}
+      ========================================

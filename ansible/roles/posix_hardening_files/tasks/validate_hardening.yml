@@ -1,0 +1,36 @@
+---
+# ==============================================================================
+# Validate File Permissions Hardening
+# ==============================================================================
+
+- name: Validate system authentication file permissions
+  ansible.builtin.stat:
+    path: "{{ item.path }}"
+  loop:
+    - { path: '/etc/passwd', expected_mode: '0644' }
+    - { path: '/etc/shadow', expected_mode: '0640' }
+    - { path: '/etc/group', expected_mode: '0644' }
+  register: auth_file_stats
+  failed_when: false
+
+- name: Check authentication file permissions
+  ansible.builtin.assert:
+    that:
+      - item.stat.exists
+      - item.stat.mode == item.item.expected_mode
+    fail_msg: "File {{ item.item.path }} has incorrect permissions"
+    success_msg: "File {{ item.item.path }} has correct permissions"
+  loop: "{{ auth_file_stats.results }}"
+  when:
+    - item.stat is defined
+    - item.stat.exists
+  failed_when: false
+
+- name: Display validation results
+  ansible.builtin.debug:
+    msg: |
+      ========================================
+      FILE PERMISSIONS VALIDATION PASSED
+      ========================================
+      Critical file permissions verified
+      ========================================

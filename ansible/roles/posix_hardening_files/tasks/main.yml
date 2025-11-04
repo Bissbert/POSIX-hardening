@@ -1,0 +1,113 @@
+---
+# ==============================================================================
+# POSIX File Permissions Hardening Role - Main Tasks
+# ==============================================================================
+# CRITICAL: This role modifies file and directory permissions
+# Converted from: scripts/05-file-permissions.sh
+# ==============================================================================
+
+- name: Display file permissions hardening warning
+  ansible.builtin.debug:
+    msg: |
+      ========================================
+      FILE PERMISSIONS HARDENING IN PROGRESS
+      ========================================
+      This role will modify file and directory permissions
+
+      Applied hardening:
+        - System authentication files (passwd, shadow, group)
+        - SSH configuration files
+        - Cron files and directories
+        - Log file permissions
+        - Sensitive directories and files
+
+      Backup location: {{ posix_files_backup_dir }}
+      Marker file: {{ posix_files_hardening_marker }}
+      ========================================
+  tags: [files, warning]
+
+- name: Check if file permissions hardening already applied
+  ansible.builtin.stat:
+    path: "{{ posix_files_hardening_marker }}"
+  register: files_hardening_marker_stat
+  tags: [files, check]
+
+- name: Display skip message if already hardened
+  ansible.builtin.debug:
+    msg: |
+      File permissions hardening already applied (marker exists).
+      Set posix_files_force_reharden=true to re-apply.
+  when:
+    - files_hardening_marker_stat.stat.exists
+    - not posix_files_force_reharden | bool
+  tags: [files, check]
+
+- name: Phase 1 - Preparation
+  block:
+    - name: Ensure backup directory exists
+      ansible.builtin.file:
+        path: "{{ posix_files_backup_dir }}"
+        state: directory
+        mode: '0700'
+        owner: root
+        group: root
+
+    - name: Ensure log directory exists
+      ansible.builtin.file:
+        path: "{{ posix_files_log_dir }}"
+        state: directory
+        mode: '0755'
+        owner: root
+        group: root
+
+    - name: Ensure marker directory exists
+      ansible.builtin.file:
+        path: "{{ posix_files_hardening_marker | dirname }}"
+        state: directory
+        mode: '0755'
+        owner: root
+        group: root
+
+  when:
+    - not files_hardening_marker_stat.stat.exists or posix_files_force_reharden | bool
+  tags: [files, preparation, phase1]
+
+- name: Phase 2 - Apply file permissions hardening
+  ansible.builtin.include_tasks: apply_hardening.yml
+  when:
+    - not files_hardening_marker_stat.stat.exists or posix_files_force_reharden | bool
+  tags: [files, apply, phase2]
+
+- name: Phase 3 - Validate settings
+  ansible.builtin.include_tasks: validate_hardening.yml
+  when:
+    - not files_hardening_marker_stat.stat.exists or posix_files_force_reharden | bool
+    - posix_files_validate_after_apply | bool
+  tags: [files, validate, phase3]
+
+- name: Phase 4 - Finalization
+  block:
+    - name: Create hardening marker file
+      ansible.builtin.copy:
+        content: |
+          File permissions hardening applied on: {{ ansible_date_time.iso8601 }}
+          Applied by: Ansible role posix_hardening_files
+          Hostname: {{ ansible_hostname }}
+          Backup location: {{ posix_files_backup_dir }}
+        dest: "{{ posix_files_hardening_marker }}"
+        mode: '0644'
+        owner: root
+        group: root
+
+    - name: Display file permissions hardening success
+      ansible.builtin.debug:
+        msg: |
+          ========================================
+          FILE PERMISSIONS HARDENING COMPLETED
+          ========================================
+          All file permissions secured
+          ========================================
+
+  when:
+    - not files_hardening_marker_stat.stat.exists or posix_files_force_reharden | bool
+  tags: [files, finalization, phase4]

@@ -1,0 +1,100 @@
+---
+# ==============================================================================
+# POSIX File Permissions Hardening Role - Default Variables
+# ==============================================================================
+# These variables control file and directory permissions for system security
+# Override in group_vars/all.yml or host_vars/
+# ==============================================================================
+
+# ------------------------------------------------------------------------------
+# CONTROL FLAGS
+# ------------------------------------------------------------------------------
+posix_files_force_reharden: false  # Force re-hardening even if already completed
+posix_files_backup_before_changes: true  # Create backup before modifying
+posix_files_validate_after_apply: true  # Validate settings after applying
+posix_files_remove_world_writable: false  # Find and fix world-writable files (DISABLED by default - time intensive)
+
+# ------------------------------------------------------------------------------
+# STATE TRACKING
+# ------------------------------------------------------------------------------
+posix_files_hardening_marker: "/var/lib/hardening/files_hardened"
+
+# ------------------------------------------------------------------------------
+# FILE PATHS
+# ------------------------------------------------------------------------------
+posix_files_backup_dir: "/var/backups/hardening"
+posix_files_log_dir: "/var/log/hardening"
+
+# ------------------------------------------------------------------------------
+# SYSTEM FILES PERMISSIONS
+# ------------------------------------------------------------------------------
+# Critical authentication files
+posix_files_passwd_mode: "0644"
+posix_files_shadow_mode: "0640"
+posix_files_group_mode: "0644"
+posix_files_gshadow_mode: "0640"
+
+# SSH configuration
+posix_files_sshd_config_mode: "0600"
+posix_files_sshd_config_owner: "root"
+posix_files_sshd_config_group: "root"
+
+# ------------------------------------------------------------------------------
+# CRON FILES PERMISSIONS
+# ------------------------------------------------------------------------------
+posix_files_crontab_mode: "0600"
+posix_files_cron_d_mode: "0700"
+posix_files_cron_daily_mode: "0700"
+posix_files_cron_hourly_mode: "0700"
+posix_files_cron_monthly_mode: "0700"
+posix_files_cron_weekly_mode: "0700"
+
+# ------------------------------------------------------------------------------
+# LOG DIRECTORY PERMISSIONS
+# ------------------------------------------------------------------------------
+posix_files_log_dir_mode: "0755"
+posix_files_log_file_mode: "0640"
+posix_files_log_file_owner: "root"
+posix_files_log_file_group: "root"
+
+# ------------------------------------------------------------------------------
+# WORLD-WRITABLE FILES SEARCH
+# ------------------------------------------------------------------------------
+# Maximum time for world-writable file search (seconds)
+posix_files_world_writable_timeout: 300
+
+# ------------------------------------------------------------------------------
+# SENSITIVE DIRECTORIES
+# ------------------------------------------------------------------------------
+# Additional sensitive directories to secure
+posix_files_sensitive_dirs:
+  - path: "/etc/ssh"
+    mode: "0755"
+    owner: "root"
+    group: "root"
+  - path: "/etc/sudoers.d"
+    mode: "0750"
+    owner: "root"
+    group: "root"
+  - path: "/root"
+    mode: "0700"
+    owner: "root"
+    group: "root"
+
+# ------------------------------------------------------------------------------
+# SENSITIVE FILES
+# ------------------------------------------------------------------------------
+# Additional sensitive files to secure
+posix_files_sensitive_files:
+  - path: "/etc/sudoers"
+    mode: "0440"
+    owner: "root"
+    group: "root"
+  - path: "/etc/hosts.allow"
+    mode: "0644"
+    owner: "root"
+    group: "root"
+  - path: "/etc/hosts.deny"
+    mode: "0644"
+    owner: "root"
+    group: "root"

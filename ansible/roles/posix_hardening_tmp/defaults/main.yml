@@ -1,0 +1,63 @@
+---
+# ==============================================================================
+# POSIX Tmp Hardening Role - Default Variables
+# ==============================================================================
+# These variables control temporary directory security hardening
+# Override in group_vars/all.yml or host_vars/
+# ==============================================================================
+
+# ------------------------------------------------------------------------------
+# CONTROL FLAGS
+# ------------------------------------------------------------------------------
+posix_tmp_force_reharden: false  # Force re-hardening even if already completed
+posix_tmp_backup_fstab: true  # Create backup of /etc/fstab before modifying
+posix_tmp_validate_after_apply: true  # Validate mount options after applying
+posix_tmp_remount_immediately: true  # Remount with new options immediately
+
+# ------------------------------------------------------------------------------
+# STATE TRACKING
+# ------------------------------------------------------------------------------
+posix_tmp_hardening_marker: "/var/lib/hardening/tmp_hardened"
+
+# ------------------------------------------------------------------------------
+# FILE PATHS
+# ------------------------------------------------------------------------------
+posix_tmp_backup_dir: "/var/backups/hardening"
+posix_tmp_log_dir: "/var/log/hardening"
+
+# ------------------------------------------------------------------------------
+# /tmp DIRECTORY HARDENING
+# ------------------------------------------------------------------------------
+posix_tmp_path: "/tmp"
+posix_tmp_mode: "1777"  # Sticky bit + world writable (standard for /tmp)
+posix_tmp_mount_options: "nosuid,nodev,noexec"
+posix_tmp_fstype: "tmpfs"  # Use tmpfs (RAM-based) or leave empty for partition-based
+
+# ------------------------------------------------------------------------------
+# /var/tmp DIRECTORY HARDENING
+# ------------------------------------------------------------------------------
+posix_var_tmp_path: "/var/tmp"
+posix_var_tmp_mode: "1777"
+posix_var_tmp_mount_options: "nosuid,nodev,noexec"
+
+# ------------------------------------------------------------------------------
+# /dev/shm DIRECTORY HARDENING
+# ------------------------------------------------------------------------------
+posix_dev_shm_path: "/dev/shm"
+posix_dev_shm_mount_options: "nosuid,nodev,noexec"
+
+# ------------------------------------------------------------------------------
+# CLEANUP CONFIGURATION
+# ------------------------------------------------------------------------------
+posix_tmp_cleanup_enabled: false  # Clean old temporary files (DISABLED by default)
+posix_tmp_cleanup_days: 7  # Delete files older than N days
+posix_tmp_cleanup_paths:
+  - "/tmp"
+  - "/var/tmp"
+
+# ------------------------------------------------------------------------------
+# FSTAB CONFIGURATION
+# ------------------------------------------------------------------------------
+posix_tmp_update_fstab: true  # Add/update entries in /etc/fstab for persistence
+posix_tmp_tmpfs_size: "2G"  # Size limit for tmpfs-based /tmp
+posix_tmp_tmpfs_mode: "1777"

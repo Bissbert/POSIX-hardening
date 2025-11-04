@@ -1,0 +1,93 @@
+---
+# ==============================================================================
+# POSIX Mount Options Hardening Role - Default Variables
+# ==============================================================================
+# These variables control filesystem mount security options
+# Override in group_vars/all.yml or host_vars/
+# ==============================================================================
+
+# ------------------------------------------------------------------------------
+# CONTROL FLAGS
+# ------------------------------------------------------------------------------
+posix_mount_force_reharden: false  # Force re-hardening even if already completed
+posix_mount_backup_fstab: true  # Create backup of /etc/fstab before modifying
+posix_mount_validate_after_apply: true  # Validate mount options after applying
+posix_mount_remount_immediately: true  # Remount with new options immediately
+
+# ------------------------------------------------------------------------------
+# STATE TRACKING
+# ------------------------------------------------------------------------------
+posix_mount_hardening_marker: "/var/lib/hardening/mount_hardened"
+
+# ------------------------------------------------------------------------------
+# FILE PATHS
+# ------------------------------------------------------------------------------
+posix_mount_backup_dir: "/var/backups/hardening"
+posix_mount_log_dir: "/var/log/hardening"
+
+# ------------------------------------------------------------------------------
+# /proc FILESYSTEM HARDENING
+# ------------------------------------------------------------------------------
+posix_mount_proc_enabled: true
+posix_mount_proc_path: "/proc"
+posix_mount_proc_options: "hidepid=2"  # Hide processes from other users
+posix_mount_proc_fstype: "proc"
+
+# ------------------------------------------------------------------------------
+# /dev/shm FILESYSTEM HARDENING
+# ------------------------------------------------------------------------------
+posix_mount_dev_shm_enabled: true
+posix_mount_dev_shm_path: "/dev/shm"
+posix_mount_dev_shm_options: "nosuid,nodev,noexec"
+posix_mount_dev_shm_fstype: "tmpfs"
+
+# ------------------------------------------------------------------------------
+# /home FILESYSTEM HARDENING
+# ------------------------------------------------------------------------------
+posix_mount_home_enabled: true
+posix_mount_home_path: "/home"
+posix_mount_home_options: "nodev"  # Prevent device files in /home
+# Note: /home options only applied if it's a separate partition
+
+# ------------------------------------------------------------------------------
+# /var FILESYSTEM HARDENING
+# ------------------------------------------------------------------------------
+posix_mount_var_enabled: false  # Disabled by default - /var may contain necessary devices
+posix_mount_var_path: "/var"
+posix_mount_var_options: "nodev"
+# Note: /var options only applied if it's a separate partition
+
+# ------------------------------------------------------------------------------
+# /var/log FILESYSTEM HARDENING
+# ------------------------------------------------------------------------------
+posix_mount_var_log_enabled: false  # Disabled by default - rarely a separate partition
+posix_mount_var_log_path: "/var/log"
+posix_mount_var_log_options: "nodev,nosuid,noexec"
+
+# ------------------------------------------------------------------------------
+# REMOVABLE MEDIA HARDENING
+# ------------------------------------------------------------------------------
+posix_mount_removable_media_enabled: true
+posix_mount_removable_media_options: "nodev,nosuid,noexec"
+posix_mount_removable_media_paths:
+  - "/media"
+  - "/mnt"
+  - "/run/media"
+
+# ------------------------------------------------------------------------------
+# CUSTOM MOUNT POINTS
+# ------------------------------------------------------------------------------
+# Add custom mount points to harden
+posix_mount_custom_mounts: []
+# Example:
+# posix_mount_custom_mounts:
+#   - path: "/data"
+#     options: "nodev,nosuid"
+#     fstype: "ext4"
+#     enabled: true
+
+# ------------------------------------------------------------------------------
+# FSTAB UPDATE CONFIGURATION
+# ------------------------------------------------------------------------------
+posix_mount_update_fstab: true  # Update /etc/fstab for persistence across reboots
+posix_mount_fstab_backup_count: 10  # Keep last N fstab backups

@@ -1,0 +1,122 @@
+---
+# ==============================================================================
+# POSIX Mount Options Hardening Role - Main Tasks
+# ==============================================================================
+# CRITICAL: This role modifies filesystem mount options
+# Converted from: scripts/16-mount-options.sh
+# ==============================================================================
+
+- name: Display mount hardening warning
+  ansible.builtin.debug:
+    msg: |
+      ========================================
+      MOUNT OPTIONS HARDENING IN PROGRESS
+      ========================================
+      This role will apply security mount options
+      
+      Mount points affected:
+        - /proc: {{ posix_mount_proc_options if posix_mount_proc_enabled else 'SKIPPED' }}
+        - /dev/shm: {{ posix_mount_dev_shm_options if posix_mount_dev_shm_enabled else 'SKIPPED' }}
+        - /home: {{ posix_mount_home_options if posix_mount_home_enabled else 'SKIPPED' }}
+      
+      Backup location: {{ posix_mount_backup_dir }}
+      Marker file: {{ posix_mount_hardening_marker }}
+      ========================================
+  tags: [mount, warning]
+
+- name: Check if mount hardening already applied
+  ansible.builtin.stat:
+    path: "{{ posix_mount_hardening_marker }}"
+  register: mount_hardening_marker_stat
+  tags: [mount, check]
+
+- name: Display skip message if already hardened
+  ansible.builtin.debug:
+    msg: |
+      Mount hardening already applied (marker exists).
+      Set posix_mount_force_reharden=true to re-apply.
+  when:
+    - mount_hardening_marker_stat.stat.exists
+    - not posix_mount_force_reharden | bool
+  tags: [mount, check]
+
+- name: Phase 1 - Preparation
+  block:
+    - name: Ensure backup directory exists
+      ansible.builtin.file:
+        path: "{{ posix_mount_backup_dir }}"
+        state: directory
+        mode: '0700'
+        owner: root
+        group: root
+
+    - name: Ensure log directory exists
+      ansible.builtin.file:
+        path: "{{ posix_mount_log_dir }}"
+        state: directory
+        mode: '0755'
+        owner: root
+        group: root
+
+    - name: Ensure marker directory exists
+      ansible.builtin.file:
+        path: "{{ posix_mount_hardening_marker | dirname }}"
+        state: directory
+        mode: '0755'
+        owner: root
+        group: root
+
+    - name: Backup /etc/fstab
+      ansible.builtin.copy:
+        src: /etc/fstab
+        dest: "{{ posix_mount_backup_dir }}/fstab.mount.{{ ansible_date_time.iso8601_basic_short }}.bak"
+        remote_src: yes
+        mode: '0600'
+        owner: root
+        group: root
+      when: posix_mount_backup_fstab | bool
+      failed_when: false
+
+  when:
+    - not mount_hardening_marker_stat.stat.exists or posix_mount_force_reharden | bool
+  tags: [mount, preparation, phase1]
+
+- name: Phase 2 - Apply mount hardening
+  ansible.builtin.include_tasks: apply_hardening.yml
+  when:
+    - not mount_hardening_marker_stat.stat.exists or posix_mount_force_reharden | bool
+  tags: [mount, apply, phase2]
+
+- name: Phase 3 - Validate settings
+  ansible.builtin.include_tasks: validate_hardening.yml
+  when:
+    - not mount_hardening_marker_stat.stat.exists or posix_mount_force_reharden | bool
+    - posix_mount_validate_after_apply | bool
+  tags: [mount, validate, phase3]
+
+- name: Phase 4 - Finalization
+  block:
+    - name: Create hardening marker file
+      ansible.builtin.copy:
+        content: |
+          Mount hardening applied on: {{ ansible_date_time.iso8601 }}
+          Applied by: Ansible role posix_hardening_mount
+          Hostname: {{ ansible_hostname }}
+          Backup location: {{ posix_mount_backup_dir }}
+        dest: "{{ posix_mount_hardening_marker }}"
+        mode: '0644'
+        owner: root
+        group: root
+
+    - name: Display mount hardening success
+      ansible.builtin.debug:
+        msg: |
+          ========================================
+          MOUNT HARDENING COMPLETED
+          ========================================
+          Filesystem mount options secured
+          ========================================
+
+  when:
+    - not mount_hardening_marker_stat.stat.exists or posix_mount_force_reharden | bool
+  tags: [mount, finalization, phase4]

@@ -1,0 +1,186 @@
+---
+# ==============================================================================
+# Apply Mount Options Hardening
+# ==============================================================================
+
+# ------------------------------------------------------------------------------
+# GATHER CURRENT MOUNT INFORMATION
+# ------------------------------------------------------------------------------
+
+- name: Get current mount information
+  ansible.builtin.command: mount
+  register: current_mounts
+  changed_when: false
+
+- name: Display current mount status
+  ansible.builtin.debug:
+    var: current_mounts.stdout_lines
+
+# ------------------------------------------------------------------------------
+# HARDEN /proc FILESYSTEM
+# ------------------------------------------------------------------------------
+
+- name: Check if /proc is mounted
+  ansible.builtin.shell: mount | grep ' /proc ' || echo "not_mounted"
+  register: proc_mount_check
+  changed_when: false
+
+- name: Remount /proc with hidepid option
+  ansible.builtin.command: mount -o remount,{{ posix_mount_proc_options }} {{ posix_mount_proc_path }}
+  when:
+    - posix_mount_proc_enabled | bool
+    - '"not_mounted" not in proc_mount_check.stdout'
+    - posix_mount_remount_immediately | bool
+  changed_when: true
+  failed_when: false
+  notify: log mount change
+
+# ------------------------------------------------------------------------------
+# HARDEN /dev/shm FILESYSTEM
+# ------------------------------------------------------------------------------
+
+- name: Check if /dev/shm is mounted
+  ansible.builtin.shell: mount | grep ' /dev/shm ' || echo "not_mounted"
+  register: dev_shm_mount_check
+  changed_when: false
+
+- name: Remount /dev/shm with secure options
+  ansible.builtin.command: mount -o remount,{{ posix_mount_dev_shm_options }} {{ posix_mount_dev_shm_path }}
+  when:
+    - posix_mount_dev_shm_enabled | bool
+    - '"not_mounted" not in dev_shm_mount_check.stdout'
+    - posix_mount_remount_immediately | bool
+  changed_when: true
+  failed_when: false
+  notify: log mount change
+
+- name: Update /etc/fstab for /dev/shm persistence
+  ansible.posix.mount:
+    path: "{{ posix_mount_dev_shm_path }}"
+    src: tmpfs
+    fstype: "{{ posix_mount_dev_shm_fstype }}"
+    opts: "{{ posix_mount_dev_shm_options }}"
+    state: present
+  when:
+    - posix_mount_dev_shm_enabled | bool
+    - posix_mount_update_fstab | bool
+    - '"not_mounted" not in dev_shm_mount_check.stdout'
+
+# ------------------------------------------------------------------------------
+# HARDEN /home FILESYSTEM (if separate partition)
+# ------------------------------------------------------------------------------
+
+- name: Check if /home is a separate mount
+  ansible.builtin.shell: mount | grep ' /home ' || echo "not_mounted"
+  register: home_mount_check
+  changed_when: false
+
+- name: Get current /home mount options
+  ansible.builtin.shell: mount | grep ' /home ' | awk '{print $6}' | tr -d '()'
+  register: home_current_options
+  when: '"not_mounted" not in home_mount_check.stdout'
+  changed_when: false
+
+- name: Remount /home with nodev option
+  ansible.builtin.command: mount -o remount,{{ posix_mount_home_options }} {{ posix_mount_home_path }}
+  when:
+    - posix_mount_home_enabled | bool
+    - '"not_mounted" not in home_mount_check.stdout'
+    - posix_mount_remount_immediately | bool
+  changed_when: true
+  failed_when: false
+  notify: log mount change
+
+# ------------------------------------------------------------------------------
+# HARDEN /var FILESYSTEM (if separate partition)
+# ------------------------------------------------------------------------------
+
+- name: Check if /var is a separate mount
+  ansible.builtin.shell: mount | grep ' /var ' || echo "not_mounted"
+  register: var_mount_check
+  changed_when: false
+
+- name: Remount /var with nodev option
+  ansible.builtin.command: mount -o remount,{{ posix_mount_var_options }} {{ posix_mount_var_path }}
+  when:
+    - posix_mount_var_enabled | bool
+    - '"not_mounted" not in var_mount_check.stdout'
+    - posix_mount_remount_immediately | bool
+  changed_when: true
+  failed_when: false
+  notify: log mount change
+
+# ------------------------------------------------------------------------------
+# HARDEN /var/log FILESYSTEM (if separate partition)
+# ------------------------------------------------------------------------------
+
+- name: Check if /var/log is a separate mount
+  ansible.builtin.shell: mount | grep ' /var/log ' || echo "not_mounted"
+  register: var_log_mount_check
+  changed_when: false
+
+- name: Remount /var/log with secure options
+  ansible.builtin.command: mount -o remount,{{ posix_mount_var_log_options }} {{ posix_mount_var_log_path }}
+  when:
+    - posix_mount_var_log_enabled | bool
+    - '"not_mounted" not in var_log_mount_check.stdout'
+    - posix_mount_remount_immediately | bool
+  changed_when: true
+  failed_when: false
+  notify: log mount change
+
+# ------------------------------------------------------------------------------
+# HARDEN REMOVABLE MEDIA MOUNT POINTS
+# ------------------------------------------------------------------------------
+
+- name: Check removable media mount points
+  ansible.builtin.stat:
+    path: "{{ item }}"
+  loop: "{{ posix_mount_removable_media_paths }}"
+  register: removable_media_stats
+  when: posix_mount_removable_media_enabled | bool
+
+- name: Log removable media mount points found
+  ansible.builtin.debug:
+    msg: "Found removable media mount point: {{ item.item }}"
+  loop: "{{ removable_media_stats.results | default([]) }}"
+  when:
+    - posix_mount_removable_media_enabled | bool
+    - item.stat is defined
+    - item.stat.exists
+
+# ------------------------------------------------------------------------------
+# APPLY CUSTOM MOUNT HARDENING
+# ------------------------------------------------------------------------------
+
+- name: Check custom mount points
+  ansible.builtin.shell: mount | grep ' {{ item.path }} ' || echo "not_mounted"
+  loop: "{{ posix_mount_custom_mounts }}"
+  register: custom_mount_checks
+  when:
+    - posix_mount_custom_mounts | length > 0
+    - item.enabled | default(true)
+  changed_when: false
+
+- name: Remount custom mount points with secure options
+  ansible.builtin.command: mount -o remount,{{ item.item.options }} {{ item.item.path }}
+  loop: "{{ custom_mount_checks.results | default([]) }}"
+  when:
+    - posix_mount_custom_mounts | length > 0
+    - item.item.enabled | default(true)
+    - '"not_mounted" not in item.stdout'
+    - posix_mount_remount_immediately | bool
+  changed_when: true
+  failed_when: false
+  notify: log mount change
+
+# ------------------------------------------------------------------------------
+# LOG ALL MOUNT CHANGES
+# ------------------------------------------------------------------------------
+
+- name: Log mount hardening completion
+  ansible.builtin.lineinfile:
+    path: "{{ posix_mount_log_dir }}/mount_hardening.log"
+    line: "{{ ansible_date_time.iso8601 }} - Mount hardening applied"
+    create: yes
+    mode: '0600'
