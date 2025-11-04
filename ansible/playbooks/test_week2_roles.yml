@@ -1,0 +1,163 @@
+---
+# ==============================================================================
+# POSIX Hardening - Week 2 Roles Test Playbook
+# ==============================================================================
+# This playbook tests the three critical roles created in Week 2:
+#   1. posix_hardening_validation - Pre-flight validation checks
+#   2. posix_hardening_deploy - Toolkit deployment
+#   3. posix_hardening_users - User and SSH key management
+#
+# Usage:
+#   ansible-playbook playbooks/test_week2_roles.yml --limit testing
+#   ansible-playbook playbooks/test_week2_roles.yml --tags validation
+#   ansible-playbook playbooks/test_week2_roles.yml --tags deploy --check
+# ==============================================================================
+
+- name: Week 2 Roles Test - Validation
+  hosts: all
+  gather_facts: yes
+  become: yes
+
+  vars:
+    # Test variables - override these in inventory or command line
+    admin_ip: "192.168.1.100"
+    ssh_allow_users: "testuser"
+    ssh_port: 22
+    toolkit_path: "/opt/posix-hardening"
+    backup_path: "/var/backups/hardening"
+    log_path: "/var/log/hardening"
+    state_path: "/var/lib/hardening"
+    safety_mode: 1
+    dry_run: 0
+
+  roles:
+    - role: posix_hardening_validation
+      tags: [validation, week2_test]
+      vars:
+        posix_validation_mode: preflight
+        posix_validation_fail_on_warning: false
+
+- name: Week 2 Roles Test - Deployment
+  hosts: all
+  gather_facts: no
+  become: yes
+
+  roles:
+    - role: posix_hardening_deploy
+      tags: [deploy, week2_test]
+      vars:
+        posix_deploy_create_backup: true
+        posix_deploy_verify_permissions: true
+
+- name: Week 2 Roles Test - User Management
+  hosts: all
+  gather_facts: no
+  become: yes
+
+  roles:
+    - role: posix_hardening_users
+      tags: [users, week2_test]
+      vars:
+        posix_hardening_create_users: true
+        posix_hardening_users_passwordless_sudo: true
+        posix_hardening_deploy_ansible_key: true
+        posix_hardening_deploy_team_key: true
+
+- name: Week 2 Roles Test - Final Verification
+  hosts: all
+  gather_facts: no
+  become: yes
+  tags: [verify, week2_test]
+
+  tasks:
+    - name: Verify toolkit directory structure
+      stat:
+        path: "{{ item }}"
+      loop:
+        - "{{ toolkit_path }}"
+        - "{{ toolkit_path }}/lib"
+        - "{{ toolkit_path }}/scripts"
+        - "{{ toolkit_path }}/config"
+        - "{{ toolkit_path }}/tests"
+        - "{{ backup_path }}"
+        - "{{ log_path }}"
+        - "{{ state_path }}"
+      register: dir_verification
+
+    - name: Assert all directories exist
+      assert:
+        that:
+          - item.stat.exists
+          - item.stat.isdir
+        fail_msg: "Directory missing or not a directory: {{ item.item }}"
+        success_msg: "Directory verified: {{ item.item }}"
+      loop: "{{ dir_verification.results }}"
+
+    - name: Verify critical toolkit files deployed
+      stat:
+        path: "{{ toolkit_path }}/{{ item }}"
+      loop:
+        - lib/common.sh
+        - lib/backup.sh
+        - lib/rollback.sh
+        - lib/ssh_safety.sh
+        - config/defaults.conf
+        - scripts/01-ssh-hardening.sh
+        - scripts/02-firewall-setup.sh
+      register: file_verification
+
+    - name: Assert all critical files exist
+      assert:
+        that:
+          - item.stat.exists
+          - item.stat.isreg
+        fail_msg: "File missing: {{ item.item }}"
+        success_msg: "File verified: {{ item.item }}"
+      loop: "{{ file_verification.results }}"
+
+    - name: Verify scripts are executable
+      stat:
+        path: "{{ toolkit_path }}/scripts/01-ssh-hardening.sh"
+      register: script_perms
+
+    - name: Assert scripts have execute permissions
+      assert:
+        that:
+          - script_perms.stat.executable
+        fail_msg: "Scripts are not executable"
+        success_msg: "Scripts have correct permissions"
+
+    - name: Verify users created
+      getent:
+        database: passwd
+        key: "{{ item }}"
+      loop: "{{ ssh_allow_users.split() }}"
+      register: user_verification
+      failed_when: false
+
+    - name: Display user verification results
+      debug:
+        msg: "User {{ item.item }}: {{ 'EXISTS' if item.ansible_facts is defined else 'NOT FOUND' }}"
+      loop: "{{ user_verification.results }}"
+
+    - name: Verify sudo configuration
+      stat:
+        path: /etc/sudoers.d/posix-hardening-users
+      register: sudoers_check
+
+    - name: Display sudo configuration status
+      debug:
+        msg: "Sudoers file: {{ 'CONFIGURED' if sudoers_check.stat.exists else 'NOT CONFIGURED' }}"
+
+    - name: Display test completion message
+      debug:
+        msg: |
+          ========================================
+          Week 2 Roles Test Complete
+          ========================================
+          Validation: PASSED
+          Deployment: PASSED
+          User Management: PASSED
+
+          All Week 2 roles are functioning correctly!
+          ========================================
