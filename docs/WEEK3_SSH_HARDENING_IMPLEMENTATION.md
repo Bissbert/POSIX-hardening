@@ -758,7 +758,6 @@ This is the most critical role in the entire POSIX-hardening toolkit, and it has
 
 ---
 
-**Implemented by:** Claude (Sonnet 4.5)
 **Date:** 2025-11-04
 **Project:** POSIX-hardening Ansible Migration
 **Phase:** Week 3 - Critical SSH Hardening

@@ -2,7 +2,6 @@
 
 **Project:** POSIX Hardening Toolkit
 **Review Date:** 2025-11-04
-**Reviewer:** Claude (Ansible Specialist)
 
 ---
 
