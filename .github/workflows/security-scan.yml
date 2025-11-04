@@ -55,7 +55,7 @@ jobs:
       - name: Initialize CodeQL
         uses: github/codeql-action/init@v3
         with:
-          languages: 'python'  # For Python utilities in ansible/utils/lib
+          # No languages specified - will auto-detect supported languages
           queries: security-extended
 
       - name: Autobuild
