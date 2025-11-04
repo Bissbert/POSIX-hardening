@@ -1,0 +1,36 @@
+---
+# Molecule Converge Playbook - Apply SSH Hardening Role
+# This playbook applies the posix_hardening_ssh role to test containers
+
+- name: Converge - Apply SSH hardening
+  hosts: all
+  become: true
+  gather_facts: true
+
+  pre_tasks:
+    - name: Display pre-hardening info
+      ansible.builtin.debug:
+        msg: |
+          Starting SSH hardening convergence...
+          Target: {{ inventory_hostname }}
+          Admin IP: {{ posix_ssh_admin_ip | default('not set') }}
+          Emergency Port: {{ posix_ssh_emergency_port | default(2222) }}
+
+  roles:
+    - role: posix_hardening_ssh
+
+  post_tasks:
+    - name: Display post-hardening info
+      ansible.builtin.debug:
+        msg: |
+          SSH hardening applied successfully.
+
+          Configuration:
+            - Root login: {{ posix_ssh_permit_root_login | default('no') }}
+            - Password auth: {{ posix_ssh_password_authentication | default(false) }}
+            - PubKey auth: {{ posix_ssh_pubkey_authentication | default(true) }}
+            - Emergency port: {{ posix_ssh_emergency_port | default(2222) }}
+            - Banner enabled: {{ posix_ssh_banner_enabled | default(true) }}
+            - Drift detection: {{ posix_ssh_drift_detection_enabled | default(true) }}
+
+          Verification tests will now run...

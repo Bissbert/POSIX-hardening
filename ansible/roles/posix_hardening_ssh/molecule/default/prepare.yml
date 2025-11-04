@@ -1,0 +1,82 @@
+---
+# Molecule Prepare Playbook - Setup Test Environment
+# Prepares the container for SSH hardening role testing
+
+- name: Prepare test environment
+  hosts: all
+  become: true
+  gather_facts: true
+
+  tasks:
+    - name: Update apt cache
+      ansible.builtin.apt:
+        update_cache: true
+        cache_valid_time: 3600
+      when: ansible_os_family == 'Debian'
+
+    - name: Install OpenSSH server
+      ansible.builtin.package:
+        name: openssh-server
+        state: present
+
+    - name: Ensure SSH service is running
+      ansible.builtin.service:
+        name: ssh
+        state: started
+        enabled: true
+
+    - name: Create test admin user
+      ansible.builtin.user:
+        name: adminuser
+        groups: sudo
+        append: true
+        create_home: true
+        shell: /bin/bash
+
+    - name: Create .ssh directory for admin user
+      ansible.builtin.file:
+        path: /home/adminuser/.ssh
+        state: directory
+        owner: adminuser
+        group: adminuser
+        mode: '0700'
+
+    - name: Generate SSH key pair for testing
+      ansible.builtin.command:
+        cmd: ssh-keygen -t ed25519 -f /home/adminuser/.ssh/id_ed25519 -N ""
+        creates: /home/adminuser/.ssh/id_ed25519
+      become: true
+      become_user: adminuser
+
+    - name: Add public key to authorized_keys
+      ansible.builtin.copy:
+        src: /home/adminuser/.ssh/id_ed25519.pub
+        dest: /home/adminuser/.ssh/authorized_keys
+        owner: adminuser
+        group: adminuser
+        mode: '0600'
+        remote_src: true
+
+    - name: Set admin IP fact for role testing
+      ansible.builtin.set_fact:
+        posix_ssh_admin_ip: "192.168.1.100"
+
+    - name: Create backup directory
+      ansible.builtin.file:
+        path: /var/backups/ssh
+        state: directory
+        owner: root
+        group: root
+        mode: '0750'
+
+    - name: Display preparation complete message
+      ansible.builtin.debug:
+        msg: |
+          Test environment prepared:
+            - OpenSSH server installed and running
+            - Test admin user created: adminuser
+            - SSH keys generated and authorized
+            - Admin IP set: 192.168.1.100
+            - Backup directory created
+
+          Ready for SSH hardening role application.

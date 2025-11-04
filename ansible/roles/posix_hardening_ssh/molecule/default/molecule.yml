@@ -1,0 +1,84 @@
+---
+# Molecule Configuration for posix_hardening_ssh Role
+# Uses Docker driver to test SSH hardening on Ubuntu 22.04 containers
+
+dependency:
+  name: galaxy
+  options:
+    requirements-file: ../../../../collections/requirements.yml
+
+driver:
+  name: docker
+
+platforms:
+  # SSH hardening test target
+  - name: ssh-test-target
+    image: geerlingguy/docker-ubuntu2204-ansible:latest
+    command: ""
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:rw
+    cgroupns_mode: host
+    privileged: true
+    pre_build_image: true
+    networks:
+      - name: molecule-test-network
+
+provisioner:
+  name: ansible
+  config_options:
+    defaults:
+      callbacks_enabled: profile_tasks, timer
+      stdout_callback: yaml
+      roles_path: ../../  # Point to ansible/roles directory
+  inventory:
+    host_vars:
+      ssh-test-target:
+        # Ansible connection settings
+        ansible_user: root
+        # Simulate admin connection from this IP
+        ansible_env:
+          SSH_CONNECTION: "192.168.1.100 54321 172.17.0.2 22"
+        # Global admin IP for validation role
+        admin_ip: "192.168.1.100"
+        # Variables for validation role
+        ssh_allow_users: "adminuser"
+        ssh_port: 22
+        posix_validation_mode: "light"  # Use light mode to skip some checks
+        # SSH role variables for testing
+        posix_ssh_allow_users:
+          - adminuser
+          - root
+        posix_ssh_permit_root_login: "no"
+        posix_ssh_password_authentication: false
+        posix_ssh_pubkey_authentication: true
+        posix_ssh_emergency_port_enabled: true
+        posix_ssh_emergency_port: 2222
+        posix_ssh_banner_enabled: true
+        posix_ssh_log_level: "VERBOSE"
+        posix_ssh_config_validation_enabled: true
+        posix_ssh_drift_detection_enabled: true
+        posix_ssh_firewall_preflight_enabled: false  # No firewall in test
+        posix_ssh_skip_connectivity_test: true  # Skip connectivity test in container
+
+verifier:
+  name: testinfra
+  options:
+    v: 1
+  additional_files_or_dirs:
+    - ../../../molecule/default/tests/
+
+scenario:
+  name: default
+  test_sequence:
+    - dependency
+    - cleanup
+    - destroy
+    - syntax
+    - create
+    - prepare
+    - converge
+    - idempotence
+    - side_effect
+    - verify
+    - cleanup
+    - destroy
