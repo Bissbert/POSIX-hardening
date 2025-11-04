@@ -1,0 +1,89 @@
+---
+# ==============================================================================
+# POSIX Core Dump Hardening - Validate Settings
+# ==============================================================================
+
+- name: Validate core dump limits in limits.conf
+  ansible.builtin.shell: |
+    grep "^\* hard core" {{ posix_coredump_limits_conf }} | awk '{print $4}'
+  register: core_limits_check
+  changed_when: false
+  failed_when: false
+  tags: [coredump, validate, limits]
+
+- name: Validate fs.suid_dumpable sysctl setting
+  ansible.builtin.command:
+    cmd: sysctl -n fs.suid_dumpable
+  register: suid_dumpable_check
+  changed_when: false
+  failed_when: false
+  tags: [coredump, validate, sysctl]
+
+- name: Validate kernel.core_pattern sysctl setting
+  ansible.builtin.command:
+    cmd: sysctl -n kernel.core_pattern
+  register: core_pattern_check
+  changed_when: false
+  failed_when: false
+  tags: [coredump, validate, sysctl]
+
+- name: Check ulimit setting in current shell
+  ansible.builtin.shell: |
+    ulimit -c
+  register: ulimit_check
+  changed_when: false
+  failed_when: false
+  tags: [coredump, validate, ulimit]
+
+- name: Check if ulimit configured in profile
+  ansible.builtin.shell: |
+    grep "ulimit -c" {{ posix_coredump_profile_path }}
+  register: profile_ulimit_check
+  changed_when: false
+  failed_when: false
+  when:
+    - posix_coredump_configure_profile | bool
+  tags: [coredump, validate, profile]
+
+- name: Check systemd-coredump configuration
+  ansible.builtin.shell: |
+    if [ -f /etc/systemd/coredump.conf.d/hardening.conf ]; then
+      grep "Storage=" /etc/systemd/coredump.conf.d/hardening.conf | cut -d= -f2
+    else
+      echo "not_configured"
+    fi
+  register: systemd_coredump_check
+  changed_when: false
+  failed_when: false
+  when:
+    - posix_coredump_configure_systemd | bool
+  tags: [coredump, validate, systemd]
+
+- name: Display validation results
+  ansible.builtin.debug:
+    msg: |
+      Core dump hardening validation completed:
+        - Core dump limit (limits.conf): {{ core_limits_check.stdout | default('Not found') }}
+        - fs.suid_dumpable: {{ suid_dumpable_check.stdout | default('N/A') }}
+        - kernel.core_pattern: {{ core_pattern_check.stdout | default('N/A') }}
+        - Current ulimit -c: {{ ulimit_check.stdout | default('N/A') }}
+        - Profile ulimit configured: {{ 'Yes' if profile_ulimit_check.rc | default(1) == 0 else 'No' }}
+        - systemd-coredump storage: {{ systemd_coredump_check.stdout | default('N/A') }}
+
+      Note: New limits apply to new login sessions.
+      Core dumps are {{ 'DISABLED' if not posix_coredump_enabled else 'ENABLED' }}.
+  tags: [coredump, validate]
+
+- name: Verify core dumps are actually disabled
+  ansible.builtin.assert:
+    that:
+      - core_limits_check.stdout | default('999') | int == 0
+      - suid_dumpable_check.stdout | default('999') | int == 0
+    fail_msg: "Core dumps are not properly disabled!"
+    success_msg: "Core dumps are correctly disabled"
+  when:
+    - not posix_coredump_enabled
+    - core_limits_check.rc == 0
+    - suid_dumpable_check.rc == 0
+  ignore_errors: true
+  tags: [coredump, validate]

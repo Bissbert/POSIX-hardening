@@ -1,0 +1,192 @@
+---
+# ==============================================================================
+# POSIX Core Dump Hardening - Apply Settings
+# ==============================================================================
+
+# ------------------------------------------------------------------------------
+# BACKUP CONFIGURATION FILES
+# ------------------------------------------------------------------------------
+- name: Backup limits.conf before modification
+  ansible.builtin.copy:
+    src: "{{ posix_coredump_limits_conf }}"
+    dest: "{{ posix_coredump_backup_dir }}/limits.conf.coredump.{{ ansible_date_time.iso8601_basic_short }}"
+    remote_src: true
+    mode: '0600'
+    owner: root
+    group: root
+  when:
+    - posix_coredump_backup_before_changes | bool
+  ignore_errors: true
+  tags: [coredump, backup]
+
+- name: Backup sysctl.conf before modification
+  ansible.builtin.copy:
+    src: "{{ posix_coredump_sysctl_conf }}"
+    dest: "{{ posix_coredump_backup_dir }}/sysctl.conf.{{ ansible_date_time.iso8601_basic_short }}"
+    remote_src: true
+    mode: '0600'
+    owner: root
+    group: root
+  when:
+    - posix_coredump_backup_before_changes | bool
+  ignore_errors: true
+  tags: [coredump, backup]
+
+- name: Backup profile before modification
+  ansible.builtin.copy:
+    src: "{{ posix_coredump_profile_path }}"
+    dest: "{{ posix_coredump_backup_dir }}/profile.{{ ansible_date_time.iso8601_basic_short }}"
+    remote_src: true
+    mode: '0600'
+    owner: root
+    group: root
+  when:
+    - posix_coredump_backup_before_changes | bool
+    - posix_coredump_configure_profile | bool
+  ignore_errors: true
+  tags: [coredump, backup]
+
+# ------------------------------------------------------------------------------
+# CONFIGURE LIMITS.CONF (DISABLE CORE DUMPS)
+# ------------------------------------------------------------------------------
+- name: Disable core dumps in limits.conf (hard limit)
+  ansible.builtin.lineinfile:
+    path: "{{ posix_coredump_limits_conf }}"
+    regexp: '^\*\s+hard\s+core\s+'
+    line: "* hard core {{ posix_coredump_size_limit }}"
+    state: "{{ 'present' if not posix_coredump_enabled else 'absent' }}"
+    create: false
+  tags: [coredump, limits]
+
+- name: Disable core dumps in limits.conf (soft limit)
+  ansible.builtin.lineinfile:
+    path: "{{ posix_coredump_limits_conf }}"
+    regexp: '^\*\s+soft\s+core\s+'
+    line: "* soft core {{ posix_coredump_size_limit }}"
+    state: "{{ 'present' if not posix_coredump_enabled else 'absent' }}"
+    create: false
+  tags: [coredump, limits]
+
+# ------------------------------------------------------------------------------
+# CONFIGURE USER EXCEPTIONS
+# ------------------------------------------------------------------------------
+- name: Configure core dump exceptions for specific users
+  ansible.builtin.lineinfile:
+    path: "{{ posix_coredump_limits_conf }}"
+    regexp: "^{{ item.username }}\\s+hard\\s+core\\s+"
+    line: "{{ item.username }} hard core {{ item.core_limit }}"
+    state: present
+    create: false
+  loop: "{{ posix_coredump_user_exceptions }}"
+  when:
+    - posix_coredump_user_exceptions | length > 0
+  tags: [coredump, limits, exceptions]
+
+# ------------------------------------------------------------------------------
+# CONFIGURE SYSCTL (fs.suid_dumpable)
+# ------------------------------------------------------------------------------
+- name: Configure fs.suid_dumpable sysctl
+  ansible.posix.sysctl:
+    name: fs.suid_dumpable
+    value: "{{ posix_coredump_suid_dumpable }}"
+    state: present
+    sysctl_file: "{{ posix_coredump_sysctl_conf }}"
+    reload: true
+  tags: [coredump, sysctl]
+
+# Note: kernel.core_pattern is intentionally NOT set via sysctl module
+# because it doesn't persist correctly across reboots in all scenarios
+# Instead, we use sysctl -w directly and add to sysctl.conf
+
+- name: Set kernel.core_pattern in sysctl.conf
+  ansible.builtin.lineinfile:
+    path: "{{ posix_coredump_sysctl_conf }}"
+    regexp: '^kernel\.core_pattern\s*='
+    line: "kernel.core_pattern = {{ posix_coredump_kernel_pattern }}"
+    state: "{{ 'present' if not posix_coredump_enabled else 'absent' }}"
+    create: false
+  when:
+    - not posix_coredump_enabled
+  tags: [coredump, sysctl]
+
+- name: Apply kernel.core_pattern setting immediately
+  ansible.builtin.command:
+    cmd: sysctl -w kernel.core_pattern="{{ posix_coredump_kernel_pattern }}"
+  changed_when: true
+  when:
+    - not posix_coredump_enabled
+  tags: [coredump, sysctl]
+
+# ------------------------------------------------------------------------------
+# CONFIGURE /etc/profile (ulimit -c 0)
+# ------------------------------------------------------------------------------
+- name: Check if ulimit already configured in profile
+  ansible.builtin.shell: |
+    grep -q "ulimit -c" {{ posix_coredump_profile_path }}
+  register: ulimit_profile_check
+  changed_when: false
+  failed_when: false
+  when:
+    - posix_coredump_configure_profile | bool
+  tags: [coredump, profile]
+
+- name: Add ulimit -c 0 to /etc/profile
+  ansible.builtin.blockinfile:
+    path: "{{ posix_coredump_profile_path }}"
+    marker: "# {mark} ANSIBLE MANAGED BLOCK - Core Dump Hardening"
+    block: |
+      {{ posix_coredump_profile_marker }}
+      ulimit -c {{ posix_coredump_size_limit }}
+    state: "{{ 'present' if not posix_coredump_enabled else 'absent' }}"
+    create: false
+  when:
+    - posix_coredump_configure_profile | bool
+  tags: [coredump, profile]
+
+# ------------------------------------------------------------------------------
+# CONFIGURE SYSTEMD COREDUMP (if systemd present)
+# ------------------------------------------------------------------------------
+- name: Check if systemd coredump.conf exists
+  ansible.builtin.stat:
+    path: "{{ posix_coredump_systemd_conf }}"
+  register: systemd_coredump_stat
+  when:
+    - posix_coredump_configure_systemd | bool
+  tags: [coredump, systemd]
+
+- name: Ensure systemd coredump.conf.d directory exists
+  ansible.builtin.file:
+    path: /etc/systemd/coredump.conf.d
+    state: directory
+    mode: '0755'
+    owner: root
+    group: root
+  when:
+    - posix_coredump_configure_systemd | bool
+    - systemd_coredump_stat.stat.exists
+  tags: [coredump, systemd]
+
+- name: Configure systemd-coredump via drop-in file
+  ansible.builtin.template:
+    src: coredump.conf.j2
+    dest: /etc/systemd/coredump.conf.d/hardening.conf
+    mode: '0644'
+    owner: root
+    group: root
+  when:
+    - posix_coredump_configure_systemd | bool
+    - systemd_coredump_stat.stat.exists
+  tags: [coredump, systemd]
+
+# ------------------------------------------------------------------------------
+# LOGGING
+# ------------------------------------------------------------------------------
+- name: Log core dump configuration
+  ansible.builtin.lineinfile:
+    path: "{{ posix_coredump_log_dir }}/coredump.log"
+    line: "{{ ansible_date_time.iso8601 }} - Core dumps {{ 'DISABLED' if not posix_coredump_enabled else 'ENABLED' }} on {{ ansible_hostname }}"
+    create: true
+    mode: '0640'
+    owner: root
+    group: root
+  tags: [coredump, logging]

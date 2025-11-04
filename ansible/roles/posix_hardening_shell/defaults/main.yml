@@ -1,0 +1,135 @@
+---
+# ==============================================================================
+# POSIX Shell Timeout Hardening Role - Default Variables
+# ==============================================================================
+# These variables control shell timeout and history settings for security
+# Override in group_vars/all.yml or host_vars/
+# ==============================================================================
+
+# ------------------------------------------------------------------------------
+# CONTROL FLAGS
+# ------------------------------------------------------------------------------
+posix_shell_force_reharden: false  # Force re-hardening even if already completed
+posix_shell_backup_before_changes: true  # Create backup before modifying
+posix_shell_validate_after_apply: true  # Validate settings after applying
+
+# ------------------------------------------------------------------------------
+# STATE TRACKING
+# ------------------------------------------------------------------------------
+posix_shell_hardening_marker: "/var/lib/hardening/shell_hardened"
+
+# ------------------------------------------------------------------------------
+# FILE PATHS
+# ------------------------------------------------------------------------------
+posix_shell_backup_dir: "/var/backups/hardening"
+posix_shell_log_dir: "/var/log/hardening"
+posix_shell_profile_path: "/etc/profile"
+posix_shell_bash_bashrc_path: "/etc/bash.bashrc"
+posix_shell_bashrc_debian_path: "/etc/bash.bashrc"  # Debian/Ubuntu location
+
+# ------------------------------------------------------------------------------
+# SHELL TIMEOUT SETTINGS
+# ------------------------------------------------------------------------------
+# Automatic shell timeout in seconds
+# TMOUT variable causes the shell to exit after N seconds of inactivity
+# Recommended values:
+#   300 = 5 minutes (balanced security/usability)
+#   600 = 10 minutes (more lenient)
+#   900 = 15 minutes (lenient, but still secure)
+#   0 = disabled (not recommended for production)
+posix_shell_timeout_seconds: 300
+
+# Make TMOUT readonly to prevent users from unsetting it
+# This is a critical security feature
+posix_shell_tmout_readonly: true
+
+# Export TMOUT so it applies to child shells
+posix_shell_tmout_export: true
+
+# ------------------------------------------------------------------------------
+# SHELL HISTORY SETTINGS
+# ------------------------------------------------------------------------------
+# Configure bash history for security and auditing
+
+# Enable history configuration
+posix_shell_configure_history: true
+
+# Maximum number of commands in history file
+posix_shell_histfilesize: 2000
+
+# Maximum number of commands in memory during session
+posix_shell_histsize: 1000
+
+# History control options (colon-separated)
+# ignorespace = don't save commands starting with space
+# ignoredups = don't save duplicate commands
+# erasedups = remove all previous duplicates
+# ignoreboth = ignorespace + ignoredups
+posix_shell_histcontrol: "ignoreboth:erasedups"
+
+# Timestamp format for history (empty = no timestamps)
+# Example: "%F %T" for "YYYY-MM-DD HH:MM:SS"
+posix_shell_histtimeformat: "%F %T "
+
+# Additional history options (array)
+# histappend = append to history file instead of overwriting
+posix_shell_hist_shopt:
+  - histappend
+
+# Commands to ignore in history (colon-separated pattern)
+# Example: "ls:ll:cd:pwd:exit:clear:history"
+posix_shell_histignore: "ls:ll:cd:pwd:exit:clear:history"
+
+# ------------------------------------------------------------------------------
+# UMASK SETTINGS
+# ------------------------------------------------------------------------------
+# Configure default file creation mask
+posix_shell_configure_umask: true
+
+# Default umask for regular users (027 = rwxr-x---)
+posix_shell_umask: "027"
+
+# ------------------------------------------------------------------------------
+# SHELL SECURITY FEATURES
+# ------------------------------------------------------------------------------
+# Disable core dumps in shell environment
+posix_shell_disable_core_dumps: true
+
+# Restrict certain shell features
+posix_shell_configure_restrictions: true
+
+# Prevent Ctrl+D from logging out (require explicit 'exit' or 'logout')
+# Set to number of consecutive Ctrl+D presses needed (0 = require exit command)
+posix_shell_ignoreeof: 10
+
+# ------------------------------------------------------------------------------
+# PROFILE CONFIGURATION
+# ------------------------------------------------------------------------------
+# Marker text for managed sections
+posix_shell_profile_marker: "# POSIX Hardening - Shell Security"
+posix_shell_bashrc_marker: "# POSIX Hardening - Shell Security"
+
+# Configure both /etc/profile and /etc/bash.bashrc
+# Some distributions use profile, others use bash.bashrc
+posix_shell_configure_profile: true
+posix_shell_configure_bashrc: true
+
+# ------------------------------------------------------------------------------
+# USER EXCEPTIONS
+# ------------------------------------------------------------------------------
+# List of users exempt from shell timeout
+# These users will not have TMOUT enforced
+# Example:
+# posix_shell_timeout_exceptions:
+#   - root
+#   - ansible
+posix_shell_timeout_exceptions: []
+
+# ------------------------------------------------------------------------------
+# WARNING THRESHOLDS
+# ------------------------------------------------------------------------------
+# Warn if timeout is too aggressive (less than this value in seconds)
+posix_shell_warn_timeout_threshold: 180  # 3 minutes
+
+# Warn if timeout is too lenient (more than this value in seconds)
+posix_shell_warn_lenient_threshold: 1800  # 30 minutes

@@ -1,0 +1,102 @@
+---
+# ==============================================================================
+# POSIX Core Dump Hardening Role - Default Variables
+# ==============================================================================
+# These variables control core dump generation to prevent information disclosure
+# Override in group_vars/all.yml or host_vars/
+# ==============================================================================
+
+# ------------------------------------------------------------------------------
+# CONTROL FLAGS
+# ------------------------------------------------------------------------------
+posix_coredump_force_reharden: false  # Force re-hardening even if already completed
+posix_coredump_backup_before_changes: true  # Create backup before modifying
+posix_coredump_validate_after_apply: true  # Validate settings after applying
+
+# ------------------------------------------------------------------------------
+# STATE TRACKING
+# ------------------------------------------------------------------------------
+posix_coredump_hardening_marker: "/var/lib/hardening/coredump_hardened"
+
+# ------------------------------------------------------------------------------
+# FILE PATHS
+# ------------------------------------------------------------------------------
+posix_coredump_backup_dir: "/var/backups/hardening"
+posix_coredump_log_dir: "/var/log/hardening"
+posix_coredump_limits_conf: "/etc/security/limits.conf"
+posix_coredump_sysctl_conf: "/etc/sysctl.conf"
+posix_coredump_profile_path: "/etc/profile"
+posix_coredump_systemd_conf: "/etc/systemd/coredump.conf"
+
+# ------------------------------------------------------------------------------
+# CORE DUMP SETTINGS
+# ------------------------------------------------------------------------------
+# Enable or disable core dumps system-wide
+# Set to false to disable core dumps (recommended for production)
+# Set to true to allow core dumps (useful for development/debugging)
+posix_coredump_enabled: false
+
+# Core file size limit (in blocks)
+# 0 = disabled, any other value = maximum size
+posix_coredump_size_limit: 0
+
+# Sysctl settings for core dumps
+# fs.suid_dumpable controls core dumps for setuid programs
+# 0 = disabled (default, secure)
+# 1 = enabled (debugging only)
+# 2 = enabled with dump to file owned by fs UID
+posix_coredump_suid_dumpable: 0
+
+# Kernel core pattern (where core dumps are written)
+# Set to |/bin/false to discard core dumps
+# Set to /dev/null to discard core dumps
+# Set to |/usr/lib/systemd/systemd-coredump to use systemd-coredump
+posix_coredump_kernel_pattern: "|/bin/false"
+
+# ------------------------------------------------------------------------------
+# SYSTEMD COREDUMP SETTINGS
+# ------------------------------------------------------------------------------
+# Configure systemd-coredump if systemd is present
+posix_coredump_configure_systemd: true
+
+# Storage mode for systemd-coredump
+# none = do not store core dumps
+# external = store in /var/lib/systemd/coredump
+# journal = store in systemd journal
+posix_coredump_systemd_storage: "none"
+
+# Process size max (systemd)
+# Maximum size in bytes of a core dump that will be processed
+# 0 = disabled
+posix_coredump_systemd_process_size_max: 0
+
+# External size max (systemd)
+# Maximum size in bytes to keep in external storage
+posix_coredump_systemd_external_size_max: 0
+
+# Keep free (systemd)
+# Minimum free space required on disk before writing core dumps
+posix_coredump_systemd_keep_free: "1G"
+
+# Max use (systemd)
+# Maximum disk space that can be used for core dumps
+posix_coredump_systemd_max_use: "0"
+
+# ------------------------------------------------------------------------------
+# PROFILE CONFIGURATION
+# ------------------------------------------------------------------------------
+# Add ulimit -c 0 to /etc/profile for defense-in-depth
+posix_coredump_configure_profile: true
+
+# Profile marker text
+posix_coredump_profile_marker: "# POSIX Hardening - Disable Core Dumps"
+
+# ------------------------------------------------------------------------------
+# USER EXCEPTIONS
+# ------------------------------------------------------------------------------
+# List of users that should be allowed to generate core dumps
+# Example:
+# posix_coredump_user_exceptions:
+#   - username: "developer"
+#     core_limit: "unlimited"
+posix_coredump_user_exceptions: []

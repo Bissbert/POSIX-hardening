@@ -1,0 +1,113 @@
+---
+# ==============================================================================
+# POSIX Shell Hardening - Validate Settings
+# ==============================================================================
+
+- name: Check if TMOUT configured in profile
+  ansible.builtin.shell: |
+    grep "^TMOUT=" {{ posix_shell_profile_path }} || grep "^export TMOUT" {{ posix_shell_profile_path }}
+  register: tmout_profile_check
+  changed_when: false
+  failed_when: false
+  when:
+    - posix_shell_configure_profile | bool
+  tags: [shell, validate, tmout]
+
+- name: Extract TMOUT value from profile
+  ansible.builtin.shell: |
+    grep "^TMOUT=" {{ posix_shell_profile_path }} | cut -d= -f2 | head -1
+  register: tmout_value_profile
+  changed_when: false
+  failed_when: false
+  when:
+    - posix_shell_configure_profile | bool
+    - tmout_profile_check.rc == 0
+  tags: [shell, validate, tmout]
+
+- name: Check if TMOUT configured in bash.bashrc
+  ansible.builtin.shell: |
+    grep "^TMOUT=" {{ posix_shell_bash_bashrc_path }} || grep "^export TMOUT" {{ posix_shell_bash_bashrc_path }}
+  register: tmout_bashrc_check
+  changed_when: false
+  failed_when: false
+  when:
+    - posix_shell_configure_bashrc | bool
+    - bash_bashrc_stat.stat.exists
+  tags: [shell, validate, tmout]
+
+- name: Check if TMOUT is readonly in profile
+  ansible.builtin.shell: |
+    grep "readonly TMOUT" {{ posix_shell_profile_path }}
+  register: tmout_readonly_check
+  changed_when: false
+  failed_when: false
+  when:
+    - posix_shell_configure_profile | bool
+    - posix_shell_tmout_readonly | bool
+  tags: [shell, validate, tmout]
+
+- name: Validate history settings in profile
+  ansible.builtin.shell: |
+    grep -E "^export HISTSIZE=|^export HISTFILESIZE=" {{ posix_shell_profile_path }} | wc -l
+  register: history_profile_check
+  changed_when: false
+  failed_when: false
+  when:
+    - posix_shell_configure_profile | bool
+    - posix_shell_configure_history | bool
+  tags: [shell, validate, history]
+
+- name: Validate umask setting
+  ansible.builtin.shell: |
+    grep "^umask {{ posix_shell_umask }}" {{ posix_shell_profile_path }}
+  register: umask_check
+  changed_when: false
+  failed_when: false
+  when:
+    - posix_shell_configure_profile | bool
+    - posix_shell_configure_umask | bool
+  tags: [shell, validate, umask]
+
+- name: Check current shell timeout (if possible)
+  ansible.builtin.shell: |
+    if [ -n "$TMOUT" ]; then echo "$TMOUT"; else echo "not_set"; fi
+  register: current_tmout
+  changed_when: false
+  failed_when: false
+  tags: [shell, validate]
+
+- name: Display validation results
+  ansible.builtin.debug:
+    msg: |
+      Shell hardening validation completed:
+        - TMOUT in profile: {{ 'Configured' if tmout_profile_check.rc | default(1) == 0 else 'Not found' }}
+        - TMOUT value (profile): {{ tmout_value_profile.stdout | default('N/A') }}
+        - TMOUT in bash.bashrc: {{ 'Configured' if tmout_bashrc_check.rc | default(1) == 0 else 'Not found' }}
+        - TMOUT is readonly: {{ 'Yes' if tmout_readonly_check.rc | default(1) == 0 else 'No' }}
+        - History settings: {{ history_profile_check.stdout | default('0') }} settings configured
+        - Umask configured: {{ 'Yes' if umask_check.rc | default(1) == 0 else 'No' }}
+        - Current TMOUT: {{ current_tmout.stdout | default('N/A') }}
+
+      Note: Changes take effect for NEW login sessions.
+      Current shell sessions are not affected.
+  tags: [shell, validate]
+
+- name: Verify TMOUT is configured correctly
+  ansible.builtin.assert:
+    that:
+      - tmout_profile_check.rc == 0 or tmout_bashrc_check.rc == 0
+    fail_msg: "TMOUT is not configured in profile or bash.bashrc!"
+    success_msg: "TMOUT is correctly configured"
+  when:
+    - posix_shell_timeout_seconds | int > 0
+    - (posix_shell_configure_profile | bool) or (posix_shell_configure_bashrc | bool and bash_bashrc_stat.stat.exists)
+  ignore_errors: true
+  tags: [shell, validate]
+
+- name: Warning about active sessions
+  ansible.builtin.debug:
+    msg: |
+      IMPORTANT: Shell timeout changes only affect NEW login sessions.
+      Existing shell sessions will NOT have the timeout applied.
+      Users need to logout and login again for changes to take effect.
+  tags: [shell, validate]

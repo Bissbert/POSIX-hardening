@@ -1,0 +1,14 @@
+---
+# ==============================================================================
+# POSIX Core Dump Hardening Role - Handlers
+# ==============================================================================
+# Core dump settings are applied at kernel and PAM level
+# Most changes take effect immediately via sysctl or at next login
+# ==============================================================================
+
+# No handlers required for core dump configuration
+# Changes are applied via:
+# - sysctl (immediate effect)
+# - limits.conf (loaded at login via PAM)
+# - profile (loaded at login)
+# - systemd coredump.conf (immediate for systemd-coredump)

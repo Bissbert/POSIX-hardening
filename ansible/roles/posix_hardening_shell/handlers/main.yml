@@ -1,0 +1,11 @@
+---
+# ==============================================================================
+# POSIX Shell Hardening Role - Handlers
+# ==============================================================================
+# Shell configuration is loaded at login time
+# Changes take effect for new login sessions (no service restart required)
+# ==============================================================================
+
+# No handlers required for shell configuration
+# Changes are applied to /etc/profile and /etc/bash.bashrc
+# Settings are loaded when users login or start new shells

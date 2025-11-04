@@ -1,0 +1,85 @@
+---
+# ==============================================================================
+# POSIX Process Limits Hardening - Validate Settings
+# ==============================================================================
+
+- name: Validate managed section exists in limits.conf
+  ansible.builtin.shell: |
+    grep -q "{{ posix_limits_managed_marker }}" {{ posix_limits_conf_path }}
+  register: marker_check
+  changed_when: false
+  failed_when: marker_check.rc != 0
+  tags: [limits, validate]
+
+- name: Validate core dump limits configured
+  ansible.builtin.shell: |
+    grep "^\* hard core" {{ posix_limits_conf_path }} | awk '{print $4}'
+  register: core_limit_check
+  changed_when: false
+  failed_when: false
+  tags: [limits, validate, core]
+
+- name: Validate process limits configured
+  ansible.builtin.shell: |
+    grep "^\* hard nproc" {{ posix_limits_conf_path }} | tail -1 | awk '{print $4}'
+  register: nproc_limit_check
+  changed_when: false
+  failed_when: false
+  tags: [limits, validate, nproc]
+
+- name: Validate open file limits configured
+  ansible.builtin.shell: |
+    grep "^\* hard nofile" {{ posix_limits_conf_path }} | tail -1 | awk '{print $4}'
+  register: nofile_limit_check
+  changed_when: false
+  failed_when: false
+  tags: [limits, validate, nofile]
+
+- name: Validate memory lock limits configured
+  ansible.builtin.shell: |
+    grep "^\* hard memlock" {{ posix_limits_conf_path }} | tail -1 | awk '{print $4}'
+  register: memlock_limit_check
+  changed_when: false
+  failed_when: false
+  tags: [limits, validate, memlock]
+
+- name: Check current ulimit settings for validation
+  ansible.builtin.shell: |
+    ulimit -a
+  register: ulimit_current
+  changed_when: false
+  failed_when: false
+  tags: [limits, validate]
+
+- name: Display validation results
+  ansible.builtin.debug:
+    msg: |
+      Process limits validation completed:
+        - Managed section exists: {{ 'Yes' if marker_check.rc == 0 else 'No' }}
+        - Core dump limit: {{ core_limit_check.stdout | default('Not found') }}
+        - Process limit (nproc): {{ nproc_limit_check.stdout | default('Not found') }}
+        - Open files limit (nofile): {{ nofile_limit_check.stdout | default('Not found') }}
+        - Memory lock limit (memlock): {{ memlock_limit_check.stdout | default('Not found') }}
+
+      Note: New limits will apply to new login sessions.
+      Current session limits may differ.
+  tags: [limits, validate]
+
+- name: Warning if limits are very restrictive
+  ansible.builtin.debug:
+    msg: |
+      WARNING: Process limit (nproc) is set to {{ posix_limits_nproc_hard }}.
+      This may affect applications that spawn many processes.
+      Monitor your applications after applying these limits.
+  when:
+    - posix_limits_nproc_hard | int < 2048
+  tags: [limits, validate, warning]
+
+- name: Warning if file limits are low
+  ansible.builtin.debug:
+    msg: |
+      WARNING: Open file limit (nofile) is set to {{ posix_limits_nofile_hard }}.
+      Web servers and databases typically need higher limits (65535+).
+  when:
+    - posix_limits_nofile_hard | int < 8192
+  tags: [limits, validate, warning]

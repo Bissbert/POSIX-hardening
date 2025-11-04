@@ -1,0 +1,22 @@
+# ==============================================================================
+# systemd-coredump Configuration
+# ==============================================================================
+# Managed by Ansible - posix_hardening_coredump role
+# Changes will be overwritten on next Ansible run
+# ==============================================================================
+
+[Coredump]
+# Storage mode: none, external, journal
+Storage={{ posix_coredump_systemd_storage }}
+
+# Maximum size of core dump to process (0 = disabled)
+ProcessSizeMax={{ posix_coredump_systemd_process_size_max }}
+
+# Maximum size to keep in external storage
+ExternalSizeMax={{ posix_coredump_systemd_external_size_max }}
+
+# Minimum free space on disk before writing core dumps
+KeepFree={{ posix_coredump_systemd_keep_free }}
+
+# Maximum disk space for all core dumps
+MaxUse={{ posix_coredump_systemd_max_use }}

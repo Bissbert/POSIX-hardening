@@ -1,0 +1,112 @@
+---
+# ==============================================================================
+# POSIX Process Limits Hardening Role - Main Tasks
+# ==============================================================================
+# CRITICAL: This role modifies system resource limits
+# Converted from: scripts/06-process-limits.sh
+# ==============================================================================
+
+- name: Display process limits hardening warning
+  ansible.builtin.debug:
+    msg: |
+      ========================================
+      PROCESS LIMITS HARDENING IN PROGRESS
+      ========================================
+      This role will configure system resource limits
+
+      Applied hardening:
+        - Process limits (nproc)
+        - Open file limits (nofile)
+        - Core dump limits
+        - Memory lock limits
+
+      Backup location: {{ posix_limits_backup_dir }}
+      Marker file: {{ posix_limits_hardening_marker }}
+      ========================================
+  tags: [limits, warning]
+
+- name: Check if process limits hardening already applied
+  ansible.builtin.stat:
+    path: "{{ posix_limits_hardening_marker }}"
+  register: limits_hardening_marker_stat
+  tags: [limits, check]
+
+- name: Display skip message if already hardened
+  ansible.builtin.debug:
+    msg: |
+      Process limits hardening already applied (marker exists).
+      Set posix_limits_force_reharden=true to re-apply.
+  when:
+    - limits_hardening_marker_stat.stat.exists
+    - not posix_limits_force_reharden | bool
+  tags: [limits, check]
+
+- name: Phase 1 - Preparation
+  block:
+    - name: Ensure backup directory exists
+      ansible.builtin.file:
+        path: "{{ posix_limits_backup_dir }}"
+        state: directory
+        mode: '0700'
+        owner: root
+        group: root
+
+    - name: Ensure log directory exists
+      ansible.builtin.file:
+        path: "{{ posix_limits_log_dir }}"
+        state: directory
+        mode: '0755'
+        owner: root
+        group: root
+
+    - name: Ensure marker directory exists
+      ansible.builtin.file:
+        path: "{{ posix_limits_hardening_marker | dirname }}"
+        state: directory
+        mode: '0755'
+        owner: root
+        group: root
+
+  when:
+    - not limits_hardening_marker_stat.stat.exists or posix_limits_force_reharden | bool
+  tags: [limits, preparation, phase1]
+
+- name: Phase 2 - Apply process limits hardening
+  ansible.builtin.include_tasks: apply_hardening.yml
+  when:
+    - not limits_hardening_marker_stat.stat.exists or posix_limits_force_reharden | bool
+  tags: [limits, apply, phase2]
+
+- name: Phase 3 - Validate settings
+  ansible.builtin.include_tasks: validate_hardening.yml
+  when:
+    - not limits_hardening_marker_stat.stat.exists or posix_limits_force_reharden | bool
+    - posix_limits_validate_after_apply | bool
+  tags: [limits, validate, phase3]
+
+- name: Phase 4 - Finalization
+  block:
+    - name: Create hardening marker file
+      ansible.builtin.copy:
+        content: |
+          Process limits hardening applied on: {{ ansible_date_time.iso8601 }}
+          Applied by: Ansible role posix_hardening_limits
+          Hostname: {{ ansible_hostname }}
+          Backup location: {{ posix_limits_backup_dir }}
+        dest: "{{ posix_limits_hardening_marker }}"
+        mode: '0644'
+        owner: root
+        group: root
+
+    - name: Display process limits hardening success
+      ansible.builtin.debug:
+        msg: |
+          ========================================
+          PROCESS LIMITS HARDENING COMPLETED
+          ========================================
+          Resource limits configured successfully
+          ========================================
+
+  when:
+    - not limits_hardening_marker_stat.stat.exists or posix_limits_force_reharden | bool
+  tags: [limits, finalization, phase4]

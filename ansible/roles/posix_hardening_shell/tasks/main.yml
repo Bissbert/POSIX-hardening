@@ -1,0 +1,150 @@
+---
+# ==============================================================================
+# POSIX Shell Timeout Hardening Role - Main Tasks
+# ==============================================================================
+# CRITICAL: This role configures shell timeout and history settings
+# Converted from: scripts/17-shell-timeout.sh
+# ==============================================================================
+
+- name: Display shell timeout hardening warning
+  ansible.builtin.debug:
+    msg: |
+      ========================================
+      SHELL TIMEOUT HARDENING IN PROGRESS
+      ========================================
+      This role will configure shell security settings
+
+      Applied hardening:
+        - Automatic shell timeout (TMOUT={{ posix_shell_timeout_seconds }}s)
+        - Shell history configuration
+        - Umask settings
+        - Security restrictions
+
+      WARNING: Shells will automatically logout after {{ posix_shell_timeout_seconds }} seconds!
+      Users may need to adjust their workflow.
+
+      Backup location: {{ posix_shell_backup_dir }}
+      Marker file: {{ posix_shell_hardening_marker }}
+      ========================================
+  tags: [shell, warning]
+
+- name: Check if shell hardening already applied
+  ansible.builtin.stat:
+    path: "{{ posix_shell_hardening_marker }}"
+  register: shell_hardening_marker_stat
+  tags: [shell, check]
+
+- name: Display skip message if already hardened
+  ansible.builtin.debug:
+    msg: |
+      Shell hardening already applied (marker exists).
+      Set posix_shell_force_reharden=true to re-apply.
+  when:
+    - shell_hardening_marker_stat.stat.exists
+    - not posix_shell_force_reharden | bool
+  tags: [shell, check]
+
+- name: Display timeout configuration warnings
+  block:
+    - name: Warn if timeout is too aggressive
+      ansible.builtin.debug:
+        msg: |
+          WARNING: Shell timeout is set to {{ posix_shell_timeout_seconds }} seconds.
+          This is less than {{ posix_shell_warn_timeout_threshold }} seconds and may be too aggressive.
+          Users may experience frequent disconnections.
+      when:
+        - posix_shell_timeout_seconds | int < posix_shell_warn_timeout_threshold | int
+        - posix_shell_timeout_seconds | int > 0
+
+    - name: Warn if timeout is too lenient
+      ansible.builtin.debug:
+        msg: |
+          WARNING: Shell timeout is set to {{ posix_shell_timeout_seconds }} seconds.
+          This is more than {{ posix_shell_warn_lenient_threshold }} seconds and may be too lenient.
+          Consider a shorter timeout for better security.
+      when:
+        - posix_shell_timeout_seconds | int > posix_shell_warn_lenient_threshold | int
+
+    - name: Warn if timeout is disabled
+      ansible.builtin.debug:
+        msg: |
+          WARNING: Shell timeout is DISABLED (set to 0).
+          This is not recommended for production environments.
+      when:
+        - posix_shell_timeout_seconds | int == 0
+
+  when:
+    - not shell_hardening_marker_stat.stat.exists or posix_shell_force_reharden | bool
+  tags: [shell, warning]
+
+- name: Phase 1 - Preparation
+  block:
+    - name: Ensure backup directory exists
+      ansible.builtin.file:
+        path: "{{ posix_shell_backup_dir }}"
+        state: directory
+        mode: '0700'
+        owner: root
+        group: root
+
+    - name: Ensure log directory exists
+      ansible.builtin.file:
+        path: "{{ posix_shell_log_dir }}"
+        state: directory
+        mode: '0755'
+        owner: root
+        group: root
+
+    - name: Ensure marker directory exists
+      ansible.builtin.file:
+        path: "{{ posix_shell_hardening_marker | dirname }}"
+        state: directory
+        mode: '0755'
+        owner: root
+        group: root
+
+  when:
+    - not shell_hardening_marker_stat.stat.exists or posix_shell_force_reharden | bool
+  tags: [shell, preparation, phase1]
+
+- name: Phase 2 - Apply shell hardening
+  ansible.builtin.include_tasks: apply_hardening.yml
+  when:
+    - not shell_hardening_marker_stat.stat.exists or posix_shell_force_reharden | bool
+  tags: [shell, apply, phase2]
+
+- name: Phase 3 - Validate settings
+  ansible.builtin.include_tasks: validate_hardening.yml
+  when:
+    - not shell_hardening_marker_stat.stat.exists or posix_shell_force_reharden | bool
+    - posix_shell_validate_after_apply | bool
+  tags: [shell, validate, phase3]
+
+- name: Phase 4 - Finalization
+  block:
+    - name: Create hardening marker file
+      ansible.builtin.copy:
+        content: |
+          Shell hardening applied on: {{ ansible_date_time.iso8601 }}
+          Applied by: Ansible role posix_hardening_shell
+          Hostname: {{ ansible_hostname }}
+          Backup location: {{ posix_shell_backup_dir }}
+          Shell timeout: {{ posix_shell_timeout_seconds }} seconds
+        dest: "{{ posix_shell_hardening_marker }}"
+        mode: '0644'
+        owner: root
+        group: root
+
+    - name: Display shell hardening success
+      ansible.builtin.debug:
+        msg: |
+          ========================================
+          SHELL HARDENING COMPLETED
+          ========================================
+          Shell security settings configured successfully
+          Shell timeout: {{ posix_shell_timeout_seconds }} seconds
+          ========================================
+
+  when:
+    - not shell_hardening_marker_stat.stat.exists or posix_shell_force_reharden | bool
+  tags: [shell, finalization, phase4]

@@ -1,0 +1,242 @@
+---
+# ==============================================================================
+# POSIX Shell Hardening - Apply Settings
+# ==============================================================================
+
+# ------------------------------------------------------------------------------
+# BACKUP CONFIGURATION FILES
+# ------------------------------------------------------------------------------
+- name: Backup /etc/profile before modification
+  ansible.builtin.copy:
+    src: "{{ posix_shell_profile_path }}"
+    dest: "{{ posix_shell_backup_dir }}/profile.{{ ansible_date_time.iso8601_basic_short }}"
+    remote_src: true
+    mode: '0600'
+    owner: root
+    group: root
+  when:
+    - posix_shell_backup_before_changes | bool
+    - posix_shell_configure_profile | bool
+  ignore_errors: true
+  tags: [shell, backup]
+
+- name: Check if bash.bashrc exists
+  ansible.builtin.stat:
+    path: "{{ posix_shell_bash_bashrc_path }}"
+  register: bash_bashrc_stat
+  tags: [shell, check]
+
+- name: Backup bash.bashrc before modification
+  ansible.builtin.copy:
+    src: "{{ posix_shell_bash_bashrc_path }}"
+    dest: "{{ posix_shell_backup_dir }}/bash.bashrc.{{ ansible_date_time.iso8601_basic_short }}"
+    remote_src: true
+    mode: '0600'
+    owner: root
+    group: root
+  when:
+    - posix_shell_backup_before_changes | bool
+    - posix_shell_configure_bashrc | bool
+    - bash_bashrc_stat.stat.exists
+  ignore_errors: true
+  tags: [shell, backup]
+
+# ------------------------------------------------------------------------------
+# CONFIGURE SHELL TIMEOUT IN /etc/profile
+# ------------------------------------------------------------------------------
+- name: Check if TMOUT already configured in profile
+  ansible.builtin.shell: |
+    grep -q "^TMOUT=" {{ posix_shell_profile_path }}
+  register: tmout_profile_check
+  changed_when: false
+  failed_when: false
+  when:
+    - posix_shell_configure_profile | bool
+  tags: [shell, profile, tmout]
+
+- name: Configure shell timeout in /etc/profile
+  ansible.builtin.blockinfile:
+    path: "{{ posix_shell_profile_path }}"
+    marker: "# {mark} ANSIBLE MANAGED BLOCK - Shell Timeout"
+    block: |
+      {{ posix_shell_profile_marker }}
+      {% if posix_shell_timeout_seconds | int > 0 %}
+      TMOUT={{ posix_shell_timeout_seconds }}
+      {% if posix_shell_tmout_readonly %}
+      readonly TMOUT
+      {% endif %}
+      {% if posix_shell_tmout_export %}
+      export TMOUT
+      {% endif %}
+      {% endif %}
+    state: present
+    create: false
+  when:
+    - posix_shell_configure_profile | bool
+  tags: [shell, profile, tmout]
+
+# ------------------------------------------------------------------------------
+# CONFIGURE SHELL TIMEOUT IN /etc/bash.bashrc (Debian/Ubuntu)
+# ------------------------------------------------------------------------------
+- name: Configure shell timeout in bash.bashrc
+  ansible.builtin.blockinfile:
+    path: "{{ posix_shell_bash_bashrc_path }}"
+    marker: "# {mark} ANSIBLE MANAGED BLOCK - Shell Timeout"
+    block: |
+      {{ posix_shell_bashrc_marker }}
+      {% if posix_shell_timeout_seconds | int > 0 %}
+      TMOUT={{ posix_shell_timeout_seconds }}
+      {% if posix_shell_tmout_readonly %}
+      readonly TMOUT
+      {% endif %}
+      {% if posix_shell_tmout_export %}
+      export TMOUT
+      {% endif %}
+      {% endif %}
+    state: present
+    create: false
+  when:
+    - posix_shell_configure_bashrc | bool
+    - bash_bashrc_stat.stat.exists
+  tags: [shell, bashrc, tmout]
+
+# ------------------------------------------------------------------------------
+# CONFIGURE SHELL HISTORY SETTINGS
+# ------------------------------------------------------------------------------
+- name: Configure history settings in /etc/profile
+  ansible.builtin.blockinfile:
+    path: "{{ posix_shell_profile_path }}"
+    marker: "# {mark} ANSIBLE MANAGED BLOCK - Shell History"
+    block: |
+      # Shell history configuration
+      {% if posix_shell_configure_history %}
+      export HISTSIZE={{ posix_shell_histsize }}
+      export HISTFILESIZE={{ posix_shell_histfilesize }}
+      export HISTCONTROL="{{ posix_shell_histcontrol }}"
+      {% if posix_shell_histtimeformat %}
+      export HISTTIMEFORMAT="{{ posix_shell_histtimeformat }}"
+      {% endif %}
+      {% if posix_shell_histignore %}
+      export HISTIGNORE="{{ posix_shell_histignore }}"
+      {% endif %}
+      {% for shopt_opt in posix_shell_hist_shopt %}
+      shopt -s {{ shopt_opt }} 2>/dev/null || true
+      {% endfor %}
+      {% endif %}
+    state: "{{ 'present' if posix_shell_configure_history else 'absent' }}"
+    create: false
+  when:
+    - posix_shell_configure_profile | bool
+  tags: [shell, profile, history]
+
+- name: Configure history settings in bash.bashrc
+  ansible.builtin.blockinfile:
+    path: "{{ posix_shell_bash_bashrc_path }}"
+    marker: "# {mark} ANSIBLE MANAGED BLOCK - Shell History"
+    block: |
+      # Shell history configuration
+      {% if posix_shell_configure_history %}
+      export HISTSIZE={{ posix_shell_histsize }}
+      export HISTFILESIZE={{ posix_shell_histfilesize }}
+      export HISTCONTROL="{{ posix_shell_histcontrol }}"
+      {% if posix_shell_histtimeformat %}
+      export HISTTIMEFORMAT="{{ posix_shell_histtimeformat }}"
+      {% endif %}
+      {% if posix_shell_histignore %}
+      export HISTIGNORE="{{ posix_shell_histignore }}"
+      {% endif %}
+      {% for shopt_opt in posix_shell_hist_shopt %}
+      shopt -s {{ shopt_opt }} 2>/dev/null || true
+      {% endfor %}
+      {% endif %}
+    state: "{{ 'present' if posix_shell_configure_history else 'absent' }}"
+    create: false
+  when:
+    - posix_shell_configure_bashrc | bool
+    - bash_bashrc_stat.stat.exists
+  tags: [shell, bashrc, history]
+
+# ------------------------------------------------------------------------------
+# CONFIGURE UMASK
+# ------------------------------------------------------------------------------
+- name: Configure umask in /etc/profile
+  ansible.builtin.lineinfile:
+    path: "{{ posix_shell_profile_path }}"
+    regexp: '^umask\s+'
+    line: "umask {{ posix_shell_umask }}"
+    state: "{{ 'present' if posix_shell_configure_umask else 'absent' }}"
+    create: false
+  when:
+    - posix_shell_configure_profile | bool
+  tags: [shell, profile, umask]
+
+- name: Configure umask in bash.bashrc
+  ansible.builtin.lineinfile:
+    path: "{{ posix_shell_bash_bashrc_path }}"
+    regexp: '^umask\s+'
+    line: "umask {{ posix_shell_umask }}"
+    state: "{{ 'present' if posix_shell_configure_umask else 'absent' }}"
+    create: false
+  when:
+    - posix_shell_configure_bashrc | bool
+    - bash_bashrc_stat.stat.exists
+  tags: [shell, bashrc, umask]
+
+# ------------------------------------------------------------------------------
+# CONFIGURE SHELL SECURITY RESTRICTIONS
+# ------------------------------------------------------------------------------
+- name: Configure shell security restrictions in /etc/profile
+  ansible.builtin.blockinfile:
+    path: "{{ posix_shell_profile_path }}"
+    marker: "# {mark} ANSIBLE MANAGED BLOCK - Shell Security"
+    block: |
+      # Shell security restrictions
+      {% if posix_shell_configure_restrictions %}
+      # Prevent accidental logout with Ctrl+D
+      set -o ignoreeof 2>/dev/null || IGNOREEOF={{ posix_shell_ignoreeof }}
+
+      {% if posix_shell_disable_core_dumps %}
+      # Disable core dumps in shell
+      ulimit -c 0
+      {% endif %}
+      {% endif %}
+    state: "{{ 'present' if posix_shell_configure_restrictions else 'absent' }}"
+    create: false
+  when:
+    - posix_shell_configure_profile | bool
+  tags: [shell, profile, security]
+
+- name: Configure shell security restrictions in bash.bashrc
+  ansible.builtin.blockinfile:
+    path: "{{ posix_shell_bash_bashrc_path }}"
+    marker: "# {mark} ANSIBLE MANAGED BLOCK - Shell Security"
+    block: |
+      # Shell security restrictions
+      {% if posix_shell_configure_restrictions %}
+      # Prevent accidental logout with Ctrl+D
+      set -o ignoreeof 2>/dev/null || IGNOREEOF={{ posix_shell_ignoreeof }}
+
+      {% if posix_shell_disable_core_dumps %}
+      # Disable core dumps in shell
+      ulimit -c 0
+      {% endif %}
+      {% endif %}
+    state: "{{ 'present' if posix_shell_configure_restrictions else 'absent' }}"
+    create: false
+  when:
+    - posix_shell_configure_bashrc | bool
+    - bash_bashrc_stat.stat.exists
+  tags: [shell, bashrc, security]
+
+# ------------------------------------------------------------------------------
+# LOGGING
+# ------------------------------------------------------------------------------
+- name: Log shell hardening configuration
+  ansible.builtin.lineinfile:
+    path: "{{ posix_shell_log_dir }}/shell.log"
+    line: "{{ ansible_date_time.iso8601 }} - Shell hardening configured on {{ ansible_hostname }} - TMOUT={{ posix_shell_timeout_seconds }}s"
+    create: true
+    mode: '0640'
+    owner: root
+    group: root
+  tags: [shell, logging]

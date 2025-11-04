@@ -1,0 +1,11 @@
+---
+# ==============================================================================
+# POSIX Process Limits Hardening Role - Handlers
+# ==============================================================================
+# Process limits are loaded at login time via PAM
+# Changes take effect for new sessions (no service restart required)
+# ==============================================================================
+
+# No handlers required for process limits
+# Changes are applied to /etc/security/limits.conf and loaded via PAM
+# New limits take effect for new login sessions

@@ -1,0 +1,111 @@
+---
+# ==============================================================================
+# POSIX Process Limits Hardening Role - Default Variables
+# ==============================================================================
+# These variables control system resource limits to prevent resource exhaustion
+# Override in group_vars/all.yml or host_vars/
+# ==============================================================================
+
+# ------------------------------------------------------------------------------
+# CONTROL FLAGS
+# ------------------------------------------------------------------------------
+posix_limits_force_reharden: false  # Force re-hardening even if already completed
+posix_limits_backup_before_changes: true  # Create backup before modifying
+posix_limits_validate_after_apply: true  # Validate settings after applying
+
+# ------------------------------------------------------------------------------
+# STATE TRACKING
+# ------------------------------------------------------------------------------
+posix_limits_hardening_marker: "/var/lib/hardening/limits_hardened"
+
+# ------------------------------------------------------------------------------
+# FILE PATHS
+# ------------------------------------------------------------------------------
+posix_limits_backup_dir: "/var/backups/hardening"
+posix_limits_log_dir: "/var/log/hardening"
+posix_limits_conf_path: "/etc/security/limits.conf"
+
+# ------------------------------------------------------------------------------
+# PROCESS LIMITS CONFIGURATION
+# ------------------------------------------------------------------------------
+# Maximum number of processes per user
+# Default: 4096 (conservative to prevent fork bombs)
+posix_limits_nproc_soft: 4096
+posix_limits_nproc_hard: 4096
+
+# Maximum number of open file descriptors
+# Soft limit: typical application needs
+# Hard limit: maximum allowed (for high-performance services)
+posix_limits_nofile_soft: 65535
+posix_limits_nofile_hard: 65535
+
+# Core file size (typically 0 to disable core dumps)
+# Note: This is duplicated in coredump role for defense-in-depth
+posix_limits_core_soft: 0
+posix_limits_core_hard: 0
+
+# Memory lock limit (for applications that need mlockall)
+# Set to unlimited to allow applications to lock memory
+# Set to specific value (in KB) to limit memory locking
+posix_limits_memlock_soft: "unlimited"
+posix_limits_memlock_hard: "unlimited"
+
+# Maximum file size (in KB)
+# Set to unlimited or specific value
+# Default: unlimited (controlled by filesystem limits)
+posix_limits_fsize_soft: "unlimited"
+posix_limits_fsize_hard: "unlimited"
+
+# Maximum CPU time (in minutes)
+# Set to unlimited or specific value
+# Default: unlimited (applications control their own CPU usage)
+posix_limits_cpu_soft: "unlimited"
+posix_limits_cpu_hard: "unlimited"
+
+# Maximum data segment size (in KB)
+# Default: unlimited
+posix_limits_data_soft: "unlimited"
+posix_limits_data_hard: "unlimited"
+
+# Maximum stack size (in KB)
+# Default: unlimited
+posix_limits_stack_soft: "unlimited"
+posix_limits_stack_hard: "unlimited"
+
+# Maximum resident set size (in KB)
+# Default: unlimited
+posix_limits_rss_soft: "unlimited"
+posix_limits_rss_hard: "unlimited"
+
+# Maximum number of pending signals
+# Default: not set (system default)
+posix_limits_sigpending_soft: ""
+posix_limits_sigpending_hard: ""
+
+# Maximum number of message queues
+# Default: not set (system default)
+posix_limits_msgqueue_soft: ""
+posix_limits_msgqueue_hard: ""
+
+# ------------------------------------------------------------------------------
+# USER-SPECIFIC LIMITS
+# ------------------------------------------------------------------------------
+# Define user-specific limits (override wildcard defaults)
+# Example:
+# posix_limits_user_overrides:
+#   - domain: "oracle"
+#     limits:
+#       - { type: "soft", item: "nproc", value: "16384" }
+#       - { type: "hard", item: "nproc", value: "16384" }
+#       - { type: "soft", item: "nofile", value: "131072" }
+#       - { type: "hard", item: "nofile", value: "131072" }
+#   - domain: "@developers"
+#     limits:
+#       - { type: "soft", item: "nproc", value: "8192" }
+posix_limits_user_overrides: []
+
+# ------------------------------------------------------------------------------
+# MANAGED MARKER
+# ------------------------------------------------------------------------------
+# Marker text to identify our managed section in limits.conf
+posix_limits_managed_marker: "# POSIX Hardening - Process Limits"

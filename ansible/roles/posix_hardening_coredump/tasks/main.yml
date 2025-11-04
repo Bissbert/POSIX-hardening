@@ -1,0 +1,117 @@
+---
+# ==============================================================================
+# POSIX Core Dump Hardening Role - Main Tasks
+# ==============================================================================
+# CRITICAL: This role disables core dumps to prevent information disclosure
+# Converted from: scripts/13-core-dump-disable.sh
+# ==============================================================================
+
+- name: Display core dump hardening warning
+  ansible.builtin.debug:
+    msg: |
+      ========================================
+      CORE DUMP HARDENING IN PROGRESS
+      ========================================
+      This role will disable core dumps system-wide
+
+      Applied hardening:
+        - Disable core dumps in limits.conf
+        - Set fs.suid_dumpable sysctl
+        - Configure kernel.core_pattern
+        - Disable systemd-coredump (if present)
+        - Set ulimit in /etc/profile
+
+      WARNING: Core dumps will not be generated!
+      This may affect debugging capabilities.
+
+      Backup location: {{ posix_coredump_backup_dir }}
+      Marker file: {{ posix_coredump_hardening_marker }}
+      ========================================
+  tags: [coredump, warning]
+
+- name: Check if core dump hardening already applied
+  ansible.builtin.stat:
+    path: "{{ posix_coredump_hardening_marker }}"
+  register: coredump_hardening_marker_stat
+  tags: [coredump, check]
+
+- name: Display skip message if already hardened
+  ansible.builtin.debug:
+    msg: |
+      Core dump hardening already applied (marker exists).
+      Set posix_coredump_force_reharden=true to re-apply.
+  when:
+    - coredump_hardening_marker_stat.stat.exists
+    - not posix_coredump_force_reharden | bool
+  tags: [coredump, check]
+
+- name: Phase 1 - Preparation
+  block:
+    - name: Ensure backup directory exists
+      ansible.builtin.file:
+        path: "{{ posix_coredump_backup_dir }}"
+        state: directory
+        mode: '0700'
+        owner: root
+        group: root
+
+    - name: Ensure log directory exists
+      ansible.builtin.file:
+        path: "{{ posix_coredump_log_dir }}"
+        state: directory
+        mode: '0755'
+        owner: root
+        group: root
+
+    - name: Ensure marker directory exists
+      ansible.builtin.file:
+        path: "{{ posix_coredump_hardening_marker | dirname }}"
+        state: directory
+        mode: '0755'
+        owner: root
+        group: root
+
+  when:
+    - not coredump_hardening_marker_stat.stat.exists or posix_coredump_force_reharden | bool
+  tags: [coredump, preparation, phase1]
+
+- name: Phase 2 - Apply core dump hardening
+  ansible.builtin.include_tasks: apply_hardening.yml
+  when:
+    - not coredump_hardening_marker_stat.stat.exists or posix_coredump_force_reharden | bool
+  tags: [coredump, apply, phase2]
+
+- name: Phase 3 - Validate settings
+  ansible.builtin.include_tasks: validate_hardening.yml
+  when:
+    - not coredump_hardening_marker_stat.stat.exists or posix_coredump_force_reharden | bool
+    - posix_coredump_validate_after_apply | bool
+  tags: [coredump, validate, phase3]
+
+- name: Phase 4 - Finalization
+  block:
+    - name: Create hardening marker file
+      ansible.builtin.copy:
+        content: |
+          Core dump hardening applied on: {{ ansible_date_time.iso8601 }}
+          Applied by: Ansible role posix_hardening_coredump
+          Hostname: {{ ansible_hostname }}
+          Backup location: {{ posix_coredump_backup_dir }}
+          Core dumps enabled: {{ posix_coredump_enabled }}
+        dest: "{{ posix_coredump_hardening_marker }}"
+        mode: '0644'
+        owner: root
+        group: root
+
+    - name: Display core dump hardening success
+      ansible.builtin.debug:
+        msg: |
+          ========================================
+          CORE DUMP HARDENING COMPLETED
+          ========================================
+          Core dumps have been {{ 'DISABLED' if not posix_coredump_enabled else 'ENABLED' }}
+          ========================================
+
+  when:
+    - not coredump_hardening_marker_stat.stat.exists or posix_coredump_force_reharden | bool
+  tags: [coredump, finalization, phase4]

@@ -1,0 +1,190 @@
+---
+# ==============================================================================
+# POSIX Process Limits Hardening - Apply Settings
+# ==============================================================================
+
+# ------------------------------------------------------------------------------
+# BACKUP CONFIGURATION FILES
+# ------------------------------------------------------------------------------
+- name: Backup limits.conf before modification
+  ansible.builtin.copy:
+    src: "{{ posix_limits_conf_path }}"
+    dest: "{{ posix_limits_backup_dir }}/limits.conf.{{ ansible_date_time.iso8601_basic_short }}"
+    remote_src: true
+    mode: '0600'
+    owner: root
+    group: root
+  when:
+    - posix_limits_backup_before_changes | bool
+  ignore_errors: true
+  tags: [limits, backup]
+
+# ------------------------------------------------------------------------------
+# REMOVE OLD MANAGED SECTION (FOR IDEMPOTENCY)
+# ------------------------------------------------------------------------------
+- name: Check if old managed section exists in limits.conf
+  ansible.builtin.shell: |
+    grep -q "{{ posix_limits_managed_marker }}" {{ posix_limits_conf_path }}
+  register: old_section_check
+  changed_when: false
+  failed_when: false
+  tags: [limits, cleanup]
+
+- name: Remove old managed section from limits.conf
+  ansible.builtin.shell: |
+    sed -i '/{{ posix_limits_managed_marker }}/,/^$/d' {{ posix_limits_conf_path }}
+  when:
+    - old_section_check.rc == 0
+  tags: [limits, cleanup]
+
+# ------------------------------------------------------------------------------
+# CONFIGURE WILDCARD (*) LIMITS
+# ------------------------------------------------------------------------------
+- name: Add managed section marker to limits.conf
+  ansible.builtin.lineinfile:
+    path: "{{ posix_limits_conf_path }}"
+    line: "\n{{ posix_limits_managed_marker }}"
+    state: present
+    create: false
+  tags: [limits, configure]
+
+- name: Configure core dump limits (soft)
+  ansible.builtin.lineinfile:
+    path: "{{ posix_limits_conf_path }}"
+    line: "* soft core {{ posix_limits_core_soft }}"
+    state: present
+    create: false
+    insertafter: "{{ posix_limits_managed_marker }}"
+  tags: [limits, configure, core]
+
+- name: Configure core dump limits (hard)
+  ansible.builtin.lineinfile:
+    path: "{{ posix_limits_conf_path }}"
+    line: "* hard core {{ posix_limits_core_hard }}"
+    state: present
+    create: false
+    insertafter: "{{ posix_limits_managed_marker }}"
+  tags: [limits, configure, core]
+
+- name: Configure process limits (soft)
+  ansible.builtin.lineinfile:
+    path: "{{ posix_limits_conf_path }}"
+    line: "* soft nproc {{ posix_limits_nproc_soft }}"
+    state: present
+    create: false
+    insertafter: "{{ posix_limits_managed_marker }}"
+  tags: [limits, configure, nproc]
+
+- name: Configure process limits (hard)
+  ansible.builtin.lineinfile:
+    path: "{{ posix_limits_conf_path }}"
+    line: "* hard nproc {{ posix_limits_nproc_hard }}"
+    state: present
+    create: false
+    insertafter: "{{ posix_limits_managed_marker }}"
+  tags: [limits, configure, nproc]
+
+- name: Configure open file limits (soft)
+  ansible.builtin.lineinfile:
+    path: "{{ posix_limits_conf_path }}"
+    line: "* soft nofile {{ posix_limits_nofile_soft }}"
+    state: present
+    create: false
+    insertafter: "{{ posix_limits_managed_marker }}"
+  tags: [limits, configure, nofile]
+
+- name: Configure open file limits (hard)
+  ansible.builtin.lineinfile:
+    path: "{{ posix_limits_conf_path }}"
+    line: "* hard nofile {{ posix_limits_nofile_hard }}"
+    state: present
+    create: false
+    insertafter: "{{ posix_limits_managed_marker }}"
+  tags: [limits, configure, nofile]
+
+- name: Configure memory lock limits (soft)
+  ansible.builtin.lineinfile:
+    path: "{{ posix_limits_conf_path }}"
+    line: "* soft memlock {{ posix_limits_memlock_soft }}"
+    state: present
+    create: false
+    insertafter: "{{ posix_limits_managed_marker }}"
+  tags: [limits, configure, memlock]
+
+- name: Configure memory lock limits (hard)
+  ansible.builtin.lineinfile:
+    path: "{{ posix_limits_conf_path }}"
+    line: "* hard memlock {{ posix_limits_memlock_hard }}"
+    state: present
+    create: false
+    insertafter: "{{ posix_limits_managed_marker }}"
+  tags: [limits, configure, memlock]
+
+# ------------------------------------------------------------------------------
+# CONFIGURE OPTIONAL LIMITS (if values provided)
+# ------------------------------------------------------------------------------
+- name: Configure file size limits (soft)
+  ansible.builtin.lineinfile:
+    path: "{{ posix_limits_conf_path }}"
+    line: "* soft fsize {{ posix_limits_fsize_soft }}"
+    state: present
+    create: false
+    insertafter: "{{ posix_limits_managed_marker }}"
+  when: posix_limits_fsize_soft != ""
+  tags: [limits, configure, optional]
+
+- name: Configure file size limits (hard)
+  ansible.builtin.lineinfile:
+    path: "{{ posix_limits_conf_path }}"
+    line: "* hard fsize {{ posix_limits_fsize_hard }}"
+    state: present
+    create: false
+    insertafter: "{{ posix_limits_managed_marker }}"
+  when: posix_limits_fsize_hard != ""
+  tags: [limits, configure, optional]
+
+- name: Configure CPU time limits (soft)
+  ansible.builtin.lineinfile:
+    path: "{{ posix_limits_conf_path }}"
+    line: "* soft cpu {{ posix_limits_cpu_soft }}"
+    state: present
+    create: false
+    insertafter: "{{ posix_limits_managed_marker }}"
+  when: posix_limits_cpu_soft != ""
+  tags: [limits, configure, optional]
+
+- name: Configure CPU time limits (hard)
+  ansible.builtin.lineinfile:
+    path: "{{ posix_limits_conf_path }}"
+    line: "* hard cpu {{ posix_limits_cpu_hard }}"
+    state: present
+    create: false
+    insertafter: "{{ posix_limits_managed_marker }}"
+  when: posix_limits_cpu_hard != ""
+  tags: [limits, configure, optional]
+
+# ------------------------------------------------------------------------------
+# USER-SPECIFIC OVERRIDES
+# ------------------------------------------------------------------------------
+- name: Configure user-specific limit overrides
+  ansible.builtin.lineinfile:
+    path: "{{ posix_limits_conf_path }}"
+    line: "{{ item.1.domain | default(item.0.domain) }} {{ item.1.type }} {{ item.1.item }} {{ item.1.value }}"
+    state: present
+    create: false
+  loop: "{{ posix_limits_user_overrides | subelements('limits', skip_missing=True) }}"
+  when: posix_limits_user_overrides | length > 0
+  tags: [limits, configure, user_overrides]
+
+# ------------------------------------------------------------------------------
+# LOGGING
+# ------------------------------------------------------------------------------
+- name: Log process limits configuration
+  ansible.builtin.lineinfile:
+    path: "{{ posix_limits_log_dir }}/limits.log"
+    line: "{{ ansible_date_time.iso8601 }} - Process limits configured on {{ ansible_hostname }}"
+    create: true
+    mode: '0640'
+    owner: root
+    group: root
+  tags: [limits, logging]
