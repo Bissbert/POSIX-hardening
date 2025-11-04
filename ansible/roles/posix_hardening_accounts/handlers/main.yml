@@ -1,0 +1,10 @@
+---
+# ==============================================================================
+# POSIX Account Lockdown Hardening Role - Handlers
+# ==============================================================================
+# Account modifications do not require service restarts
+# Changes to user accounts take effect immediately
+# ==============================================================================
+
+# No handlers required for account modifications
+# User account changes are applied directly and take effect on next login

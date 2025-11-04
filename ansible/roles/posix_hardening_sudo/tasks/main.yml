@@ -1,0 +1,123 @@
+---
+# ==============================================================================
+# POSIX Sudo Restrictions Hardening Role - Main Tasks
+# ==============================================================================
+# CRITICAL: This role modifies sudo configuration
+# Changes are validated with visudo before applying
+# Converted from: scripts/10-sudo-restrictions.sh
+# ==============================================================================
+
+- name: Display sudo restrictions hardening warning
+  ansible.builtin.debug:
+    msg: |
+      ========================================
+      SUDO RESTRICTIONS HARDENING IN PROGRESS
+      ========================================
+      This role will configure sudo restrictions
+
+      Applied hardening:
+        - Sudo security settings (requiretty, visiblepw)
+        - Sudo logging configuration
+        - Secure PATH enforcement
+        - Password timeout settings
+
+      Backup location: {{ posix_sudo_backup_dir }}
+      Marker file: {{ posix_sudo_hardening_marker }}
+
+      IMPORTANT: All changes are validated with visudo
+      ========================================
+  tags: [sudo, warning]
+
+- name: Check if sudo restrictions hardening already applied
+  ansible.builtin.stat:
+    path: "{{ posix_sudo_hardening_marker }}"
+  register: sudo_hardening_marker_stat
+  tags: [sudo, check]
+
+- name: Display skip message if already hardened
+  ansible.builtin.debug:
+    msg: |
+      Sudo restrictions hardening already applied (marker exists).
+      Set posix_sudo_force_reharden=true to re-apply.
+  when:
+    - sudo_hardening_marker_stat.stat.exists
+    - not posix_sudo_force_reharden | bool
+  tags: [sudo, check]
+
+- name: Phase 1 - Preparation
+  block:
+    - name: Ensure backup directory exists
+      ansible.builtin.file:
+        path: "{{ posix_sudo_backup_dir }}"
+        state: directory
+        mode: '0700'
+        owner: root
+        group: root
+
+    - name: Ensure log directory exists
+      ansible.builtin.file:
+        path: "{{ posix_sudo_log_dir }}"
+        state: directory
+        mode: '0755'
+        owner: root
+        group: root
+
+    - name: Ensure marker directory exists
+      ansible.builtin.file:
+        path: "{{ posix_sudo_hardening_marker | dirname }}"
+        state: directory
+        mode: '0755'
+        owner: root
+        group: root
+
+    - name: Ensure sudoers.d directory exists
+      ansible.builtin.file:
+        path: "{{ posix_sudo_sudoers_d_path }}"
+        state: directory
+        mode: '0750'
+        owner: root
+        group: root
+
+  when:
+    - not sudo_hardening_marker_stat.stat.exists or posix_sudo_force_reharden | bool
+  tags: [sudo, preparation, phase1]
+
+- name: Phase 2 - Apply sudo restrictions hardening
+  ansible.builtin.include_tasks: apply_hardening.yml
+  when:
+    - not sudo_hardening_marker_stat.stat.exists or posix_sudo_force_reharden | bool
+  tags: [sudo, apply, phase2]
+
+- name: Phase 3 - Validate settings
+  ansible.builtin.include_tasks: validate_hardening.yml
+  when:
+    - not sudo_hardening_marker_stat.stat.exists or posix_sudo_force_reharden | bool
+    - posix_sudo_validate_after_apply | bool
+  tags: [sudo, validate, phase3]
+
+- name: Phase 4 - Finalization
+  block:
+    - name: Create hardening marker file
+      ansible.builtin.copy:
+        content: |
+          Sudo restrictions hardening applied on: {{ ansible_date_time.iso8601 }}
+          Applied by: Ansible role posix_hardening_sudo
+          Hostname: {{ ansible_hostname }}
+          Backup location: {{ posix_sudo_backup_dir }}
+        dest: "{{ posix_sudo_hardening_marker }}"
+        mode: '0644'
+        owner: root
+        group: root
+
+    - name: Display sudo restrictions hardening success
+      ansible.builtin.debug:
+        msg: |
+          ========================================
+          SUDO RESTRICTIONS HARDENING COMPLETED
+          ========================================
+          Sudo configuration secured successfully
+          ========================================
+
+  when:
+    - not sudo_hardening_marker_stat.stat.exists or posix_sudo_force_reharden | bool
+  tags: [sudo, finalization, phase4]

@@ -1,0 +1,147 @@
+---
+# ==============================================================================
+# POSIX Account Lockdown Hardening - Apply Settings
+# ==============================================================================
+
+# ------------------------------------------------------------------------------
+# BACKUP CONFIGURATION FILES
+# ------------------------------------------------------------------------------
+- name: Backup /etc/passwd before modification
+  ansible.builtin.copy:
+    src: /etc/passwd
+    dest: "{{ posix_accounts_backup_dir }}/passwd.{{ ansible_date_time.iso8601_basic_short }}"
+    remote_src: true
+    mode: '0600'
+    owner: root
+    group: root
+  when:
+    - posix_accounts_backup_before_changes | bool
+  tags: [accounts, backup]
+
+- name: Backup /etc/shadow before modification
+  ansible.builtin.copy:
+    src: /etc/shadow
+    dest: "{{ posix_accounts_backup_dir }}/shadow.{{ ansible_date_time.iso8601_basic_short }}"
+    remote_src: true
+    mode: '0600'
+    owner: root
+    group: root
+  when:
+    - posix_accounts_backup_before_changes | bool
+  tags: [accounts, backup]
+
+# ------------------------------------------------------------------------------
+# DETERMINE AVAILABLE NOLOGIN SHELL
+# ------------------------------------------------------------------------------
+- name: Check for available nologin shell paths
+  ansible.builtin.stat:
+    path: "{{ item }}"
+  register: nologin_shell_check
+  loop: "{{ posix_accounts_nologin_alternatives }}"
+  tags: [accounts, shell]
+
+- name: Set nologin shell path (use first available)
+  ansible.builtin.set_fact:
+    accounts_nologin_shell: "{{ (nologin_shell_check.results | selectattr('stat.exists') | map(attribute='stat.path') | list | first) | default('/usr/sbin/nologin') }}"
+  tags: [accounts, shell]
+
+# ------------------------------------------------------------------------------
+# LOCK SYSTEM ACCOUNTS
+# ------------------------------------------------------------------------------
+- name: Get list of existing users to lock
+  ansible.builtin.shell: |
+    set -e
+    for user in {{ posix_accounts_lock_list | join(' ') }}; do
+      if id "$user" >/dev/null 2>&1; then
+        echo "$user"
+      fi
+    done
+  register: existing_users_to_lock
+  changed_when: false
+  tags: [accounts, lock]
+
+- name: Lock system accounts
+  ansible.builtin.user:
+    name: "{{ item }}"
+    password_lock: true
+    shell: "{{ accounts_nologin_shell if posix_accounts_set_nologin_shell | bool else omit }}"
+  loop: "{{ existing_users_to_lock.stdout_lines }}"
+  when:
+    - existing_users_to_lock.stdout_lines | length > 0
+    - item not in posix_accounts_exclude_users
+  tags: [accounts, lock]
+
+# ------------------------------------------------------------------------------
+# LOCK ACCOUNTS WITH EMPTY PASSWORDS
+# ------------------------------------------------------------------------------
+- name: Identify accounts with empty or null passwords
+  ansible.builtin.shell: |
+    set -e
+    awk -F: '($2 == "" || $2 == "!" || $2 == "*") && ($1 != "root") {print $1}' /etc/shadow
+  register: empty_password_accounts
+  changed_when: false
+  tags: [accounts, empty_password]
+
+- name: Lock accounts with empty passwords
+  ansible.builtin.user:
+    name: "{{ item }}"
+    password_lock: true
+  loop: "{{ empty_password_accounts.stdout_lines }}"
+  when:
+    - posix_accounts_lock_empty_password | bool
+    - empty_password_accounts.stdout_lines | length > 0
+    - item not in posix_accounts_exclude_users
+  tags: [accounts, empty_password]
+
+# ------------------------------------------------------------------------------
+# CONFIGURE ACCOUNT INACTIVITY
+# ------------------------------------------------------------------------------
+- name: Set default account inactivity timeout in login.defs
+  ansible.builtin.lineinfile:
+    path: /etc/login.defs
+    regexp: '^INACTIVE\s*='
+    line: "INACTIVE={{ posix_accounts_inactive_days }}"
+    state: present
+    create: false
+  when:
+    - posix_accounts_enable_inactivity | bool
+  tags: [accounts, inactivity]
+
+# ------------------------------------------------------------------------------
+# ROOT ACCOUNT CHECKS
+# ------------------------------------------------------------------------------
+- name: Check root password status
+  ansible.builtin.shell: |
+    set -e
+    passwd -S root 2>/dev/null | awk '{print $2}'
+  register: root_password_status
+  changed_when: false
+  when:
+    - posix_accounts_check_root_password | bool
+  tags: [accounts, root_check]
+
+- name: Warn if root has no password
+  ansible.builtin.debug:
+    msg: |
+      WARNING: Root account has no password set!
+      Status: {{ root_password_status.stdout }}
+      Consider setting a strong root password for emergency access.
+  when:
+    - posix_accounts_check_root_password | bool
+    - posix_accounts_warn_root_no_password | bool
+    - root_password_status.stdout is defined
+    - root_password_status.stdout in ['NP', 'L']
+  tags: [accounts, root_check]
+
+# ------------------------------------------------------------------------------
+# LOGGING
+# ------------------------------------------------------------------------------
+- name: Log account lockdown actions
+  ansible.builtin.lineinfile:
+    path: "{{ posix_accounts_log_dir }}/account_lockdown.log"
+    line: "{{ ansible_date_time.iso8601 }} - Account lockdown configured on {{ ansible_hostname }} - Locked users: {{ existing_users_to_lock.stdout_lines | join(', ') }}"
+    create: true
+    mode: '0640'
+    owner: root
+    group: root
+  tags: [accounts, logging]

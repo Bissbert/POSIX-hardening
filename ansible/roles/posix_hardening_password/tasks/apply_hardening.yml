@@ -1,0 +1,241 @@
+---
+# ==============================================================================
+# POSIX Password Policy Hardening - Apply Settings
+# ==============================================================================
+
+# ------------------------------------------------------------------------------
+# BACKUP CONFIGURATION FILES
+# ------------------------------------------------------------------------------
+- name: Backup login.defs before modification
+  ansible.builtin.copy:
+    src: "{{ posix_password_login_defs_path }}"
+    dest: "{{ posix_password_backup_dir }}/login.defs.{{ ansible_date_time.iso8601_basic_short }}"
+    remote_src: true
+    mode: '0600'
+    owner: root
+    group: root
+  when:
+    - posix_password_backup_before_changes | bool
+  ignore_errors: true
+  tags: [password, backup]
+
+- name: Check if PAM password configuration exists (Debian/Ubuntu)
+  ansible.builtin.stat:
+    path: "{{ posix_password_pam_file_debian }}"
+  register: pam_debian_stat
+  tags: [password, pam]
+
+- name: Check if PAM password configuration exists (RHEL)
+  ansible.builtin.stat:
+    path: "{{ posix_password_pam_file_redhat }}"
+  register: pam_redhat_stat
+  tags: [password, pam]
+
+- name: Backup PAM configuration (Debian/Ubuntu)
+  ansible.builtin.copy:
+    src: "{{ posix_password_pam_file_debian }}"
+    dest: "{{ posix_password_backup_dir }}/common-password.{{ ansible_date_time.iso8601_basic_short }}"
+    remote_src: true
+    mode: '0600'
+    owner: root
+    group: root
+  when:
+    - posix_password_backup_before_changes | bool
+    - pam_debian_stat.stat.exists
+  ignore_errors: true
+  tags: [password, backup, pam]
+
+- name: Backup PAM configuration (RHEL)
+  ansible.builtin.copy:
+    src: "{{ posix_password_pam_file_redhat }}"
+    dest: "{{ posix_password_backup_dir }}/system-auth.{{ ansible_date_time.iso8601_basic_short }}"
+    remote_src: true
+    mode: '0600'
+    owner: root
+    group: root
+  when:
+    - posix_password_backup_before_changes | bool
+    - pam_redhat_stat.stat.exists
+  ignore_errors: true
+  tags: [password, backup, pam]
+
+# ------------------------------------------------------------------------------
+# CONFIGURE PASSWORD AGING POLICIES (login.defs)
+# ------------------------------------------------------------------------------
+- name: Configure PASS_MAX_DAYS in login.defs
+  ansible.builtin.lineinfile:
+    path: "{{ posix_password_login_defs_path }}"
+    regexp: '^PASS_MAX_DAYS\s+'
+    line: "PASS_MAX_DAYS   {{ posix_password_max_days }}"
+    state: present
+    create: false
+  tags: [password, login_defs]
+
+- name: Configure PASS_MIN_DAYS in login.defs
+  ansible.builtin.lineinfile:
+    path: "{{ posix_password_login_defs_path }}"
+    regexp: '^PASS_MIN_DAYS\s+'
+    line: "PASS_MIN_DAYS   {{ posix_password_min_days }}"
+    state: present
+    create: false
+  tags: [password, login_defs]
+
+- name: Configure PASS_WARN_AGE in login.defs
+  ansible.builtin.lineinfile:
+    path: "{{ posix_password_login_defs_path }}"
+    regexp: '^PASS_WARN_AGE\s+'
+    line: "PASS_WARN_AGE   {{ posix_password_warn_age }}"
+    state: present
+    create: false
+  tags: [password, login_defs]
+
+- name: Configure PASS_MIN_LEN in login.defs
+  ansible.builtin.lineinfile:
+    path: "{{ posix_password_login_defs_path }}"
+    regexp: '^PASS_MIN_LEN\s+'
+    line: "PASS_MIN_LEN    {{ posix_password_min_len }}"
+    state: present
+    create: false
+  tags: [password, login_defs]
+
+# ------------------------------------------------------------------------------
+# CONFIGURE PAM PASSWORD HISTORY
+# ------------------------------------------------------------------------------
+- name: Configure PAM password history (Debian/Ubuntu)
+  ansible.builtin.lineinfile:
+    path: "{{ posix_password_pam_file_debian }}"
+    regexp: '^password\s+.*pam_pwhistory\.so'
+    line: "password required pam_pwhistory.so remember={{ posix_password_history_remember }}"
+    state: present
+    create: false
+  when:
+    - posix_password_enable_history | bool
+    - pam_debian_stat.stat.exists
+  tags: [password, pam, history]
+
+- name: Configure PAM password history (RHEL)
+  ansible.builtin.lineinfile:
+    path: "{{ posix_password_pam_file_redhat }}"
+    regexp: '^password\s+.*pam_pwhistory\.so'
+    line: "password required pam_pwhistory.so remember={{ posix_password_history_remember }}"
+    state: present
+    create: false
+  when:
+    - posix_password_enable_history | bool
+    - pam_redhat_stat.stat.exists
+  tags: [password, pam, history]
+
+# ------------------------------------------------------------------------------
+# CONFIGURE PAM PASSWORD QUALITY (pwquality)
+# ------------------------------------------------------------------------------
+- name: Check if pwquality.conf exists
+  ansible.builtin.stat:
+    path: /etc/security/pwquality.conf
+  register: pwquality_conf_stat
+  tags: [password, pam, pwquality]
+
+- name: Configure password quality - minlen
+  ansible.builtin.lineinfile:
+    path: /etc/security/pwquality.conf
+    regexp: '^#?\s*minlen\s*='
+    line: "minlen = {{ posix_password_pwquality_minlen }}"
+    state: present
+    create: false
+  when:
+    - posix_password_enable_pwquality | bool
+    - pwquality_conf_stat.stat.exists
+  tags: [password, pam, pwquality]
+
+- name: Configure password quality - dcredit
+  ansible.builtin.lineinfile:
+    path: /etc/security/pwquality.conf
+    regexp: '^#?\s*dcredit\s*='
+    line: "dcredit = {{ posix_password_pwquality_dcredit }}"
+    state: present
+    create: false
+  when:
+    - posix_password_enable_pwquality | bool
+    - pwquality_conf_stat.stat.exists
+  tags: [password, pam, pwquality]
+
+- name: Configure password quality - ucredit
+  ansible.builtin.lineinfile:
+    path: /etc/security/pwquality.conf
+    regexp: '^#?\s*ucredit\s*='
+    line: "ucredit = {{ posix_password_pwquality_ucredit }}"
+    state: present
+    create: false
+  when:
+    - posix_password_enable_pwquality | bool
+    - pwquality_conf_stat.exists
+  tags: [password, pam, pwquality]
+
+- name: Configure password quality - lcredit
+  ansible.builtin.lineinfile:
+    path: /etc/security/pwquality.conf
+    regexp: '^#?\s*lcredit\s*='
+    line: "lcredit = {{ posix_password_pwquality_lcredit }}"
+    state: present
+    create: false
+  when:
+    - posix_password_enable_pwquality | bool
+    - pwquality_conf_stat.stat.exists
+  tags: [password, pam, pwquality]
+
+- name: Configure password quality - ocredit
+  ansible.builtin.lineinfile:
+    path: /etc/security/pwquality.conf
+    regexp: '^#?\s*ocredit\s*='
+    line: "ocredit = {{ posix_password_pwquality_ocredit }}"
+    state: present
+    create: false
+  when:
+    - posix_password_enable_pwquality | bool
+    - pwquality_conf_stat.stat.exists
+  tags: [password, pam, pwquality]
+
+- name: Configure password quality - maxrepeat
+  ansible.builtin.lineinfile:
+    path: /etc/security/pwquality.conf
+    regexp: '^#?\s*maxrepeat\s*='
+    line: "maxrepeat = {{ posix_password_pwquality_maxrepeat }}"
+    state: present
+    create: false
+  when:
+    - posix_password_enable_pwquality | bool
+    - pwquality_conf_stat.stat.exists
+  tags: [password, pam, pwquality]
+
+- name: Configure password quality - maxsequence
+  ansible.builtin.lineinfile:
+    path: /etc/security/pwquality.conf
+    regexp: '^#?\s*maxsequence\s*='
+    line: "maxsequence = {{ posix_password_pwquality_maxsequence }}"
+    state: present
+    create: false
+  when:
+    - posix_password_enable_pwquality | bool
+    - pwquality_conf_stat.stat.exists
+  tags: [password, pam, pwquality]
+
+- name: Configure password quality - difok
+  ansible.builtin.lineinfile:
+    path: /etc/security/pwquality.conf
+    regexp: '^#?\s*difok\s*='
+    line: "difok = {{ posix_password_pwquality_difok }}"
+    state: present
+    create: false
+  when:
+    - posix_password_enable_pwquality | bool
+    - pwquality_conf_stat.stat.exists
+  tags: [password, pam, pwquality]
+
+- name: Log password policy configuration
+  ansible.builtin.lineinfile:
+    path: "{{ posix_password_log_dir }}/password_policy.log"
+    line: "{{ ansible_date_time.iso8601 }} - Password policy configured on {{ ansible_hostname }}"
+    create: true
+    mode: '0640'
+    owner: root
+    group: root
+  tags: [password, logging]

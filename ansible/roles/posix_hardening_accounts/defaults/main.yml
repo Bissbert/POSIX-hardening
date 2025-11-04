@@ -1,0 +1,92 @@
+---
+# ==============================================================================
+# POSIX Account Lockdown Hardening Role - Default Variables
+# ==============================================================================
+# These variables control account security and lockdown policies
+# Override in group_vars/all.yml or host_vars/
+# ==============================================================================
+
+# ------------------------------------------------------------------------------
+# CONTROL FLAGS
+# ------------------------------------------------------------------------------
+posix_accounts_force_reharden: false  # Force re-hardening even if already completed
+posix_accounts_backup_before_changes: true  # Create backup before modifying
+posix_accounts_validate_after_apply: true  # Validate settings after applying
+
+# ------------------------------------------------------------------------------
+# STATE TRACKING
+# ------------------------------------------------------------------------------
+posix_accounts_hardening_marker: "/var/lib/hardening/accounts_hardened"
+
+# ------------------------------------------------------------------------------
+# FILE PATHS
+# ------------------------------------------------------------------------------
+posix_accounts_backup_dir: "/var/backups/hardening"
+posix_accounts_log_dir: "/var/log/hardening"
+
+# ------------------------------------------------------------------------------
+# SYSTEM ACCOUNTS TO LOCK
+# ------------------------------------------------------------------------------
+# List of system accounts that should be locked and have nologin shell
+# These are typically service accounts that should not allow interactive login
+posix_accounts_lock_list:
+  - games
+  - news
+  - uucp
+  - proxy
+  - www-data
+  - list
+  - irc
+  - gnats
+  - nobody
+
+# ------------------------------------------------------------------------------
+# ACCOUNTS TO NEVER LOCK
+# ------------------------------------------------------------------------------
+# Critical accounts that should NEVER be locked (safety list)
+# Add your admin/automation accounts here
+posix_accounts_exclude_users:
+  - root
+  - ubuntu      # Common cloud-init user
+  - vagrant     # Vagrant default user
+  - ansible     # Common Ansible automation user
+  - admin       # Common admin user
+  - centos      # CentOS cloud user
+  - debian      # Debian cloud user
+  - ec2-user    # AWS EC2 default user
+
+# ------------------------------------------------------------------------------
+# ACCOUNT LOCKOUT POLICIES
+# ------------------------------------------------------------------------------
+# Lock accounts with empty or null passwords
+posix_accounts_lock_empty_password: true
+
+# Set nologin shell for locked system accounts
+posix_accounts_set_nologin_shell: true
+
+# Path to nologin shell
+posix_accounts_nologin_path: "/usr/sbin/nologin"
+
+# Alternative nologin paths (fallback)
+posix_accounts_nologin_alternatives:
+  - "/usr/sbin/nologin"
+  - "/sbin/nologin"
+  - "/bin/false"
+
+# ------------------------------------------------------------------------------
+# ACCOUNT INACTIVITY
+# ------------------------------------------------------------------------------
+# Enable account inactivity timeout (days after password expiry)
+posix_accounts_enable_inactivity: true
+
+# Number of days of inactivity after password expiry before account is locked
+posix_accounts_inactive_days: 30
+
+# ------------------------------------------------------------------------------
+# ROOT ACCOUNT SECURITY
+# ------------------------------------------------------------------------------
+# Check that root has a password set (warning only)
+posix_accounts_check_root_password: true
+
+# Warn if root password is not set
+posix_accounts_warn_root_no_password: true

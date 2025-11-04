@@ -1,0 +1,112 @@
+---
+# ==============================================================================
+# POSIX Account Lockdown Hardening Role - Main Tasks
+# ==============================================================================
+# CRITICAL: This role locks system accounts and enforces account policies
+# Converted from: scripts/09-account-lockdown.sh
+# ==============================================================================
+
+- name: Display account lockdown hardening warning
+  ansible.builtin.debug:
+    msg: |
+      ========================================
+      ACCOUNT LOCKDOWN HARDENING IN PROGRESS
+      ========================================
+      This role will lock system accounts
+
+      Applied hardening:
+        - Lock unnecessary system accounts
+        - Set nologin shell for service accounts
+        - Lock accounts with empty passwords
+        - Configure account inactivity timeout
+
+      Backup location: {{ posix_accounts_backup_dir }}
+      Marker file: {{ posix_accounts_hardening_marker }}
+      ========================================
+  tags: [accounts, warning]
+
+- name: Check if account lockdown hardening already applied
+  ansible.builtin.stat:
+    path: "{{ posix_accounts_hardening_marker }}"
+  register: accounts_hardening_marker_stat
+  tags: [accounts, check]
+
+- name: Display skip message if already hardened
+  ansible.builtin.debug:
+    msg: |
+      Account lockdown hardening already applied (marker exists).
+      Set posix_accounts_force_reharden=true to re-apply.
+  when:
+    - accounts_hardening_marker_stat.stat.exists
+    - not posix_accounts_force_reharden | bool
+  tags: [accounts, check]
+
+- name: Phase 1 - Preparation
+  block:
+    - name: Ensure backup directory exists
+      ansible.builtin.file:
+        path: "{{ posix_accounts_backup_dir }}"
+        state: directory
+        mode: '0700'
+        owner: root
+        group: root
+
+    - name: Ensure log directory exists
+      ansible.builtin.file:
+        path: "{{ posix_accounts_log_dir }}"
+        state: directory
+        mode: '0755'
+        owner: root
+        group: root
+
+    - name: Ensure marker directory exists
+      ansible.builtin.file:
+        path: "{{ posix_accounts_hardening_marker | dirname }}"
+        state: directory
+        mode: '0755'
+        owner: root
+        group: root
+
+  when:
+    - not accounts_hardening_marker_stat.stat.exists or posix_accounts_force_reharden | bool
+  tags: [accounts, preparation, phase1]
+
+- name: Phase 2 - Apply account lockdown hardening
+  ansible.builtin.include_tasks: apply_hardening.yml
+  when:
+    - not accounts_hardening_marker_stat.stat.exists or posix_accounts_force_reharden | bool
+  tags: [accounts, apply, phase2]
+
+- name: Phase 3 - Validate settings
+  ansible.builtin.include_tasks: validate_hardening.yml
+  when:
+    - not accounts_hardening_marker_stat.stat.exists or posix_accounts_force_reharden | bool
+    - posix_accounts_validate_after_apply | bool
+  tags: [accounts, validate, phase3]
+
+- name: Phase 4 - Finalization
+  block:
+    - name: Create hardening marker file
+      ansible.builtin.copy:
+        content: |
+          Account lockdown hardening applied on: {{ ansible_date_time.iso8601 }}
+          Applied by: Ansible role posix_hardening_accounts
+          Hostname: {{ ansible_hostname }}
+          Backup location: {{ posix_accounts_backup_dir }}
+        dest: "{{ posix_accounts_hardening_marker }}"
+        mode: '0644'
+        owner: root
+        group: root
+
+    - name: Display account lockdown hardening success
+      ansible.builtin.debug:
+        msg: |
+          ========================================
+          ACCOUNT LOCKDOWN HARDENING COMPLETED
+          ========================================
+          System accounts locked successfully
+          ========================================
+
+  when:
+    - not accounts_hardening_marker_stat.stat.exists or posix_accounts_force_reharden | bool
+  tags: [accounts, finalization, phase4]

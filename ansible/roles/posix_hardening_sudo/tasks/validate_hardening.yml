@@ -1,0 +1,74 @@
+---
+# ==============================================================================
+# POSIX Sudo Restrictions Hardening - Validate Settings
+# ==============================================================================
+
+- name: Validate sudoers syntax with visudo
+  ansible.builtin.command: visudo -c
+  register: sudoers_syntax_check
+  changed_when: false
+  failed_when: sudoers_syntax_check.rc != 0
+  tags: [sudo, validate, syntax]
+
+- name: Validate sudoers.d/hardening file syntax
+  ansible.builtin.command: visudo -cf {{ posix_sudo_hardening_file }}
+  register: hardening_file_check
+  changed_when: false
+  failed_when: hardening_file_check.rc != 0
+  tags: [sudo, validate, syntax]
+
+- name: Check if hardening file exists
+  ansible.builtin.stat:
+    path: "{{ posix_sudo_hardening_file }}"
+  register: hardening_file_stat
+  tags: [sudo, validate]
+
+- name: Validate sudo log file exists
+  ansible.builtin.stat:
+    path: "{{ posix_sudo_logfile }}"
+  register: sudo_logfile_stat
+  when:
+    - posix_sudo_enable_logging | bool
+  tags: [sudo, validate, logging]
+
+- name: Test sudo functionality (non-destructive)
+  ansible.builtin.command: sudo -n true
+  register: sudo_test
+  changed_when: false
+  failed_when: false
+  tags: [sudo, validate, functional]
+
+- name: Check sudoers.d directory permissions
+  ansible.builtin.stat:
+    path: "{{ posix_sudo_sudoers_d_path }}"
+  register: sudoers_d_stat
+  tags: [sudo, validate, permissions]
+
+- name: Validate hardening file permissions
+  ansible.builtin.stat:
+    path: "{{ posix_sudo_hardening_file }}"
+  register: hardening_file_perms
+  tags: [sudo, validate, permissions]
+
+- name: Display validation results
+  ansible.builtin.debug:
+    msg: |
+      Sudo restrictions validation completed:
+        - Sudoers syntax: {{ 'VALID' if sudoers_syntax_check.rc == 0 else 'INVALID' }}
+        - Hardening file syntax: {{ 'VALID' if hardening_file_check.rc == 0 else 'INVALID' }}
+        - Hardening file exists: {{ 'Yes' if hardening_file_stat.stat.exists else 'No' }}
+        - Hardening file mode: {{ hardening_file_perms.stat.mode | default('N/A') }}
+        - Sudo log file exists: {{ 'Yes' if sudo_logfile_stat.stat.exists | default(false) else 'No' }}
+        - sudoers.d directory mode: {{ sudoers_d_stat.stat.mode | default('N/A') }}
+        - Sudo test result: {{ 'Success' if sudo_test.rc == 0 else 'Password required (expected)' }}
+  tags: [sudo, validate]
+
+- name: Assert critical validations passed
+  ansible.builtin.assert:
+    that:
+      - sudoers_syntax_check.rc == 0
+      - hardening_file_check.rc == 0
+      - hardening_file_stat.stat.exists
+    fail_msg: "Critical sudo validation failed! Check sudoers configuration."
+    success_msg: "All critical sudo validations passed successfully."
+  tags: [sudo, validate]

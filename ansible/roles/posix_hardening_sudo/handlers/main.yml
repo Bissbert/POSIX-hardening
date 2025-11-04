@@ -1,0 +1,11 @@
+---
+# ==============================================================================
+# POSIX Sudo Restrictions Hardening Role - Handlers
+# ==============================================================================
+# Sudo configuration changes take effect immediately
+# No service restarts required
+# ==============================================================================
+
+# No handlers required for sudo configuration
+# Sudo reads configuration files on each invocation
+# Changes to /etc/sudoers and /etc/sudoers.d/* are applied immediately

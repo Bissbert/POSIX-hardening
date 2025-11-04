@@ -1,0 +1,67 @@
+---
+# ==============================================================================
+# POSIX Account Lockdown Hardening - Validate Settings
+# ==============================================================================
+
+- name: Validate locked accounts have password locked
+  ansible.builtin.shell: |
+    set -e
+    locked_count=0
+    for user in {{ existing_users_to_lock.stdout_lines | join(' ') }}; do
+      if passwd -S "$user" 2>/dev/null | grep -qE "^${user}\s+L"; then
+        locked_count=$((locked_count + 1))
+      fi
+    done
+    echo "$locked_count"
+  register: locked_accounts_count
+  changed_when: false
+  when:
+    - existing_users_to_lock is defined
+    - existing_users_to_lock.stdout_lines | length > 0
+  tags: [accounts, validate]
+
+- name: Validate locked accounts have nologin shell
+  ansible.builtin.shell: |
+    set -e
+    nologin_count=0
+    for user in {{ existing_users_to_lock.stdout_lines | join(' ') }}; do
+      if getent passwd "$user" | grep -qE "(nologin|false)$"; then
+        nologin_count=$((nologin_count + 1))
+      fi
+    done
+    echo "$nologin_count"
+  register: nologin_accounts_count
+  changed_when: false
+  when:
+    - posix_accounts_set_nologin_shell | bool
+    - existing_users_to_lock is defined
+    - existing_users_to_lock.stdout_lines | length > 0
+  tags: [accounts, validate]
+
+- name: Validate INACTIVE setting in login.defs
+  ansible.builtin.shell: |
+    set -e
+    grep "^INACTIVE" /etc/login.defs | awk -F= '{print $2}' | tr -d ' '
+  register: inactive_setting_check
+  changed_when: false
+  when:
+    - posix_accounts_enable_inactivity | bool
+  tags: [accounts, validate]
+
+- name: Check for remaining accounts with empty passwords
+  ansible.builtin.shell: |
+    set -e
+    awk -F: '($2 == "") {print $1}' /etc/shadow | wc -l
+  register: remaining_empty_passwords
+  changed_when: false
+  tags: [accounts, validate]
+
+- name: Display validation results
+  ansible.builtin.debug:
+    msg: |
+      Account lockdown validation completed:
+        - Accounts locked: {{ locked_accounts_count.stdout | default('N/A') }} / {{ existing_users_to_lock.stdout_lines | length | default(0) }}
+        - Accounts with nologin shell: {{ nologin_accounts_count.stdout | default('N/A') }} / {{ existing_users_to_lock.stdout_lines | length | default(0) }}
+        - INACTIVE setting: {{ inactive_setting_check.stdout | default('N/A') }} days
+        - Accounts with empty passwords: {{ remaining_empty_passwords.stdout | default('0') }}
+  tags: [accounts, validate]

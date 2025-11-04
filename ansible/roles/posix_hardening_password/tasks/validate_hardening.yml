@@ -1,0 +1,82 @@
+---
+# ==============================================================================
+# POSIX Password Policy Hardening - Validate Settings
+# ==============================================================================
+
+- name: Validate login.defs password aging settings
+  ansible.builtin.shell: |
+    set -e
+    grep "^PASS_MAX_DAYS" {{ posix_password_login_defs_path }} | awk '{print $2}'
+  register: pass_max_days_check
+  changed_when: false
+  failed_when: pass_max_days_check.stdout | int != posix_password_max_days | int
+  tags: [password, validate, login_defs]
+
+- name: Validate PASS_MIN_DAYS setting
+  ansible.builtin.shell: |
+    set -e
+    grep "^PASS_MIN_DAYS" {{ posix_password_login_defs_path }} | awk '{print $2}'
+  register: pass_min_days_check
+  changed_when: false
+  failed_when: pass_min_days_check.stdout | int != posix_password_min_days | int
+  tags: [password, validate, login_defs]
+
+- name: Validate PASS_WARN_AGE setting
+  ansible.builtin.shell: |
+    set -e
+    grep "^PASS_WARN_AGE" {{ posix_password_login_defs_path }} | awk '{print $2}'
+  register: pass_warn_age_check
+  changed_when: false
+  failed_when: pass_warn_age_check.stdout | int != posix_password_warn_age | int
+  tags: [password, validate, login_defs]
+
+- name: Validate PAM password history configuration (Debian/Ubuntu)
+  ansible.builtin.shell: |
+    set -e
+    grep "pam_pwhistory.so" {{ posix_password_pam_file_debian }}
+  register: pam_history_check_debian
+  changed_when: false
+  failed_when: false
+  when:
+    - posix_password_enable_history | bool
+    - pam_debian_stat is defined
+    - pam_debian_stat.stat.exists
+  tags: [password, validate, pam]
+
+- name: Validate PAM password history configuration (RHEL)
+  ansible.builtin.shell: |
+    set -e
+    grep "pam_pwhistory.so" {{ posix_password_pam_file_redhat }}
+  register: pam_history_check_redhat
+  changed_when: false
+  failed_when: false
+  when:
+    - posix_password_enable_history | bool
+    - pam_redhat_stat is defined
+    - pam_redhat_stat.stat.exists
+  tags: [password, validate, pam]
+
+- name: Validate pwquality.conf settings (if available)
+  ansible.builtin.shell: |
+    set -e
+    if [ -f /etc/security/pwquality.conf ]; then
+      grep -E "^(minlen|dcredit|ucredit|lcredit|ocredit)" /etc/security/pwquality.conf | wc -l
+    else
+      echo "0"
+    fi
+  register: pwquality_check
+  changed_when: false
+  when:
+    - posix_password_enable_pwquality | bool
+  tags: [password, validate, pwquality]
+
+- name: Display validation results
+  ansible.builtin.debug:
+    msg: |
+      Password policy validation completed:
+        - PASS_MAX_DAYS: {{ pass_max_days_check.stdout | default('N/A') }}
+        - PASS_MIN_DAYS: {{ pass_min_days_check.stdout | default('N/A') }}
+        - PASS_WARN_AGE: {{ pass_warn_age_check.stdout | default('N/A') }}
+        - PAM history configured: {{ 'Yes' if (pam_history_check_debian.rc | default(1) == 0) or (pam_history_check_redhat.rc | default(1) == 0) else 'No' }}
+        - pwquality rules: {{ pwquality_check.stdout | default('0') }} settings configured
+  tags: [password, validate]

@@ -1,0 +1,141 @@
+---
+# ==============================================================================
+# POSIX Sudo Restrictions Hardening - Apply Settings
+# ==============================================================================
+
+# ------------------------------------------------------------------------------
+# BACKUP CONFIGURATION FILES
+# ------------------------------------------------------------------------------
+- name: Backup /etc/sudoers before modification
+  ansible.builtin.copy:
+    src: "{{ posix_sudo_sudoers_path }}"
+    dest: "{{ posix_sudo_backup_dir }}/sudoers.{{ ansible_date_time.iso8601_basic_short }}"
+    remote_src: true
+    mode: '0440'
+    owner: root
+    group: root
+  when:
+    - posix_sudo_backup_before_changes | bool
+  tags: [sudo, backup]
+
+- name: Backup existing hardening file if present
+  ansible.builtin.copy:
+    src: "{{ posix_sudo_hardening_file }}"
+    dest: "{{ posix_sudo_backup_dir }}/hardening.{{ ansible_date_time.iso8601_basic_short }}"
+    remote_src: true
+    mode: '0440'
+    owner: root
+    group: root
+  when:
+    - posix_sudo_backup_before_changes | bool
+  ignore_errors: true
+  tags: [sudo, backup]
+
+# ------------------------------------------------------------------------------
+# DETECT AUTOMATION USER
+# ------------------------------------------------------------------------------
+- name: Detect current automation user
+  ansible.builtin.set_fact:
+    sudo_detected_user: "{{ ansible_user | default(ansible_env.USER | default('ansible')) }}"
+  when:
+    - posix_sudo_detect_automation_user | bool
+    - posix_sudo_automation_users | length == 0
+  tags: [sudo, automation]
+
+- name: Set automation users list
+  ansible.builtin.set_fact:
+    sudo_automation_users_final: "{{ posix_sudo_automation_users if posix_sudo_automation_users | length > 0 else [sudo_detected_user | default('ansible')] }}"
+  tags: [sudo, automation]
+
+# ------------------------------------------------------------------------------
+# CREATE SUDO LOG FILE
+# ------------------------------------------------------------------------------
+- name: Create sudo log file
+  ansible.builtin.file:
+    path: "{{ posix_sudo_logfile }}"
+    state: touch
+    mode: "{{ posix_sudo_logfile_mode }}"
+    owner: root
+    group: root
+    modification_time: preserve
+    access_time: preserve
+  when:
+    - posix_sudo_enable_logging | bool
+    - posix_sudo_create_logfile | bool
+  tags: [sudo, logging]
+
+# ------------------------------------------------------------------------------
+# CONFIGURE SUDO HARDENING (TEMPLATE METHOD)
+# ------------------------------------------------------------------------------
+- name: Deploy sudo hardening configuration from template
+  ansible.builtin.template:
+    src: hardening.j2
+    dest: "{{ posix_sudo_hardening_file }}"
+    owner: root
+    group: root
+    mode: '0440'
+    validate: 'visudo -cf %s'
+  vars:
+    posix_sudo_automation_users: "{{ sudo_automation_users_final }}"
+  when:
+    - posix_sudo_use_template | bool
+  tags: [sudo, config, template]
+
+# ------------------------------------------------------------------------------
+# VALIDATE SUDOERS CONFIGURATION
+# ------------------------------------------------------------------------------
+- name: Validate complete sudoers configuration
+  ansible.builtin.command: visudo -c
+  register: sudoers_validation
+  changed_when: false
+  failed_when: sudoers_validation.rc != 0
+  tags: [sudo, validation]
+
+- name: Display sudoers validation result
+  ansible.builtin.debug:
+    msg: |
+      Sudoers configuration validation: {{ 'PASSED' if sudoers_validation.rc == 0 else 'FAILED' }}
+  tags: [sudo, validation]
+
+# ------------------------------------------------------------------------------
+# EMERGENCY ROLLBACK ON VALIDATION FAILURE
+# ------------------------------------------------------------------------------
+- name: Emergency rollback on validation failure
+  block:
+    - name: Remove failed hardening file
+      ansible.builtin.file:
+        path: "{{ posix_sudo_hardening_file }}"
+        state: absent
+
+    - name: Restore sudoers from backup
+      ansible.builtin.copy:
+        src: "{{ posix_sudo_backup_dir }}/sudoers.{{ ansible_date_time.iso8601_basic_short }}"
+        dest: "{{ posix_sudo_sudoers_path }}"
+        remote_src: true
+        mode: '0440'
+        owner: root
+        group: root
+
+    - name: Display rollback message
+      ansible.builtin.fail:
+        msg: |
+          CRITICAL: Sudoers validation failed!
+          Hardening file removed and sudoers restored from backup.
+          Please review the configuration and try again.
+
+  when:
+    - sudoers_validation.rc != 0
+  tags: [sudo, rollback]
+
+# ------------------------------------------------------------------------------
+# LOGGING
+# ------------------------------------------------------------------------------
+- name: Log sudo configuration changes
+  ansible.builtin.lineinfile:
+    path: "{{ posix_sudo_log_dir }}/sudo_restrictions.log"
+    line: "{{ ansible_date_time.iso8601 }} - Sudo restrictions configured on {{ ansible_hostname }} - Validation: {{ 'PASSED' if sudoers_validation.rc == 0 else 'FAILED' }}"
+    create: true
+    mode: '0640'
+    owner: root
+    group: root
+  tags: [sudo, logging]

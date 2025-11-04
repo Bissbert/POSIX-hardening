@@ -1,0 +1,10 @@
+---
+# ==============================================================================
+# POSIX Password Policy Hardening Role - Handlers
+# ==============================================================================
+# Password policy changes typically do not require service restarts
+# PAM configuration is loaded per-authentication attempt
+# ==============================================================================
+
+# No handlers required for password policy changes
+# PAM modules are loaded dynamically and do not require service restarts

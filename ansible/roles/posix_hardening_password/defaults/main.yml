@@ -1,0 +1,96 @@
+---
+# ==============================================================================
+# POSIX Password Policy Hardening Role - Default Variables
+# ==============================================================================
+# These variables control password complexity and aging policies
+# Override in group_vars/all.yml or host_vars/
+# ==============================================================================
+
+# ------------------------------------------------------------------------------
+# CONTROL FLAGS
+# ------------------------------------------------------------------------------
+posix_password_force_reharden: false  # Force re-hardening even if already completed
+posix_password_backup_before_changes: true  # Create backup before modifying
+posix_password_validate_after_apply: true  # Validate settings after applying
+
+# ------------------------------------------------------------------------------
+# STATE TRACKING
+# ------------------------------------------------------------------------------
+posix_password_hardening_marker: "/var/lib/hardening/password_hardened"
+
+# ------------------------------------------------------------------------------
+# FILE PATHS
+# ------------------------------------------------------------------------------
+posix_password_backup_dir: "/var/backups/hardening"
+posix_password_log_dir: "/var/log/hardening"
+
+# ------------------------------------------------------------------------------
+# PASSWORD AGING POLICIES (login.defs)
+# ------------------------------------------------------------------------------
+# Maximum number of days a password may be used
+posix_password_max_days: 90
+
+# Minimum number of days between password changes
+posix_password_min_days: 1
+
+# Number of days warning before password expires
+posix_password_warn_age: 14
+
+# Minimum password length
+posix_password_min_len: 12
+
+# ------------------------------------------------------------------------------
+# PASSWORD COMPLEXITY (PAM pwquality)
+# ------------------------------------------------------------------------------
+# Enable PAM password quality checks
+posix_password_enable_pwquality: true
+
+# Minimum length (overrides login.defs for PAM)
+posix_password_pwquality_minlen: 12
+
+# Require at least one digit
+posix_password_pwquality_dcredit: -1
+
+# Require at least one uppercase character
+posix_password_pwquality_ucredit: -1
+
+# Require at least one lowercase character
+posix_password_pwquality_lcredit: -1
+
+# Require at least one special character
+posix_password_pwquality_ocredit: -1
+
+# Maximum number of consecutive characters allowed
+posix_password_pwquality_maxrepeat: 3
+
+# Maximum number of characters in a monotonic sequence
+posix_password_pwquality_maxsequence: 3
+
+# Number of characters from old password that can't be used
+posix_password_pwquality_difok: 5
+
+# ------------------------------------------------------------------------------
+# PASSWORD HISTORY (PAM pwhistory)
+# ------------------------------------------------------------------------------
+# Enable password history (prevent password reuse)
+posix_password_enable_history: true
+
+# Number of previous passwords to remember
+posix_password_history_remember: 5
+
+# ------------------------------------------------------------------------------
+# PAM CONFIGURATION FILES
+# ------------------------------------------------------------------------------
+# Primary PAM password configuration file
+# Debian/Ubuntu use common-password, RHEL uses system-auth
+posix_password_pam_file_debian: "/etc/pam.d/common-password"
+posix_password_pam_file_redhat: "/etc/pam.d/system-auth"
+
+# ------------------------------------------------------------------------------
+# LOGIN.DEFS CONFIGURATION
+# ------------------------------------------------------------------------------
+posix_password_login_defs_path: "/etc/login.defs"
+
+# Whether to manage the full login.defs file via template
+# If false, uses lineinfile for targeted updates
+posix_password_use_login_defs_template: false

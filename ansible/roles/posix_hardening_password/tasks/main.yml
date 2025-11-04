@@ -1,0 +1,111 @@
+---
+# ==============================================================================
+# POSIX Password Policy Hardening Role - Main Tasks
+# ==============================================================================
+# CRITICAL: This role modifies password policies and PAM configuration
+# Converted from: scripts/08-password-policy.sh
+# ==============================================================================
+
+- name: Display password policy hardening warning
+  ansible.builtin.debug:
+    msg: |
+      ========================================
+      PASSWORD POLICY HARDENING IN PROGRESS
+      ========================================
+      This role will configure password policies
+
+      Applied hardening:
+        - Password aging policies (login.defs)
+        - Password complexity requirements (PAM)
+        - Password history (prevent reuse)
+
+      Backup location: {{ posix_password_backup_dir }}
+      Marker file: {{ posix_password_hardening_marker }}
+      ========================================
+  tags: [password, warning]
+
+- name: Check if password policy hardening already applied
+  ansible.builtin.stat:
+    path: "{{ posix_password_hardening_marker }}"
+  register: password_hardening_marker_stat
+  tags: [password, check]
+
+- name: Display skip message if already hardened
+  ansible.builtin.debug:
+    msg: |
+      Password policy hardening already applied (marker exists).
+      Set posix_password_force_reharden=true to re-apply.
+  when:
+    - password_hardening_marker_stat.stat.exists
+    - not posix_password_force_reharden | bool
+  tags: [password, check]
+
+- name: Phase 1 - Preparation
+  block:
+    - name: Ensure backup directory exists
+      ansible.builtin.file:
+        path: "{{ posix_password_backup_dir }}"
+        state: directory
+        mode: '0700'
+        owner: root
+        group: root
+
+    - name: Ensure log directory exists
+      ansible.builtin.file:
+        path: "{{ posix_password_log_dir }}"
+        state: directory
+        mode: '0755'
+        owner: root
+        group: root
+
+    - name: Ensure marker directory exists
+      ansible.builtin.file:
+        path: "{{ posix_password_hardening_marker | dirname }}"
+        state: directory
+        mode: '0755'
+        owner: root
+        group: root
+
+  when:
+    - not password_hardening_marker_stat.stat.exists or posix_password_force_reharden | bool
+  tags: [password, preparation, phase1]
+
+- name: Phase 2 - Apply password policy hardening
+  ansible.builtin.include_tasks: apply_hardening.yml
+  when:
+    - not password_hardening_marker_stat.stat.exists or posix_password_force_reharden | bool
+  tags: [password, apply, phase2]
+
+- name: Phase 3 - Validate settings
+  ansible.builtin.include_tasks: validate_hardening.yml
+  when:
+    - not password_hardening_marker_stat.stat.exists or posix_password_force_reharden | bool
+    - posix_password_validate_after_apply | bool
+  tags: [password, validate, phase3]
+
+- name: Phase 4 - Finalization
+  block:
+    - name: Create hardening marker file
+      ansible.builtin.copy:
+        content: |
+          Password policy hardening applied on: {{ ansible_date_time.iso8601 }}
+          Applied by: Ansible role posix_hardening_password
+          Hostname: {{ ansible_hostname }}
+          Backup location: {{ posix_password_backup_dir }}
+        dest: "{{ posix_password_hardening_marker }}"
+        mode: '0644'
+        owner: root
+        group: root
+
+    - name: Display password policy hardening success
+      ansible.builtin.debug:
+        msg: |
+          ========================================
+          PASSWORD POLICY HARDENING COMPLETED
+          ========================================
+          Password policies configured successfully
+          ========================================
+
+  when:
+    - not password_hardening_marker_stat.stat.exists or posix_password_force_reharden | bool
+  tags: [password, finalization, phase4]

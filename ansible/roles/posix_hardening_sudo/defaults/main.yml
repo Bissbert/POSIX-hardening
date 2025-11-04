@@ -1,0 +1,87 @@
+---
+# ==============================================================================
+# POSIX Sudo Restrictions Hardening Role - Default Variables
+# ==============================================================================
+# These variables control sudo security and restrictions
+# Override in group_vars/all.yml or host_vars/
+# ==============================================================================
+
+# ------------------------------------------------------------------------------
+# CONTROL FLAGS
+# ------------------------------------------------------------------------------
+posix_sudo_force_reharden: false  # Force re-hardening even if already completed
+posix_sudo_backup_before_changes: true  # Create backup before modifying
+posix_sudo_validate_after_apply: true  # Validate settings after applying
+
+# ------------------------------------------------------------------------------
+# STATE TRACKING
+# ------------------------------------------------------------------------------
+posix_sudo_hardening_marker: "/var/lib/hardening/sudo_hardened"
+
+# ------------------------------------------------------------------------------
+# FILE PATHS
+# ------------------------------------------------------------------------------
+posix_sudo_backup_dir: "/var/backups/hardening"
+posix_sudo_log_dir: "/var/log/hardening"
+posix_sudo_sudoers_path: "/etc/sudoers"
+posix_sudo_sudoers_d_path: "/etc/sudoers.d"
+posix_sudo_hardening_file: "/etc/sudoers.d/hardening"
+
+# ------------------------------------------------------------------------------
+# SUDO SECURITY SETTINGS
+# ------------------------------------------------------------------------------
+# Disable requiretty (REQUIRED for Ansible automation)
+# If you need requiretty for security, enable per-user instead
+posix_sudo_disable_requiretty: true
+
+# Disable visiblepw (don't allow sudo with visible password)
+posix_sudo_disable_visiblepw: true
+
+# Always set home directory when using sudo
+posix_sudo_always_set_home: true
+
+# Reset environment variables for security
+posix_sudo_env_reset: true
+
+# Secure PATH for sudo commands
+posix_sudo_secure_path: "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+
+# Sudo password timeout in minutes (0 = always ask)
+posix_sudo_timestamp_timeout: 15
+
+# Always show sudo lecture (security reminder)
+posix_sudo_lecture: "always"
+
+# Sudo log file location
+posix_sudo_logfile: "/var/log/sudo.log"
+
+# ------------------------------------------------------------------------------
+# SUDO LOGGING
+# ------------------------------------------------------------------------------
+# Enable sudo logging
+posix_sudo_enable_logging: true
+
+# Create sudo log file if it doesn't exist
+posix_sudo_create_logfile: true
+
+# Sudo log file permissions
+posix_sudo_logfile_mode: "0600"
+
+# ------------------------------------------------------------------------------
+# AUTOMATION USER SETTINGS
+# ------------------------------------------------------------------------------
+# Detect current automation user (for Ansible compatibility)
+posix_sudo_detect_automation_user: true
+
+# Allow specific users to bypass requiretty (if enabled)
+# Leave empty to auto-detect, or specify users manually
+posix_sudo_automation_users: []
+
+# ------------------------------------------------------------------------------
+# TEMPLATE SETTINGS
+# ------------------------------------------------------------------------------
+# Use template for sudoers.d/hardening file
+posix_sudo_use_template: true
+
+# If false, use individual lineinfile tasks (more granular)
+posix_sudo_use_individual_settings: false

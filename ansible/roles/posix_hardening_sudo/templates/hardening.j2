@@ -1,0 +1,54 @@
+# POSIX Hardening Sudo Configuration
+# Managed by Ansible - DO NOT EDIT MANUALLY
+# Applied on: {{ ansible_date_time.iso8601 }}
+# Role: posix_hardening_sudo
+
+# ------------------------------------------------------------------------------
+# SECURITY SETTINGS
+# ------------------------------------------------------------------------------
+
+{% if posix_sudo_disable_requiretty %}
+# Disable requiretty for automation tools like Ansible
+Defaults !requiretty
+{% endif %}
+
+{% if posix_sudo_disable_visiblepw %}
+# Don't allow sudo with visible password
+Defaults !visiblepw
+{% endif %}
+
+{% if posix_sudo_always_set_home %}
+# Always set home directory when using sudo
+Defaults always_set_home
+{% endif %}
+
+{% if posix_sudo_env_reset %}
+# Reset environment variables for security
+Defaults env_reset
+{% endif %}
+
+{% if posix_sudo_secure_path %}
+# Secure PATH for sudo commands
+Defaults secure_path="{{ posix_sudo_secure_path }}"
+{% endif %}
+
+# Sudo password timeout (minutes)
+Defaults timestamp_timeout={{ posix_sudo_timestamp_timeout }}
+
+# Always show sudo lecture (security reminder)
+Defaults lecture={{ posix_sudo_lecture }}
+
+{% if posix_sudo_enable_logging %}
+# Sudo logging
+Defaults logfile="{{ posix_sudo_logfile }}"
+{% endif %}
+
+# ------------------------------------------------------------------------------
+# AUTOMATION USER EXEMPTIONS
+# ------------------------------------------------------------------------------
+{% if posix_sudo_automation_users | length > 0 %}
+# Allow automation users to run sudo without TTY (required for Ansible)
+{% for user in posix_sudo_automation_users %}
+Defaults:{{ user }} !requiretty
+{% endfor %}
+{% endif %}
