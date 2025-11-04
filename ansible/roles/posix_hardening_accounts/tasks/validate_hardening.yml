@@ -6,6 +6,7 @@
 - name: Validate locked accounts have password locked
   ansible.builtin.shell: |
     set -e
+    set -o pipefail
     locked_count=0
     for user in {{ existing_users_to_lock.stdout_lines | join(' ') }}; do
       if passwd -S "$user" 2>/dev/null | grep -qE "^${user}\s+L"; then
@@ -23,6 +24,7 @@
 - name: Validate locked accounts have nologin shell
   ansible.builtin.shell: |
     set -e
+    set -o pipefail
     nologin_count=0
     for user in {{ existing_users_to_lock.stdout_lines | join(' ') }}; do
       if getent passwd "$user" | grep -qE "(nologin|false)$"; then
@@ -41,6 +43,7 @@
 - name: Validate INACTIVE setting in login.defs
   ansible.builtin.shell: |
     set -e
+    set -o pipefail
     grep "^INACTIVE" /etc/login.defs | awk -F= '{print $2}' | tr -d ' '
   register: inactive_setting_check
   changed_when: false
@@ -51,6 +54,7 @@
 - name: Check for remaining accounts with empty passwords
   ansible.builtin.shell: |
     set -e
+    set -o pipefail
     awk -F: '($2 == "") {print $1}' /etc/shadow | wc -l
   register: remaining_empty_passwords
   changed_when: false

@@ -1,0 +1,157 @@
+---
+# ==============================================================================
+# POSIX Hardening Users Role - SSH Key Deployment Tasks
+# ==============================================================================
+# Deploys team SSH keys to root and all hardening users
+# ==============================================================================
+
+# ==============================================================================
+# VALIDATE KEYS EXIST ON CONTROLLER
+# ==============================================================================
+
+- name: Check if team keys exist on Ansible controller
+  ansible.builtin.stat:
+    path: "{{ item }}"
+  delegate_to: localhost
+  become: false
+  register: team_keys_check
+  loop:
+    - "{{ posix_hardening_ansible_key_path }}"
+    - "{{ posix_hardening_team_key_path }}"
+  failed_when: false
+  tags: [users, keys, check]
+
+- name: Display team keys status
+  ansible.builtin.debug:
+    msg:
+      - "Ansible key: {{ 'FOUND' if team_keys_check.results[0].stat.exists else 'MISSING at ' + posix_hardening_ansible_key_path }}"
+      - "Team key: {{ 'FOUND' if team_keys_check.results[1].stat.exists else 'MISSING at ' + posix_hardening_team_key_path }}"
+  tags: [users, keys, check]
+
+- name: Warn if keys are missing
+  ansible.builtin.debug:
+    msg: "WARNING: Team SSH keys not found. Generate with: cd ansible/team_keys && ./generate_keys.sh"
+  when: >
+    not team_keys_check.results[0].stat.exists or
+    not team_keys_check.results[1].stat.exists
+  tags: [users, keys, check]
+
+# ==============================================================================
+# DEPLOY KEYS TO ROOT
+# ==============================================================================
+
+- name: Ensure .ssh directory exists for root
+  ansible.builtin.file:
+    path: /root/.ssh
+    state: directory
+    owner: root
+    group: root
+    mode: '0700'
+  when: team_keys_check.results[0].stat.exists or team_keys_check.results[1].stat.exists
+  tags: [users, keys, root]
+
+- name: Deploy Ansible automation key to root
+  ansible.posix.authorized_key:
+    user: root
+    key: "{{ lookup('file', posix_hardening_ansible_key_path) }}"
+    comment: "ansible-automation@posix-hardening"
+    state: present
+  when:
+    - posix_hardening_deploy_ansible_key | bool
+    - team_keys_check.results[0].stat.exists
+  tags: [users, keys, root]
+
+- name: Deploy team shared key to root
+  ansible.posix.authorized_key:
+    user: root
+    key: "{{ lookup('file', posix_hardening_team_key_path) }}"
+    comment: "team-access@posix-hardening"
+    state: present
+  when:
+    - posix_hardening_deploy_team_key | bool
+    - team_keys_check.results[1].stat.exists
+  tags: [users, keys, root]
+
+# ==============================================================================
+# DEPLOY KEYS TO ALL HARDENING USERS
+# ==============================================================================
+
+- name: Ensure .ssh directory exists for all hardening users
+  ansible.builtin.file:
+    path: "/home/{{ item }}/.ssh"
+    state: directory
+    owner: "{{ item }}"
+    group: "{{ item }}"
+    mode: '0700'
+  loop: "{{ posix_hardening_users_list }}"
+  when:
+    - posix_hardening_users_list is defined
+    - posix_hardening_users_list | length > 0
+    - team_keys_check.results[0].stat.exists or team_keys_check.results[1].stat.exists
+  tags: [users, keys, users]
+
+- name: Deploy Ansible automation key to all hardening users
+  ansible.posix.authorized_key:
+    user: "{{ item }}"
+    key: "{{ lookup('file', posix_hardening_ansible_key_path) }}"
+    comment: "ansible-automation@posix-hardening"
+    state: present
+  loop: "{{ posix_hardening_users_list }}"
+  when:
+    - posix_hardening_deploy_ansible_key | bool
+    - posix_hardening_users_list is defined
+    - posix_hardening_users_list | length > 0
+    - team_keys_check.results[0].stat.exists
+  tags: [users, keys, users]
+
+- name: Deploy team shared key to all hardening users (PRIMARY ACCESS)
+  ansible.posix.authorized_key:
+    user: "{{ item }}"
+    key: "{{ lookup('file', posix_hardening_team_key_path) }}"
+    comment: "team-access@posix-hardening"
+    state: present
+  loop: "{{ posix_hardening_users_list }}"
+  when:
+    - posix_hardening_deploy_team_key | bool
+    - posix_hardening_users_list is defined
+    - posix_hardening_users_list | length > 0
+    - team_keys_check.results[1].stat.exists
+  tags: [users, keys, users]
+
+# ==============================================================================
+# VERIFY KEY DEPLOYMENT
+# ==============================================================================
+
+- name: Verify authorized_keys permissions for root
+  ansible.builtin.file:
+    path: /root/.ssh/authorized_keys
+    owner: root
+    group: root
+    mode: '0600'
+    state: file
+  when: team_keys_check.results[0].stat.exists or team_keys_check.results[1].stat.exists
+  tags: [users, keys, verify]
+
+- name: Verify authorized_keys permissions for all users
+  ansible.builtin.file:
+    path: "/home/{{ item }}/.ssh/authorized_keys"
+    owner: "{{ item }}"
+    group: "{{ item }}"
+    mode: '0600'
+    state: file
+  loop: "{{ posix_hardening_users_list }}"
+  when:
+    - posix_hardening_users_list is defined
+    - posix_hardening_users_list | length > 0
+    - team_keys_check.results[0].stat.exists or team_keys_check.results[1].stat.exists
+  tags: [users, keys, verify]
+
+- name: Display key deployment status
+  ansible.builtin.debug:
+    msg: |
+      SSH Keys Deployed:
+      - Root: {{ 'Yes' if (team_keys_check.results[0].stat.exists or team_keys_check.results[1].stat.exists) else 'No (keys not found)' }}
+      - Users: {{ posix_hardening_users_list | join(', ') if posix_hardening_users_list is defined else 'None' }}
+      - Ansible Key: {{ 'Deployed' if (posix_hardening_deploy_ansible_key and team_keys_check.results[0].stat.exists) else 'Skipped' }}
+      - Team Key: {{ 'Deployed' if (posix_hardening_deploy_team_key and team_keys_check.results[1].stat.exists) else 'Skipped' }}
+  tags: [users, keys, verify]

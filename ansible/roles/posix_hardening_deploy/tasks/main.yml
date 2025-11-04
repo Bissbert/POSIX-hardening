@@ -1,0 +1,238 @@
+---
+# ==============================================================================
+# POSIX Hardening Deploy Role - Main Tasks
+# ==============================================================================
+# Deploys the POSIX hardening toolkit to target servers
+# Extracted from ansible/playbooks/site.yml lines 86-187
+# ==============================================================================
+
+- name: Display deployment information
+  ansible.builtin.debug:
+    msg: |
+      Deploying POSIX Hardening Toolkit
+      Target: {{ inventory_hostname }}
+      Toolkit Path: {{ toolkit_path }}
+      Backup Path: {{ backup_path }}
+  tags: [deploy, info]
+
+# ==============================================================================
+# CREATE DIRECTORY STRUCTURE
+# ==============================================================================
+
+- name: Create toolkit directory structure
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    mode: '0755'
+    owner: root
+    group: root
+  loop:
+    - "{{ toolkit_path }}"
+    - "{{ toolkit_path }}/lib"
+    - "{{ toolkit_path }}/scripts"
+    - "{{ toolkit_path }}/config"
+    - "{{ toolkit_path }}/tests"
+    - "{{ backup_path }}"
+    - "{{ backup_path }}/snapshots"
+    - "{{ log_path }}"
+    - "{{ state_path }}"
+  tags: [deploy, directories]
+
+# ==============================================================================
+# DEPLOY LIBRARY FILES
+# ==============================================================================
+
+- name: Copy library files to target
+  ansible.builtin.copy:
+    src: "{{ playbook_dir }}/../lib/"
+    dest: "{{ toolkit_path }}/lib/"
+    mode: "{{ posix_deploy_lib_files_mode }}"
+    owner: root
+    group: root
+    backup: "{{ posix_deploy_create_backup }}"
+  tags: [deploy, lib]
+
+# ==============================================================================
+# DEPLOY HARDENING SCRIPTS
+# ==============================================================================
+
+- name: Copy hardening scripts to target
+  ansible.builtin.copy:
+    src: "{{ playbook_dir }}/../scripts/"
+    dest: "{{ toolkit_path }}/scripts/"
+    mode: "{{ posix_deploy_script_files_mode }}"
+    owner: root
+    group: root
+    backup: "{{ posix_deploy_create_backup }}"
+  tags: [deploy, scripts]
+
+# ==============================================================================
+# DEPLOY TEST SCRIPTS
+# ==============================================================================
+
+- name: Check if tests directory exists on controller
+  ansible.builtin.stat:
+    path: "{{ playbook_dir }}/../tests"
+  delegate_to: localhost
+  become: false
+  register: tests_dir_check
+  tags: [deploy, tests]
+
+- name: Copy test scripts to target (if available)
+  ansible.builtin.copy:
+    src: "{{ playbook_dir }}/../tests/"
+    dest: "{{ toolkit_path }}/tests/"
+    mode: "{{ posix_deploy_script_files_mode }}"
+    owner: root
+    group: root
+  when: tests_dir_check.stat.exists
+  tags: [deploy, tests]
+
+# ==============================================================================
+# DEPLOY ORCHESTRATOR AND EMERGENCY TOOLS
+# ==============================================================================
+
+- name: Copy orchestrator script
+  ansible.builtin.copy:
+    src: "{{ playbook_dir }}/../orchestrator.sh"
+    dest: "{{ toolkit_path }}/orchestrator.sh"
+    mode: '0755'
+    owner: root
+    group: root
+  when: posix_deploy_orchestrator | bool
+  tags: [deploy, orchestrator]
+
+- name: Copy emergency rollback script
+  ansible.builtin.copy:
+    src: "{{ playbook_dir }}/../emergency-rollback.sh"
+    dest: "{{ toolkit_path }}/emergency-rollback.sh"
+    mode: '0755'
+    owner: root
+    group: root
+  when: posix_deploy_emergency_rollback | bool
+  tags: [deploy, emergency]
+
+# ==============================================================================
+# DEPLOY CONFIGURATION
+# ==============================================================================
+
+- name: Deploy main configuration from template
+  ansible.builtin.template:
+    src: defaults.conf.j2
+    dest: "{{ toolkit_path }}/config/defaults.conf"
+    mode: '0644'
+    owner: root
+    group: root
+    backup: "{{ posix_deploy_create_backup }}"
+  tags: [deploy, config]
+
+- name: Deploy firewall configuration (if enabled)
+  ansible.builtin.template:
+    src: firewall.conf.j2
+    dest: "{{ toolkit_path }}/config/firewall.conf"
+    mode: '0644'
+    owner: root
+    group: root
+    backup: "{{ posix_deploy_create_backup }}"
+  when: deploy_firewall_config | default(false) | bool
+  tags: [deploy, config, firewall]
+
+# ==============================================================================
+# VERIFY FILE PERMISSIONS
+# ==============================================================================
+
+- name: Verify script permissions (ensure executable)
+  block:
+    - name: Find all shell scripts in toolkit
+      ansible.builtin.find:
+        paths:
+          - "{{ toolkit_path }}/scripts"
+          - "{{ toolkit_path }}/tests"
+        patterns: "*.sh"
+        recurse: no
+      register: shell_scripts
+      tags: [deploy, permissions]
+
+    - name: Ensure all scripts are executable
+      ansible.builtin.file:
+        path: "{{ item.path }}"
+        mode: '0755'
+        owner: root
+        group: root
+      loop: "{{ shell_scripts.files }}"
+      when: shell_scripts.files is defined and shell_scripts.files | length > 0
+      tags: [deploy, permissions]
+
+  when: posix_deploy_verify_permissions | bool
+
+# ==============================================================================
+# CREATE PRE-DEPLOYMENT SNAPSHOT
+# ==============================================================================
+
+- name: Create snapshot timestamp
+  ansible.builtin.set_fact:
+    posix_deploy_snapshot_timestamp: "{{ ansible_date_time.epoch }}"
+    cacheable: true
+  tags: [deploy, snapshot]
+
+- name: Create pre-deployment system snapshot
+  ansible.builtin.shell: |
+    cd {{ toolkit_path }}
+    if [ -f ./config/defaults.conf ] && [ -f ./lib/common.sh ] && [ -f ./lib/backup.sh ]; then
+      . ./config/defaults.conf
+      . ./lib/common.sh
+      . ./lib/backup.sh
+      create_system_snapshot "ansible_deploy_{{ posix_deploy_snapshot_timestamp }}"
+    else
+      echo "Snapshot creation skipped - toolkit not fully deployed yet"
+    fi
+  register: snapshot_creation
+  changed_when: "'snapshot created' in snapshot_creation.stdout.lower() or 'snapshot' in snapshot_creation.stdout.lower()"
+  failed_when: false
+  when: posix_deploy_create_backup | bool
+  tags: [deploy, snapshot]
+
+- name: Display snapshot information
+  ansible.builtin.debug:
+    msg: "{{ snapshot_creation.stdout_lines if snapshot_creation.stdout_lines is defined else 'Snapshot creation not performed' }}"
+  when: posix_deploy_create_backup | bool
+  tags: [deploy, snapshot]
+
+# ==============================================================================
+# DEPLOYMENT VERIFICATION
+# ==============================================================================
+
+- name: Verify toolkit deployment
+  ansible.builtin.stat:
+    path: "{{ toolkit_path }}/{{ item }}"
+  loop:
+    - lib/common.sh
+    - lib/backup.sh
+    - lib/rollback.sh
+    - lib/ssh_safety.sh
+    - config/defaults.conf
+    - scripts/01-ssh-hardening.sh
+    - scripts/02-firewall-setup.sh
+  register: toolkit_verification
+  tags: [deploy, verify]
+
+- name: Assert all critical files deployed
+  ansible.builtin.assert:
+    that:
+      - item.stat.exists
+    fail_msg: "Critical file missing: {{ item.item }}"
+    success_msg: "File deployed: {{ item.item }}"
+  loop: "{{ toolkit_verification.results }}"
+  tags: [deploy, verify]
+
+- name: Display deployment completion
+  ansible.builtin.debug:
+    msg: |
+      ========================================
+      POSIX Hardening Toolkit Deployment Complete
+      ========================================
+      Toolkit Path: {{ toolkit_path }}
+      Snapshot: ansible_deploy_{{ posix_deploy_snapshot_timestamp }}
+      Backup Path: {{ backup_path }}/snapshots/
+      ========================================
+  tags: [deploy, info]

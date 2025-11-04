@@ -1,0 +1,19 @@
+---
+# ==============================================================================
+# POSIX Hardening Users Role - Default Variables
+# ==============================================================================
+# These defaults can be overridden in group_vars or inventory variables
+# ==============================================================================
+
+# User management settings
+posix_hardening_users_list: []                 # Will be populated from ssh_allow_users
+posix_hardening_create_users: true             # Create users if they don't exist
+posix_hardening_users_passwordless_sudo: true  # Enable passwordless sudo for users
+
+# SSH key deployment settings
+posix_hardening_deploy_ansible_key: true       # Deploy ansible automation key
+posix_hardening_deploy_team_key: true          # Deploy team shared key
+
+# SSH key paths (on Ansible controller)
+posix_hardening_ansible_key_path: "{{ playbook_dir }}/team_keys/ansible_ed25519.pub"
+posix_hardening_team_key_path: "{{ playbook_dir }}/team_keys/team_shared_ed25519.pub"

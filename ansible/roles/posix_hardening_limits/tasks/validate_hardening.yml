@@ -13,6 +13,7 @@
 
 - name: Validate core dump limits configured
   ansible.builtin.shell: |
+    set -o pipefail
     grep "^\* hard core" {{ posix_limits_conf_path }} | awk '{print $4}'
   register: core_limit_check
   changed_when: false
@@ -21,6 +22,7 @@
 
 - name: Validate process limits configured
   ansible.builtin.shell: |
+    set -o pipefail
     grep "^\* hard nproc" {{ posix_limits_conf_path }} | tail -1 | awk '{print $4}'
   register: nproc_limit_check
   changed_when: false
@@ -29,6 +31,7 @@
 
 - name: Validate open file limits configured
   ansible.builtin.shell: |
+    set -o pipefail
     grep "^\* hard nofile" {{ posix_limits_conf_path }} | tail -1 | awk '{print $4}'
   register: nofile_limit_check
   changed_when: false
@@ -37,6 +40,7 @@
 
 - name: Validate memory lock limits configured
   ansible.builtin.shell: |
+    set -o pipefail
     grep "^\* hard memlock" {{ posix_limits_conf_path }} | tail -1 | awk '{print $4}'
   register: memlock_limit_check
   changed_when: false

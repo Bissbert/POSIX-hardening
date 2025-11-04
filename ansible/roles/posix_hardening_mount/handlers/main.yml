@@ -7,7 +7,7 @@
   ansible.builtin.lineinfile:
     path: "{{ posix_mount_log_dir }}/mount_changes.log"
     line: "{{ ansible_date_time.iso8601 }} - Mount options changed"
-    create: yes
+    create: true
     mode: '0600'
   listen: log mount change
 
@@ -41,7 +41,7 @@
   ansible.builtin.copy:
     src: "{{ (mount_fstab_backups.files | sort(attribute='mtime') | last).path }}"
     dest: /etc/fstab
-    remote_src: yes
+    remote_src: true
     mode: '0644'
     owner: root
     group: root
@@ -52,6 +52,6 @@
   ansible.builtin.lineinfile:
     path: "{{ posix_mount_log_dir }}/mount_hardening.log"
     line: "{{ ansible_date_time.iso8601 }} - EMERGENCY ROLLBACK: fstab restored from backup"
-    create: yes
+    create: true
     mode: '0600'
   listen: rollback mount settings

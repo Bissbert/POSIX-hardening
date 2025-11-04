@@ -8,12 +8,11 @@
 
 - name: Validate Hardening Configuration
   hosts: all
-  gather_facts: yes
-  become: no
-
+  gather_facts: true
+  become: false
   tasks:
     - name: Display validation start message
-      debug:
+      ansible.builtin.debug:
         msg: |
           ================================
           Configuration Validation
@@ -27,7 +26,7 @@
     # ==========================================================================
 
     - name: Validate admin_ip is set (REQUIRED)
-      assert:
+      ansible.builtin.assert:
         that:
           - admin_ip is defined
           - admin_ip != ""
@@ -40,14 +39,14 @@
         success_msg: "✓ admin_ip is set: {{ admin_ip }}"
 
     - name: Validate admin_ip format (IP address or CIDR)
-      assert:
+      ansible.builtin.assert:
         that:
           - admin_ip is match('^[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}(/[0-9]{1,2})?$')
         fail_msg: "ERROR: admin_ip '{{ admin_ip }}' is not a valid IP address or CIDR notation"
         success_msg: "✓ admin_ip format is valid"
 
     - name: Validate ssh_allow_users is set (prevents lockout)
-      assert:
+      ansible.builtin.assert:
         that:
           - ssh_allow_users is defined
           - ssh_allow_users != ""
@@ -59,12 +58,12 @@
         success_msg: "✓ ssh_allow_users is set: {{ ssh_allow_users }}"
 
     - name: Parse ssh_allow_users into list for validation
-      set_fact:
+      ansible.builtin.set_fact:
         users_to_validate: "{{ ssh_allow_users.split() }}"
       when: ssh_allow_users is defined and ssh_allow_users != ""
 
     - name: Validate each username is valid Linux username format
-      assert:
+      ansible.builtin.assert:
         that:
           - item is match('^[a-z_][a-z0-9_-]*[$]?$')
           - item | length >= 1
@@ -81,7 +80,7 @@
       when: users_to_validate is defined
 
     - name: Display users that will be created
-      debug:
+      ansible.builtin.debug:
         msg: |
           ================================
           SSH USER SETUP
@@ -103,7 +102,7 @@
     # ==========================================================================
 
     - name: Validate SSH port is in valid range
-      assert:
+      ansible.builtin.assert:
         that:
           - ssh_port | int >= 1
           - ssh_port | int <= 65535
@@ -111,7 +110,7 @@
         success_msg: "✓ SSH port is valid: {{ ssh_port }}"
 
     - name: Validate emergency SSH port is different from main SSH port
-      assert:
+      ansible.builtin.assert:
         that:
           - emergency_ssh_port | int != ssh_port | int
         fail_msg: "ERROR: emergency_ssh_port ({{ emergency_ssh_port }}) cannot be the same as ssh_port ({{ ssh_port }})"
@@ -119,7 +118,7 @@
       when: enable_emergency_ssh | bool
 
     - name: Validate allowed_ports are in valid range
-      assert:
+      ansible.builtin.assert:
         that:
           - item | int >= 1
           - item | int <= 65535
@@ -132,7 +131,7 @@
     # ==========================================================================
 
     - name: Validate trusted_networks CIDR notation
-      assert:
+      ansible.builtin.assert:
         that:
           - item is match('^[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}/[0-9]{1,2}$')
         fail_msg: "ERROR: '{{ item }}' is not valid CIDR notation (e.g., 10.0.0.0/8)"
@@ -144,7 +143,7 @@
     # ==========================================================================
 
     - name: Validate firewall_timeout is reasonable
-      assert:
+      ansible.builtin.assert:
         that:
           - firewall_timeout | int >= 60
           - firewall_timeout | int <= 3600
@@ -153,7 +152,7 @@
       when: firewall_timeout is defined
 
     - name: Validate shell_timeout is reasonable
-      assert:
+      ansible.builtin.assert:
         that:
           - shell_timeout | int >= 300
           - shell_timeout | int <= 7200
@@ -166,7 +165,7 @@
     # ==========================================================================
 
     - name: Validate password minimum length
-      assert:
+      ansible.builtin.assert:
         that:
           - password_min_length | int >= 8
           - password_min_length | int <= 64
@@ -174,7 +173,7 @@
       when: password_min_length is defined
 
     - name: Validate password max age
-      assert:
+      ansible.builtin.assert:
         that:
           - password_max_age | int >= 1
           - password_max_age | int <= 365
@@ -186,7 +185,7 @@
     # ==========================================================================
 
     - name: Check if running in production
-      debug:
+      ansible.builtin.debug:
         msg: |
           ================================
           PRODUCTION DEPLOYMENT WARNING
@@ -204,7 +203,7 @@
       when: "'production' in group_names"
 
     - name: Validate dry_run is disabled for production
-      assert:
+      ansible.builtin.assert:
         that:
           - dry_run | int == 0
         fail_msg: |
@@ -214,7 +213,7 @@
       when: "'production' in group_names"
 
     - name: Warn if emergency SSH is disabled in production
-      debug:
+      ansible.builtin.debug:
         msg: |
           WARNING: Emergency SSH is disabled in production!
           This is RISKY for initial deployment.
@@ -228,14 +227,14 @@
     # ==========================================================================
 
     - name: Verify target is Debian-based
-      assert:
+      ansible.builtin.assert:
         that:
           - ansible_os_family == "Debian"
         fail_msg: "ERROR: Target OS '{{ ansible_os_family }}' is not Debian-based. This toolkit only supports Debian/Ubuntu."
         success_msg: "✓ Target OS is Debian-based: {{ ansible_distribution }} {{ ansible_distribution_version }}"
 
     - name: Check Python interpreter is available
-      assert:
+      ansible.builtin.assert:
         that:
           - ansible_python_interpreter is defined
         fail_msg: "ERROR: Python interpreter not found on target system"
@@ -246,17 +245,17 @@
     # ==========================================================================
 
     - name: Check if SSH team keys exist on controller
-      stat:
+      ansible.builtin.stat:
         path: "{{ playbook_dir }}/team_keys/{{ item }}.pub"
       delegate_to: localhost
-      become: no
+      become: false
       register: key_files
       loop:
         - ansible_ed25519
         - team_shared_ed25519
 
     - name: Warn if SSH keys are missing
-      debug:
+      ansible.builtin.debug:
         msg: |
           WARNING: SSH team keys not found!
           Location: {{ playbook_dir }}/team_keys/
@@ -273,7 +272,7 @@
     # ==========================================================================
 
     - name: Display validation summary
-      debug:
+      ansible.builtin.debug:
         msg: |
           ================================
           Validation Complete

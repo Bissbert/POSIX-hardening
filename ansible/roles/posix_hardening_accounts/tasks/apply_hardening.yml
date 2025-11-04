@@ -51,6 +51,7 @@
 - name: Get list of existing users to lock
   ansible.builtin.shell: |
     set -e
+    set -o pipefail
     for user in {{ posix_accounts_lock_list | join(' ') }}; do
       if id "$user" >/dev/null 2>&1; then
         echo "$user"
@@ -61,7 +62,7 @@
   tags: [accounts, lock]
 
 - name: Lock system accounts
-  ansible.builtin.user:
+  user:
     name: "{{ item }}"
     password_lock: true
     shell: "{{ accounts_nologin_shell if posix_accounts_set_nologin_shell | bool else omit }}"
@@ -83,7 +84,7 @@
   tags: [accounts, empty_password]
 
 - name: Lock accounts with empty passwords
-  ansible.builtin.user:
+  user:
     name: "{{ item }}"
     password_lock: true
   loop: "{{ empty_password_accounts.stdout_lines }}"
@@ -113,6 +114,7 @@
 - name: Check root password status
   ansible.builtin.shell: |
     set -e
+    set -o pipefail
     passwd -S root 2>/dev/null | awk '{print $2}'
   register: root_password_status
   changed_when: false

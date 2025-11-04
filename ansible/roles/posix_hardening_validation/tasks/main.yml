@@ -41,7 +41,7 @@
 - name: Validate Debian-based operating system
   block:
     - name: Check OS family is Debian
-      assert:
+      ansible.builtin.assert:
         that:
           - ansible_os_family == "Debian"
         fail_msg: "ERROR: Not a Debian-based system (found: {{ ansible_os_family }})"
@@ -50,7 +50,7 @@
 
   rescue:
     - name: Record OS validation error
-      set_fact:
+      ansible.builtin.set_fact:
         posix_validation_errors: "{{ posix_validation_errors + ['Not a Debian-based system: ' + ansible_os_family] }}"
       tags: [validation, os_check]
 
@@ -61,13 +61,13 @@
 - name: Validate running with privilege escalation
   block:
     - name: Check effective user ID is root
-      command: id -u
+      ansible.builtin.command: id -u
       register: effective_uid
       changed_when: false
       tags: [validation, privilege_check]
 
     - name: Assert running as root/sudo
-      assert:
+      ansible.builtin.assert:
         that:
           - effective_uid.stdout == "0"
         fail_msg: "ERROR: Not running as root (UID: {{ effective_uid.stdout }}). Enable become: yes"
@@ -76,7 +76,7 @@
 
   rescue:
     - name: Record privilege error
-      set_fact:
+      ansible.builtin.set_fact:
         posix_validation_errors: "{{ posix_validation_errors + ['Not running as root - privilege escalation required'] }}"
       tags: [validation, privilege_check]
 
@@ -93,7 +93,7 @@
       tags: [validation, disk_check]
 
     - name: Assert minimum disk space available
-      assert:
+      ansible.builtin.assert:
         that:
           - root_disk_space.stdout | int >= posix_validation_min_disk_mb
         fail_msg: "WARNING: Low disk space ({{ root_disk_space.stdout }}MB < {{ posix_validation_min_disk_mb }}MB)"
@@ -102,7 +102,7 @@
 
   rescue:
     - name: Record disk space warning
-      set_fact:
+      ansible.builtin.set_fact:
         posix_validation_warnings: "{{ posix_validation_warnings + ['Low disk space: ' + root_disk_space.stdout + 'MB'] }}"
       tags: [validation, disk_check]
 
@@ -136,7 +136,7 @@
 - name: Validate ssh_allow_users is set
   block:
     - name: Check ssh_allow_users is defined
-      assert:
+      ansible.builtin.assert:
         that:
           - ssh_allow_users is defined
           - ssh_allow_users | length > 0
@@ -147,7 +147,7 @@
 
   rescue:
     - name: Record ssh_allow_users error
-      set_fact:
+      ansible.builtin.set_fact:
         posix_validation_errors: "{{ posix_validation_errors + ['ssh_allow_users not configured - SSH lockout risk!'] }}"
       tags: [validation, variable_check]
 
@@ -178,7 +178,7 @@
 - name: Validate SSH connectivity
   block:
     - name: Check current SSH port is accessible
-      wait_for:
+      ansible.builtin.wait_for:
         port: "{{ ansible_port | default(22) }}"
         host: "{{ ansible_host | default(inventory_hostname) }}"
         timeout: 5
@@ -187,13 +187,13 @@
       tags: [validation, ssh_check]
 
     - name: Display SSH connectivity status
-      debug:
+      ansible.builtin.debug:
         msg: "SSH port {{ ansible_port | default(22) }} is accessible"
       tags: [validation, ssh_check]
 
   rescue:
     - name: Record SSH connectivity warning
-      set_fact:
+      ansible.builtin.set_fact:
         posix_validation_warnings: "{{ posix_validation_warnings + ['SSH port check failed - connectivity may be unstable'] }}"
       tags: [validation, ssh_check]
 
@@ -204,7 +204,7 @@
 - name: Validate SSH keys exist (if check enabled)
   block:
     - name: Check for existing SSH authorized_keys
-      stat:
+      ansible.builtin.stat:
         path: "{{ item }}"
       loop:
         - /root/.ssh/authorized_keys
@@ -213,7 +213,7 @@
       tags: [validation, ssh_keys]
 
     - name: Verify at least one SSH key file exists
-      assert:
+      ansible.builtin.assert:
         that:
           - ssh_keys_present.results | selectattr('stat.exists', 'equalto', true) | list | length > 0
         fail_msg: "WARNING: No SSH authorized_keys found"
@@ -222,7 +222,7 @@
 
   rescue:
     - name: Record SSH keys warning
-      set_fact:
+      ansible.builtin.set_fact:
         posix_validation_warnings: "{{ posix_validation_warnings + ['No SSH authorized_keys found - password auth may be disabled!'] }}"
       tags: [validation, ssh_keys]
 
@@ -235,10 +235,10 @@
 - name: Check Ansible controller team keys exist
   block:
     - name: Check team keys directory on controller
-      stat:
+      ansible.builtin.stat:
         path: "{{ playbook_dir }}/team_keys/{{ item }}"
       delegate_to: localhost
-      become: no
+      become: false
       register: controller_keys
       loop:
         - "ansible_ed25519"
@@ -249,7 +249,7 @@
       tags: [validation, controller_keys]
 
     - name: Display controller key status
-      debug:
+      ansible.builtin.debug:
         msg:
           - "Team Keys Directory: {{ playbook_dir }}/team_keys"
           - "Ansible Key (private): {{ 'FOUND' if controller_keys.results[0].stat.exists else 'MISSING' }}"
@@ -259,7 +259,7 @@
       tags: [validation, controller_keys]
 
     - name: Warn if controller keys not found
-      set_fact:
+      ansible.builtin.set_fact:
         posix_validation_warnings: "{{ posix_validation_warnings + ['Team SSH keys not found on controller. Generate with: cd ansible/team_keys && ./generate_keys.sh'] }}"
       when: >
         not controller_keys.results[0].stat.exists or
@@ -275,7 +275,7 @@
 - name: Validate required system commands
   block:
     - name: Check for required commands
-      command: which {{ item }}
+      ansible.builtin.command: which {{ item }}
       loop:
         - iptables
         - sysctl
@@ -291,7 +291,7 @@
       tags: [validation, commands]
 
     - name: Record missing commands
-      set_fact:
+      ansible.builtin.set_fact:
         posix_validation_warnings: "{{ posix_validation_warnings + ['Command not found: ' + item.item] }}"
       when: item.rc != 0
       loop: "{{ commands_available.results }}"

@@ -361,6 +361,7 @@
 
     - name: Display current firewall rules summary
       ansible.builtin.shell: |
+        set -o pipefail
         echo "=== IPv4 Rules Summary ==="
         {{ posix_firewall_iptables_bin }} -L -n -v --line-numbers | head -50
         echo ""

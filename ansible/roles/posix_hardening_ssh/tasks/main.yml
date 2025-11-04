@@ -213,6 +213,7 @@
 
     - name: Monitor current SSH connections
       ansible.builtin.shell: |
+        set -o pipefail
         echo "=== Active SSH Connections ==="
         who | grep pts || echo "None found via 'who'"
         echo ""

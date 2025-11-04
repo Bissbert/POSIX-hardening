@@ -5,6 +5,7 @@
 
 - name: Validate core dump limits in limits.conf
   ansible.builtin.shell: |
+    set -o pipefail
     grep "^\* hard core" {{ posix_coredump_limits_conf }} | awk '{print $4}'
   register: core_limits_check
   changed_when: false
@@ -47,6 +48,7 @@
 
 - name: Check systemd-coredump configuration
   ansible.builtin.shell: |
+    set -o pipefail
     if [ -f /etc/systemd/coredump.conf.d/hardening.conf ]; then
       grep "Storage=" /etc/systemd/coredump.conf.d/hardening.conf | cut -d= -f2
     else

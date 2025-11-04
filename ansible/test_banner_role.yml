@@ -1,0 +1,12 @@
+---
+# Test playbook for posix_hardening_banner role
+- name: Test POSIX Banner Hardening Role
+  hosts: localhost
+  become: true
+  ansible.builtin.gather_facts: true
+
+  roles:
+    - role: posix_hardening_banner
+      vars:
+        posix_banner_organization: "Test Organization"
+        posix_banner_contact: "test@example.com"

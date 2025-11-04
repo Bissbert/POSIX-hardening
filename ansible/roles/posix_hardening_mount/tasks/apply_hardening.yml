@@ -182,5 +182,5 @@
   ansible.builtin.lineinfile:
     path: "{{ posix_mount_log_dir }}/mount_hardening.log"
     line: "{{ ansible_date_time.iso8601 }} - Mount hardening applied"
-    create: yes
+    create: true
     mode: '0600'

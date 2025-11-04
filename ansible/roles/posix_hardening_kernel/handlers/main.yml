@@ -37,7 +37,7 @@
   ansible.builtin.copy:
     src: "{{ (kernel_backups.files | sort(attribute='mtime') | last).path }}"
     dest: "{{ posix_kernel_sysctl_conf }}"
-    remote_src: yes
+    remote_src: true
     mode: '0644'
     owner: root
     group: root
@@ -55,6 +55,6 @@
   ansible.builtin.lineinfile:
     path: /var/log/hardening/kernel_hardening.log
     line: "{{ ansible_date_time.iso8601 }} - EMERGENCY ROLLBACK: Kernel configuration restored from backup"
-    create: yes
+    create: true
     mode: '0600'
   listen: rollback kernel settings

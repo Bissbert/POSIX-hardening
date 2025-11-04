@@ -6,6 +6,7 @@
 - name: Validate login.defs password aging settings
   ansible.builtin.shell: |
     set -e
+    set -o pipefail
     grep "^PASS_MAX_DAYS" {{ posix_password_login_defs_path }} | awk '{print $2}'
   register: pass_max_days_check
   changed_when: false
@@ -15,6 +16,7 @@
 - name: Validate PASS_MIN_DAYS setting
   ansible.builtin.shell: |
     set -e
+    set -o pipefail
     grep "^PASS_MIN_DAYS" {{ posix_password_login_defs_path }} | awk '{print $2}'
   register: pass_min_days_check
   changed_when: false
@@ -24,6 +26,7 @@
 - name: Validate PASS_WARN_AGE setting
   ansible.builtin.shell: |
     set -e
+    set -o pipefail
     grep "^PASS_WARN_AGE" {{ posix_password_login_defs_path }} | awk '{print $2}'
   register: pass_warn_age_check
   changed_when: false
@@ -59,6 +62,7 @@
 - name: Validate pwquality.conf settings (if available)
   ansible.builtin.shell: |
     set -e
+    set -o pipefail
     if [ -f /etc/security/pwquality.conf ]; then
       grep -E "^(minlen|dcredit|ucredit|lcredit|ocredit)" /etc/security/pwquality.conf | wc -l
     else

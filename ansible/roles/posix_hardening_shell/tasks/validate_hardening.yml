@@ -15,6 +15,7 @@
 
 - name: Extract TMOUT value from profile
   ansible.builtin.shell: |
+    set -o pipefail
     grep "^TMOUT=" {{ posix_shell_profile_path }} | cut -d= -f2 | head -1
   register: tmout_value_profile
   changed_when: false
@@ -48,6 +49,7 @@
 
 - name: Validate history settings in profile
   ansible.builtin.shell: |
+    set -o pipefail
     grep -E "^export HISTSIZE=|^export HISTFILESIZE=" {{ posix_shell_profile_path }} | wc -l
   register: history_profile_check
   changed_when: false

@@ -26,7 +26,7 @@
   ansible.builtin.copy:
     src: "{{ posix_ssh_config_file }}"
     dest: "{{ posix_ssh_config_backup_dir }}/sshd_config.{{ ansible_date_time.epoch }}.bak"
-    remote_src: yes
+    remote_src: true
     mode: "{{ posix_ssh_config_mode }}"
     owner: root
     group: root
@@ -76,7 +76,7 @@
     line: "PermitRootLogin {{ posix_ssh_permit_root_login }}"
     state: present
     validate: '/usr/sbin/sshd -t -f %s'
-    backup: yes
+    backup: true
   notify:
     - reload sshd
     - test ssh connectivity

@@ -5,8 +5,8 @@
 
 - name: POSIX Hardening - Pre-flight Validation
   hosts: all
-  gather_facts: yes
-  become: yes
+  gather_facts: true
+  become: true
   tags: [always, preflight, validation]
 
   roles:
@@ -27,8 +27,8 @@
 
 - name: POSIX Hardening - Priority 1 (Critical - SSH & Firewall)
   hosts: all
-  gather_facts: no
-  become: yes
+  gather_facts: false
+  become: true
   tags: [harden, priority1, critical]
 
   roles:
@@ -62,8 +62,8 @@
 
 - name: POSIX Hardening - Priority 2 (Core System Security)
   hosts: all
-  gather_facts: no
-  become: yes
+  gather_facts: false
+  become: true
   tags: [harden, priority2, core]
 
   roles:
@@ -101,8 +101,8 @@
 
 - name: POSIX Hardening - Priority 3 (Access Control & Policies)
   hosts: all
-  gather_facts: no
-  become: yes
+  gather_facts: false
+  become: true
   tags: [harden, priority3, access]
 
   roles:
@@ -141,8 +141,8 @@
 
 - name: POSIX Hardening - Priority 4 (Services & Scheduling)
   hosts: all
-  gather_facts: no
-  become: yes
+  gather_facts: false
+  become: true
   tags: [harden, priority4, services]
 
   roles:
@@ -165,8 +165,8 @@
 
 - name: POSIX Hardening - Priority 5 (Audit & Monitoring)
   hosts: all
-  gather_facts: no
-  become: yes
+  gather_facts: false
+  become: true
   tags: [harden, priority5, audit]
 
   roles:
@@ -193,8 +193,8 @@
 
 - name: POSIX Hardening - Priority 6 (Final Touches)
   hosts: all
-  gather_facts: no
-  become: yes
+  gather_facts: false
+  become: true
   tags: [harden, priority6, final]
 
   roles:
@@ -213,8 +213,8 @@
 
 - name: POSIX Hardening - Final Validation & Report
   hosts: all
-  gather_facts: no
-  become: yes
+  gather_facts: false
+  become: true
   tags: [always, validate, report]
 
   tasks:
@@ -224,6 +224,7 @@
 
     - name: Gather hardening status
       ansible.builtin.shell: |
+        set -o pipefail
         ls -1 /var/lib/hardening/*_hardened 2>/dev/null | wc -l
       register: roles_applied
       changed_when: false

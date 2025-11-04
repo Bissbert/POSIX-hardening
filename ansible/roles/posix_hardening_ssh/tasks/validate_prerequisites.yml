@@ -253,7 +253,7 @@
 - name: Ensure SSH service is enabled
   ansible.builtin.systemd:
     name: "{{ posix_ssh_service_name }}"
-    enabled: yes
+    enabled: true
   tags: [ssh, validation, service]
 
 # ------------------------------------------------------------------------------

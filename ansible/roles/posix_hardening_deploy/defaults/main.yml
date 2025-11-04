@@ -1,0 +1,22 @@
+---
+# ==============================================================================
+# POSIX Hardening Deploy Role - Default Variables
+# ==============================================================================
+# These defaults can be overridden in group_vars or inventory variables
+# ==============================================================================
+
+# Deployment behavior settings
+posix_deploy_create_backup: true               # Backup existing files before overwriting
+posix_deploy_backup_retention_days: 30         # Days to retain backups
+posix_deploy_verify_permissions: true          # Verify and fix script permissions after deployment
+
+# File permissions
+posix_deploy_lib_files_mode: '0644'            # Library files (non-executable)
+posix_deploy_script_files_mode: '0755'         # Script files (executable)
+
+# Optional components
+posix_deploy_orchestrator: true                # Deploy orchestrator.sh
+posix_deploy_emergency_rollback: true          # Deploy emergency-rollback.sh
+
+# Firewall configuration deployment
+deploy_firewall_config: false                  # Deploy firewall.conf template (requires template)

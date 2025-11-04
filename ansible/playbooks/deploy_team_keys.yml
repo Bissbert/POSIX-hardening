@@ -18,9 +18,8 @@
 
 - name: Deploy Team SSH Keys
   hosts: all
-  become: yes
-  gather_facts: yes
-
+  become: true
+  gather_facts: true
   vars:
     team_keys_dir: "{{ playbook_dir }}/team_keys"
     ansible_key_name: "ansible_ed25519"
@@ -28,7 +27,7 @@
 
   tasks:
     - name: Display deployment information
-      debug:
+      ansible.builtin.debug:
         msg:
           - "Deploying SSH keys for centralized access"
           - "Ansible key: {{ ansible_key_name }}"
@@ -37,10 +36,10 @@
       tags: [always]
 
     - name: Check if team keys exist
-      stat:
+      ansible.builtin.stat:
         path: "{{ team_keys_dir }}/{{ item }}.pub"
       delegate_to: localhost
-      become: no
+      become: false
       register: key_check
       loop:
         - "{{ ansible_key_name }}"
@@ -49,7 +48,7 @@
       tags: [always]
 
     - name: Verify keys are available
-      assert:
+      ansible.builtin.assert:
         that:
           - key_check.results[0].stat.exists
           - key_check.results[1].stat.exists
@@ -61,10 +60,10 @@
       tags: [always]
 
     - name: Read team public keys
-      slurp:
+      ansible.builtin.slurp:
         src: "{{ team_keys_dir }}/{{ item }}.pub"
       delegate_to: localhost
-      become: no
+      become: false
       register: public_keys
       loop:
         - "{{ ansible_key_name }}"
@@ -72,7 +71,7 @@
       tags: [always]
 
     - name: Ensure .ssh directory exists for root
-      file:
+      ansible.builtin.file:
         path: /root/.ssh
         state: directory
         owner: root
@@ -81,7 +80,7 @@
       tags: [root]
 
     - name: Deploy Ansible automation key to root
-      authorized_key:
+      ansible.posix.authorized_key:
         user: root
         key: "{{ public_keys.results[0].content | b64decode }}"
         comment: "ansible-automation@posix-hardening"
@@ -89,7 +88,7 @@
       tags: [root, ansible_key]
 
     - name: Deploy team shared key to root
-      authorized_key:
+      ansible.posix.authorized_key:
         user: root
         key: "{{ public_keys.results[1].content | b64decode }}"
         comment: "team-access@posix-hardening"
@@ -97,7 +96,7 @@
       tags: [root, team_key]
 
     - name: Check if ansible user exists
-      getent:
+      ansible.builtin.getent:
         database: passwd
         key: ansible
       register: ansible_user_check
@@ -108,14 +107,14 @@
       user:
         name: ansible
         comment: "Ansible automation user"
-        shell: /bin/bash
-        create_home: yes
+        ansible.builtin.shell: /bin/bash
+        create_home: true
         state: present
       when: ansible_user_check.failed
       tags: [ansible_user]
 
     - name: Ensure .ssh directory exists for ansible user
-      file:
+      ansible.builtin.file:
         path: /home/ansible/.ssh
         state: directory
         owner: ansible
@@ -125,7 +124,7 @@
       tags: [ansible_user]
 
     - name: Deploy Ansible automation key to ansible user
-      authorized_key:
+      ansible.posix.authorized_key:
         user: ansible
         key: "{{ public_keys.results[0].content | b64decode }}"
         comment: "ansible-automation@posix-hardening"
@@ -134,7 +133,7 @@
       tags: [ansible_user, ansible_key]
 
     - name: Deploy team shared key to ansible user
-      authorized_key:
+      ansible.posix.authorized_key:
         user: ansible
         key: "{{ public_keys.results[1].content | b64decode }}"
         comment: "team-access@posix-hardening"
@@ -143,7 +142,7 @@
       tags: [ansible_user, team_key]
 
     - name: Grant ansible user sudo privileges
-      copy:
+      ansible.builtin.copy:
         content: |
           # Ansible automation user
           ansible ALL=(ALL) NOPASSWD: ALL
@@ -156,7 +155,7 @@
       tags: [ansible_user, sudo]
 
     - name: Verify root authorized_keys permissions
-      file:
+      ansible.builtin.file:
         path: /root/.ssh/authorized_keys
         owner: root
         group: root
@@ -164,7 +163,7 @@
       tags: [permissions]
 
     - name: Verify ansible user authorized_keys permissions
-      file:
+      ansible.builtin.file:
         path: /home/ansible/.ssh/authorized_keys
         owner: ansible
         group: ansible
@@ -173,7 +172,7 @@
       tags: [permissions]
 
     - name: Display key fingerprints on targets
-      shell: |
+      ansible.builtin.shell: |
         echo "=== Deployed SSH Keys ==="
         echo "Root authorized_keys:"
         ssh-keygen -lf /root/.ssh/authorized_keys 2>/dev/null || echo "  (No keys or error reading)"
@@ -186,12 +185,12 @@
       tags: [verify]
 
     - name: Show deployed keys
-      debug:
+      ansible.builtin.debug:
         var: deployed_keys.stdout_lines
       tags: [verify]
 
     - name: Create deployment summary
-      debug:
+      ansible.builtin.debug:
         msg:
           - "============================================"
           - "SSH Key Deployment Complete"
@@ -212,19 +211,18 @@
 
 - name: Verification Tests
   hosts: all
-  become: yes
-  gather_facts: no
-
+  become: true
+  gather_facts: false
   tasks:
     - name: Count deployed keys for root
-      shell: |
+      ansible.builtin.shell: |
         grep -c "posix-hardening" /root/.ssh/authorized_keys 2>/dev/null || echo "0"
       register: root_key_count
       changed_when: false
       tags: [verify]
 
     - name: Count deployed keys for ansible user
-      shell: |
+      ansible.builtin.shell: |
         if [ -f /home/ansible/.ssh/authorized_keys ]; then
           grep -c "posix-hardening" /home/ansible/.ssh/authorized_keys 2>/dev/null || echo "0"
         else
@@ -235,7 +233,7 @@
       tags: [verify]
 
     - name: Verify deployment success
-      assert:
+      ansible.builtin.assert:
         that:
           - root_key_count.stdout | int >= 2
         fail_msg: "Expected 2 keys for root (Ansible + Team), found {{ root_key_count.stdout }}"
@@ -243,7 +241,7 @@
       tags: [verify]
 
     - name: Display final status
-      debug:
+      ansible.builtin.debug:
         msg:
           - "============================================"
           - "Deployment Verification"

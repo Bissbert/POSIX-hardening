@@ -45,7 +45,7 @@
   ansible.builtin.systemd:
     name: "{{ posix_ssh_service_name }}"
     state: restarted
-    enabled: yes
+    enabled: true
   listen: restart sshd
   async: 1
   poll: 0
@@ -61,8 +61,7 @@
     delay: 2
   listen: restart sshd
   delegate_to: localhost
-  become: no
-
+  become: false
 # ------------------------------------------------------------------------------
 # TEST SSH CONNECTIVITY (triggered after reload/restart)
 # ------------------------------------------------------------------------------
@@ -103,9 +102,9 @@
   ansible.builtin.copy:
     src: "{{ (ssh_backups.files | sort(attribute='mtime') | last).path }}"
     dest: "{{ posix_ssh_config_file }}"
-    remote_src: yes
+    remote_src: true
     mode: "{{ posix_ssh_config_mode }}"
-    backup: no
+    backup: false
   when: ssh_backups.matched > 0
   listen: emergency ssh rollback
 
@@ -121,7 +120,7 @@
   ansible.builtin.lineinfile:
     path: /var/log/hardening/ssh_hardening.log
     line: "{{ ansible_date_time.iso8601 }} - EMERGENCY ROLLBACK: SSH configuration restored from backup"
-    create: yes
+    create: true
     mode: '0600'
   listen: emergency ssh rollback
 
@@ -157,13 +156,13 @@
   ansible.builtin.apt:
     name: iptables-persistent
     state: present
-    update_cache: no
+    update_cache: false
   when:
     - posix_ssh_ensure_firewall_rule | default(true) | bool
     - ansible_os_family == "Debian"
   environment:
     DEBIAN_FRONTEND: noninteractive
-  ignore_errors: yes
+  ignore_errors: true
   register: iptables_persistent_install
   listen: update firewall for ssh port
 

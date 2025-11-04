@@ -5,13 +5,13 @@
 
 - name: POSIX Hardening Deployment - Pre-flight Checks
   hosts: all
-  gather_facts: yes
-  become: yes
+  gather_facts: true
+  become: true
   tags: [always, preflight]
 
   tasks:
     - name: Display target information
-      debug:
+      ansible.builtin.debug:
         msg: |
           Target Host: {{ inventory_hostname }}
           SSH Port: {{ ansible_port | default(22) }}
@@ -20,19 +20,19 @@
           Current User: {{ ansible_user }}
 
     - name: Verify Debian-based system
-      assert:
+      ansible.builtin.assert:
         that:
           - ansible_os_family == "Debian"
         fail_msg: "This toolkit is designed for Debian-based systems only"
         success_msg: "✓ Debian-based system confirmed"
 
     - name: Verify SSH connectivity
-      wait_for_connection:
+      ansible.builtin.wait_for_connection:
         timeout: 10
       register: ssh_check
 
     - name: Check for existing SSH keys
-      stat:
+      ansible.builtin.stat:
         path: "{{ item }}"
       loop:
         - /root/.ssh/authorized_keys
@@ -40,53 +40,52 @@
       register: ssh_keys
 
     - name: Warn if no SSH keys found
-      debug:
+      ansible.builtin.debug:
         msg: "WARNING: No SSH keys found. Ensure you have alternate access!"
       when: ssh_keys.results | selectattr('stat.exists', 'equalto', false) | list | length == ssh_keys.results | length
 
     - name: Check disk space
-      shell: df -h / | awk 'NR==2 {print $4}'
+      ansible.builtin.shell: set -o pipefail && df -h / | awk 'NR==2 {print $4}'
       register: disk_space
       changed_when: false
 
     - name: Verify sufficient disk space
-      assert:
+      ansible.builtin.assert:
         that:
           - disk_space.stdout | regex_replace('[A-Z]', '') | float > 0.5
         fail_msg: "Insufficient disk space for backups"
         success_msg: "✓ Sufficient disk space available"
 
     - name: Check if iptables is installed
-      command: which iptables
+      ansible.builtin.command: which iptables
       register: iptables_check
       failed_when: false
       changed_when: false
 
     - name: Install iptables if not present
-      apt:
+      ansible.builtin.apt:
         name: iptables
         state: present
-        update_cache: yes
+        update_cache: true
       when: iptables_check.rc != 0
 
     - name: Verify iptables installation
-      command: iptables --version
+      ansible.builtin.command: iptables --version
       register: iptables_version
       changed_when: false
 
     - name: Display iptables version
-      debug:
+      ansible.builtin.debug:
         msg: "✓ iptables installed: {{ iptables_version.stdout }}"
 
     - name: Create snapshot timestamp
-      set_fact:
+      ansible.builtin.set_fact:
         snapshot_timestamp: "{{ ansible_date_time.epoch }}"
-        cacheable: yes
-
+        cacheable: true
 - name: Deploy POSIX Hardening Toolkit
   hosts: all
-  gather_facts: no
-  become: yes
+  gather_facts: false
+  become: true
   tags: [deploy]
   vars:
     toolkit_path: "/opt/posix-hardening"
@@ -94,7 +93,7 @@
 
   tasks:
     - name: Create toolkit directories
-      file:
+      ansible.builtin.file:
         path: "{{ item }}"
         state: directory
         mode: '0755'
@@ -112,25 +111,23 @@
         - "/var/lib/hardening"
 
     - name: Copy library files
-      copy:
+      ansible.builtin.copy:
         src: "../lib/"
         dest: "{{ toolkit_path }}/lib/"
         mode: '0644'
         owner: root
         group: root
-        backup: yes
-
+        backup: true
     - name: Copy hardening scripts
-      copy:
+      ansible.builtin.copy:
         src: "../scripts/"
         dest: "{{ toolkit_path }}/scripts/"
         mode: '0755'
         owner: root
         group: root
-        backup: yes
-
+        backup: true
     - name: Copy test scripts
-      copy:
+      ansible.builtin.copy:
         src: "../tests/"
         dest: "{{ toolkit_path }}/tests/"
         mode: '0755'
@@ -138,7 +135,7 @@
         group: root
 
     - name: Copy orchestrator
-      copy:
+      ansible.builtin.copy:
         src: "../orchestrator.sh"
         dest: "{{ toolkit_path }}/orchestrator.sh"
         mode: '0755'
@@ -146,7 +143,7 @@
         group: root
 
     - name: Copy emergency rollback
-      copy:
+      ansible.builtin.copy:
         src: "../emergency-rollback.sh"
         dest: "{{ toolkit_path }}/emergency-rollback.sh"
         mode: '0755'
@@ -154,26 +151,25 @@
         group: root
 
     - name: Deploy configuration
-      template:
+      ansible.builtin.template:
         src: "templates/defaults.conf.j2"
         dest: "{{ toolkit_path }}/config/defaults.conf"
         mode: '0644'
         owner: root
         group: root
-        backup: yes
-
+        backup: true
     - name: Deploy firewall configuration (if variables defined)
-      template:
+      ansible.builtin.template:
         src: "templates/firewall.conf.j2"
         dest: "{{ toolkit_path }}/config/firewall.conf"
         mode: '0644'
         owner: root
         group: root
-        backup: yes
+        backup: true
       when: deploy_firewall_config | default(false) | bool
 
     - name: Create pre-deployment snapshot
-      shell: |
+      ansible.builtin.shell: |
         cd {{ toolkit_path }}
         . ./config/defaults.conf
         . ./lib/common.sh
@@ -182,23 +178,23 @@
       register: snapshot_result
 
     - name: Display snapshot information
-      debug:
+      ansible.builtin.debug:
         msg: "Created snapshot: {{ snapshot_result.stdout }}"
 
 - name: Create SSH-Allowed Users (CRITICAL - Prevents Lockout)
   hosts: all
-  gather_facts: no
-  become: yes
+  gather_facts: false
+  become: true
   tags: [harden, priority1, user_setup]
 
   tasks:
     - name: Parse ssh_allow_users into list
-      set_fact:
+      ansible.builtin.set_fact:
         allowed_users_list: "{{ ssh_allow_users.split() }}"
       when: ssh_allow_users is defined and ssh_allow_users != ""
 
     - name: Validate allowed_users_list is not empty
-      assert:
+      ansible.builtin.assert:
         that:
           - allowed_users_list is defined
           - allowed_users_list | length > 0
@@ -213,26 +209,26 @@
         name: "{{ item }}"
         comment: "SSH-Allowed User"
         groups: sudo
-        append: yes
-        shell: /bin/bash
-        create_home: yes
+        append: true
+        ansible.builtin.shell: /bin/bash
+        create_home: true
         state: present
       loop: "{{ allowed_users_list }}"
       when: allowed_users_list is defined
       register: users_created
 
     - name: Allow each user to use sudo without password (for Ansible)
-      lineinfile:
+      ansible.builtin.lineinfile:
         path: "/etc/sudoers.d/{{ item }}"
         line: "{{ item }} ALL=(ALL) NOPASSWD:ALL"
-        create: yes
+        create: true
         mode: '0440'
         validate: '/usr/sbin/visudo -cf %s'
       loop: "{{ allowed_users_list }}"
       when: allowed_users_list is defined
 
     - name: Display user creation status
-      debug:
+      ansible.builtin.debug:
         msg: |
           Created {{ allowed_users_list | length }} SSH-allowed user(s): {{ allowed_users_list | join(', ') }}
           All users have sudo privileges.
@@ -240,8 +236,8 @@
 
 - name: Deploy Team SSH Keys (BEFORE Hardening)
   hosts: all
-  gather_facts: no
-  become: yes
+  gather_facts: false
+  become: true
   tags: [harden, priority1, ssh_keys]
   vars:
     team_keys_dir: "{{ playbook_dir }}/team_keys"
@@ -250,10 +246,10 @@
 
   tasks:
     - name: Check if team keys exist
-      stat:
+      ansible.builtin.stat:
         path: "{{ team_keys_dir }}/{{ item }}.pub"
       delegate_to: localhost
-      become: no
+      become: false
       register: key_check
       loop:
         - "{{ ansible_key_name }}"
@@ -261,10 +257,10 @@
       failed_when: false
 
     - name: Read team public keys (if they exist)
-      slurp:
+      ansible.builtin.slurp:
         src: "{{ team_keys_dir }}/{{ item }}.pub"
       delegate_to: localhost
-      become: no
+      become: false
       register: public_keys
       loop:
         - "{{ ansible_key_name }}"
@@ -272,7 +268,7 @@
       when: key_check.results | selectattr('stat.exists', 'equalto', true) | list | length == 2
 
     - name: Ensure .ssh directory exists for root
-      file:
+      ansible.builtin.file:
         path: /root/.ssh
         state: directory
         owner: root
@@ -281,7 +277,7 @@
       when: public_keys is defined and public_keys.results is defined
 
     - name: Deploy Ansible automation key to root
-      authorized_key:
+      ansible.posix.authorized_key:
         user: root
         key: "{{ public_keys.results[0].content | b64decode }}"
         comment: "ansible-automation@posix-hardening"
@@ -289,7 +285,7 @@
       when: public_keys is defined and public_keys.results is defined
 
     - name: Deploy team shared key to root
-      authorized_key:
+      ansible.posix.authorized_key:
         user: root
         key: "{{ public_keys.results[1].content | b64decode }}"
         comment: "team-access@posix-hardening"
@@ -297,12 +293,12 @@
       when: public_keys is defined and public_keys.results is defined
 
     - name: Parse ssh_allow_users for key deployment
-      set_fact:
+      ansible.builtin.set_fact:
         allowed_users_list: "{{ ssh_allow_users.split() }}"
       when: ssh_allow_users is defined and ssh_allow_users != ""
 
     - name: Ensure .ssh directory exists for all allowed users
-      file:
+      ansible.builtin.file:
         path: "/home/{{ item }}/.ssh"
         state: directory
         owner: "{{ item }}"
@@ -315,7 +311,7 @@
         - allowed_users_list is defined
 
     - name: Deploy team shared key to all allowed users (PRIMARY ACCESS)
-      authorized_key:
+      ansible.posix.authorized_key:
         user: "{{ item }}"
         key: "{{ public_keys.results[1].content | b64decode }}"
         comment: "team-access@posix-hardening"
@@ -327,27 +323,27 @@
         - allowed_users_list is defined
 
     - name: Display key deployment status
-      debug:
+      ansible.builtin.debug:
         msg: "{{ 'SSH team keys deployed to root and users: ' + (allowed_users_list | join(', ')) if (public_keys is defined and allowed_users_list is defined) else 'SSH team keys not found - skipping (generate with: cd ansible/team_keys && ./generate_keys.sh)' }}"
 
 - name: Execute Hardening Scripts - Priority 1 (Critical)
   hosts: all
-  gather_facts: no
-  become: yes
+  gather_facts: false
+  become: true
   tags: [harden, priority1]
   vars:
     toolkit_path: "/opt/posix-hardening"
 
   tasks:
     - name: Verify SSH package integrity (BEFORE hardening)
-      shell: |
+      ansible.builtin.shell: |
         cd {{ toolkit_path }}
         sh scripts/00-ssh-verification.sh
       register: ssh_verification
       tags: [ssh_verification]
 
     - name: Verify SSH verification succeeded
-      assert:
+      ansible.builtin.assert:
         that:
           - ssh_verification.rc == 0
         fail_msg: "SSH package verification failed - cannot proceed"
@@ -355,17 +351,17 @@
       tags: [ssh_verification]
 
     - name: Create emergency SSH access first
-      shell: |
+      ansible.builtin.shell: |
+        set -o pipefail
         cd {{ toolkit_path }}
         . ./config/defaults.conf
         . ./lib/common.sh
         . ./lib/ssh_safety.sh
         create_emergency_ssh_access {{ emergency_ssh_port | default(2222) }}
       when: enable_emergency_ssh | default(true) | bool
-      ignore_errors: yes
-
+      ignore_errors: true
     - name: Execute SSH hardening
-      shell: |
+      ansible.builtin.shell: |
         cd {{ toolkit_path }}
         sh scripts/01-ssh-hardening.sh
       register: ssh_hardening
@@ -373,12 +369,12 @@
       poll: 10
 
     - name: Verify SSH connectivity after hardening
-      wait_for_connection:
+      ansible.builtin.wait_for_connection:
         timeout: 30
       register: ssh_verify
 
     - name: Execute firewall setup
-      shell: |
+      ansible.builtin.shell: |
         cd {{ toolkit_path }}
         sh scripts/02-firewall-setup.sh
       register: firewall_setup
@@ -386,50 +382,50 @@
 
 - name: Execute Hardening Scripts - Priority 2 (Core)
   hosts: all
-  gather_facts: no
-  become: yes
+  gather_facts: false
+  become: true
   tags: [harden, priority2]
   vars:
     toolkit_path: "/opt/posix-hardening"
 
   tasks:
     - name: Execute kernel parameters hardening
-      shell: |
+      ansible.builtin.shell: |
         cd {{ toolkit_path }}
         sh scripts/03-kernel-params.sh
       register: kernel_params
       when: run_full_hardening | default(true) | bool
 
     - name: Execute network stack hardening
-      shell: |
+      ansible.builtin.shell: |
         cd {{ toolkit_path }}
         sh scripts/04-network-stack.sh
       register: network_stack
       when: run_full_hardening | default(true) | bool
 
     - name: Execute file permissions hardening
-      shell: |
+      ansible.builtin.shell: |
         cd {{ toolkit_path }}
         sh scripts/05-file-permissions.sh
       register: file_permissions
       when: run_full_hardening | default(true) | bool
 
     - name: Execute process limits configuration
-      shell: |
+      ansible.builtin.shell: |
         cd {{ toolkit_path }}
         sh scripts/06-process-limits.sh
       register: process_limits
       when: run_full_hardening | default(true) | bool
 
     - name: Execute sudo restrictions
-      shell: |
+      ansible.builtin.shell: |
         cd {{ toolkit_path }}
         sh scripts/10-sudo-restrictions.sh
       register: sudo_restrictions
       when: run_full_hardening | default(true) | bool
 
     - name: Execute sysctl hardening
-      shell: |
+      ansible.builtin.shell: |
         cd {{ toolkit_path }}
         sh scripts/14-sysctl-hardening.sh
       register: sysctl_hardening
@@ -437,15 +433,15 @@
 
 - name: Execute Hardening Scripts - Priority 3 (Standard)
   hosts: all
-  gather_facts: no
-  become: yes
+  gather_facts: false
+  become: true
   tags: [harden, priority3]
   vars:
     toolkit_path: "/opt/posix-hardening"
 
   tasks:
     - name: Execute remaining priority 3 scripts
-      shell: |
+      ansible.builtin.shell: |
         cd {{ toolkit_path }}
         sh scripts/{{ item }}
       loop:
@@ -462,15 +458,15 @@
 
 - name: Execute Hardening Scripts - Priority 4 (Additional)
   hosts: all
-  gather_facts: no
-  become: yes
+  gather_facts: false
+  become: true
   tags: [harden, priority4]
   vars:
     toolkit_path: "/opt/posix-hardening"
 
   tasks:
     - name: Execute remaining priority 4 scripts
-      shell: |
+      ansible.builtin.shell: |
         cd {{ toolkit_path }}
         sh scripts/{{ item }}
       loop:
@@ -483,26 +479,25 @@
 
 - name: Validation and Cleanup
   hosts: all
-  gather_facts: no
-  become: yes
+  gather_facts: false
+  become: true
   tags: [validate, cleanup]
   vars:
     toolkit_path: "/opt/posix-hardening"
 
   tasks:
     - name: Run validation suite
-      shell: |
+      ansible.builtin.shell: |
         cd {{ toolkit_path }}
         sh tests/validation_suite.sh
       register: validation_results
-      ignore_errors: yes
-
+      ignore_errors: true
     - name: Display validation results
-      debug:
+      ansible.builtin.debug:
         var: validation_results.stdout_lines
 
     - name: Remove emergency SSH if requested
-      shell: |
+      ansible.builtin.shell: |
         cd {{ toolkit_path }}
         . ./config/defaults.conf
         . ./lib/common.sh
@@ -511,10 +506,9 @@
       when:
         - enable_emergency_ssh | default(true) | bool
         - remove_emergency_ssh | default(false) | bool
-      ignore_errors: yes
-
+      ignore_errors: true
     - name: Create completion report
-      copy:
+      ansible.builtin.copy:
         content: |
           POSIX Hardening Deployment Report
           ==================================
@@ -538,11 +532,11 @@
         dest: "{{ toolkit_path }}/deployment_report_{{ ansible_date_time.epoch }}.txt"
 
     - name: Final SSH connectivity check
-      wait_for_connection:
+      ansible.builtin.wait_for_connection:
         timeout: 10
 
     - name: Display completion message
-      debug:
+      ansible.builtin.debug:
         msg: |
           ========================================
           POSIX Hardening Deployment Complete

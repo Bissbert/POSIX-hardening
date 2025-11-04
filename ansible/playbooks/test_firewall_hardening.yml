@@ -26,9 +26,8 @@
 
 - name: Test Firewall Hardening Role (CRITICAL - LOCKOUT RISK)
   hosts: all
-  become: yes
-  gather_facts: yes
-
+  become: true
+  gather_facts: true
   vars:
     # REQUIRED: Override these in your inventory or extra-vars
     # Example: ansible-playbook playbooks/test_firewall_hardening.yml -e "admin_ip=192.168.1.100"
@@ -142,8 +141,7 @@
             host: "{{ ansible_host | default(inventory_hostname) }}"
             timeout: 10
           delegate_to: localhost
-          become: no
-
+          become: false
         - name: Test SSH connection still works
           ansible.builtin.command: whoami
           register: whoami_test
@@ -151,6 +149,7 @@
 
         - name: Verify firewall rules are present
           ansible.builtin.shell: |
+            set -o pipefail
             iptables -L INPUT -n | grep -q "dpt:{{ posix_firewall_ssh_port }}" && \
             iptables -L INPUT -n | grep -q "state RELATED,ESTABLISHED"
           register: firewall_check

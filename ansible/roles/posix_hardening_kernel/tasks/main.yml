@@ -94,7 +94,7 @@
       ansible.builtin.copy:
         src: "{{ posix_kernel_sysctl_conf }}"
         dest: "{{ posix_kernel_backup_dir }}/sysctl.conf.{{ ansible_date_time.iso8601_basic_short }}.bak"
-        remote_src: yes
+        remote_src: true
         mode: '0600'
         owner: root
         group: root

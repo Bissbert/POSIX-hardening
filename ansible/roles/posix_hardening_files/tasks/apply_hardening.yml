@@ -240,7 +240,7 @@
   ansible.builtin.lineinfile:
     path: "{{ posix_files_log_dir }}/world_writable_removed.log"
     line: "{{ ansible_date_time.iso8601 }} - Removed world-writable permission: {{ item.item.path }}"
-    create: yes
+    create: true
     mode: '0600'
   loop: "{{ file_stats.results | default([]) }}"
   when:

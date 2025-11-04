@@ -27,6 +27,7 @@
 
 - name: Verify SSH port is in iptables rules
   ansible.builtin.shell: |
+    set -o pipefail
     {{ posix_firewall_iptables_bin }} -L INPUT -n | grep -q "dpt:{{ posix_firewall_ssh_port }}"
     echo $?
   register: ssh_rule_check
@@ -49,6 +50,7 @@
 
 - name: Verify established connections rule exists
   ansible.builtin.shell: |
+    set -o pipefail
     {{ posix_firewall_iptables_bin }} -L INPUT -n | grep -q "state RELATED,ESTABLISHED"
     echo $?
   register: established_rule_check
@@ -58,6 +60,7 @@
 
 - name: Verify loopback interface is allowed
   ansible.builtin.shell: |
+    set -o pipefail
     {{ posix_firewall_iptables_bin }} -L INPUT -n | grep -q "lo"
     echo $?
   register: loopback_check
@@ -67,6 +70,7 @@
 
 - name: Check if admin IP rule exists (if configured)
   ansible.builtin.shell: |
+    set -o pipefail
     {{ posix_firewall_iptables_bin }} -L INPUT -n | grep -q "{{ posix_firewall_admin_ip }}"
     echo $?
   register: admin_ip_check
@@ -89,6 +93,7 @@
 
 - name: Verify default policies are set correctly
   ansible.builtin.shell: |
+    set -o pipefail
     {{ posix_firewall_iptables_bin }} -L -n | grep -E "Chain (INPUT|OUTPUT|FORWARD)"
   register: policy_check
   changed_when: false

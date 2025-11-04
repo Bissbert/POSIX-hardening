@@ -168,6 +168,7 @@
 
 - name: Check for required iptables modules
   ansible.builtin.shell: |
+    set -o pipefail
     lsmod | grep -E "ip_tables|iptable_filter|iptable_nat|nf_conntrack" || echo "Some modules not loaded"
   register: iptables_modules
   changed_when: false

@@ -18,20 +18,20 @@ jobs:
         uses: ludeeus/action-shellcheck@master
         with:
           scandir: './lib'
-          severity: warning
+          severity: error
           additional_files: 'orchestrator.sh quick-start.sh emergency-rollback.sh'
 
       - name: Run ShellCheck on hardening scripts
         uses: ludeeus/action-shellcheck@master
         with:
           scandir: './scripts'
-          severity: warning
+          severity: error
 
       - name: Run ShellCheck on Ansible utilities
         uses: ludeeus/action-shellcheck@master
         with:
           scandir: './ansible/utils'
-          severity: warning
+          severity: error
 
   checkbashisms:
     name: Check for Bashisms
@@ -117,7 +117,6 @@ jobs:
           files: .
           config_file: .markdownlint.json
           ignore_files: 'node_modules/**'
-          rules: '~MD013,~MD033,~MD041'
 
   test-compatibility:
     name: Test Shell Compatibility

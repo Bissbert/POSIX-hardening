@@ -42,6 +42,7 @@
 
 - name: Try to restore from latest backup
   ansible.builtin.shell: |
+    set -o pipefail
     if [ -n "{{ posix_firewall_latest_backup_v4 | default('') }}" ] && [ -f "{{ posix_firewall_latest_backup_v4 | default('') }}" ]; then
       {{ posix_firewall_iptables_restore_bin }} < {{ posix_firewall_latest_backup_v4 }}
       echo "IPv4 rules restored from backup: {{ posix_firewall_latest_backup_v4 }}"
@@ -67,6 +68,7 @@
 
 - name: Try to restore IPv6 from latest backup
   ansible.builtin.shell: |
+    set -o pipefail
     if [ -n "{{ posix_firewall_latest_backup_v6 | default('') }}" ] && [ -f "{{ posix_firewall_latest_backup_v6 | default('') }}" ]; then
       ip6tables-restore < {{ posix_firewall_latest_backup_v6 }}
       echo "IPv6 rules restored from backup: {{ posix_firewall_latest_backup_v6 }}"

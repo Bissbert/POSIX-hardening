@@ -33,7 +33,7 @@
   ansible.builtin.copy:
     src: "{{ (fstab_backups.files | sort(attribute='mtime') | last).path }}"
     dest: /etc/fstab
-    remote_src: yes
+    remote_src: true
     mode: '0644'
     owner: root
     group: root
@@ -44,6 +44,6 @@
   ansible.builtin.lineinfile:
     path: "{{ posix_tmp_log_dir }}/tmp_hardening.log"
     line: "{{ ansible_date_time.iso8601 }} - EMERGENCY ROLLBACK: fstab restored from backup"
-    create: yes
+    create: true
     mode: '0600'
   listen: rollback tmp settings

@@ -22,11 +22,11 @@
   ansible.builtin.copy:
     src: "{{ posix_ssh_config_file }}"
     dest: "{{ posix_ssh_emergency_config_file }}"
-    remote_src: yes
+    remote_src: true
     mode: '0600'
     owner: root
     group: root
-    backup: yes
+    backup: true
   register: emergency_config_created
   tags: [ssh, emergency, config]
 
@@ -254,7 +254,7 @@
 
 - name: Schedule emergency SSH auto-cleanup
   ansible.builtin.at:
-    command: "[ -f {{ posix_ssh_emergency_pid_file }} ] && kill $(cat {{ posix_ssh_emergency_pid_file }}) && rm -f {{ posix_ssh_emergency_pid_file }} {{ posix_ssh_emergency_config_file }}"
+    ansible.builtin.command: "[ -f {{ posix_ssh_emergency_pid_file }} ] && kill $(cat {{ posix_ssh_emergency_pid_file }}) && rm -f {{ posix_ssh_emergency_pid_file }} {{ posix_ssh_emergency_config_file }}"
     count: "{{ posix_ssh_emergency_timeout | int }}"
     units: seconds
   when:

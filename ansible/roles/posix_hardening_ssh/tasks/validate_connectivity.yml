@@ -47,7 +47,7 @@
     delay: 2
   register: ssh_port_accessible
   delegate_to: localhost
-  become: no
+  become: false
   when: not (posix_ssh_skip_connectivity_test | bool)
   tags: [ssh, validation, connectivity]
 
@@ -227,7 +227,7 @@
   ansible.builtin.lineinfile:
     path: /var/log/hardening/ssh_hardening.log
     line: "{{ ansible_date_time.iso8601 }} - SSH hardening completed successfully on {{ ansible_hostname }}"
-    create: yes
+    create: true
     mode: '0600'
   tags: [ssh, validation, logging]
 

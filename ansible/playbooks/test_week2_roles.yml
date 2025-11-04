@@ -15,9 +15,8 @@
 
 - name: Week 2 Roles Test - Validation
   hosts: all
-  gather_facts: yes
-  become: yes
-
+  gather_facts: true
+  become: true
   vars:
     # Test variables - override these in inventory or command line
     admin_ip: "192.168.1.100"
@@ -39,9 +38,8 @@
 
 - name: Week 2 Roles Test - Deployment
   hosts: all
-  gather_facts: no
-  become: yes
-
+  gather_facts: false
+  become: true
   roles:
     - role: posix_hardening_deploy
       tags: [deploy, week2_test]
@@ -51,9 +49,8 @@
 
 - name: Week 2 Roles Test - User Management
   hosts: all
-  gather_facts: no
-  become: yes
-
+  gather_facts: false
+  become: true
   roles:
     - role: posix_hardening_users
       tags: [users, week2_test]
@@ -65,13 +62,13 @@
 
 - name: Week 2 Roles Test - Final Verification
   hosts: all
-  gather_facts: no
-  become: yes
+  gather_facts: false
+  become: true
   tags: [verify, week2_test]
 
   tasks:
     - name: Verify toolkit directory structure
-      stat:
+      ansible.builtin.stat:
         path: "{{ item }}"
       loop:
         - "{{ toolkit_path }}"
@@ -85,7 +82,7 @@
       register: dir_verification
 
     - name: Assert all directories exist
-      assert:
+      ansible.builtin.assert:
         that:
           - item.stat.exists
           - item.stat.isdir
@@ -94,7 +91,7 @@
       loop: "{{ dir_verification.results }}"
 
     - name: Verify critical toolkit files deployed
-      stat:
+      ansible.builtin.stat:
         path: "{{ toolkit_path }}/{{ item }}"
       loop:
         - lib/common.sh
@@ -107,7 +104,7 @@
       register: file_verification
 
     - name: Assert all critical files exist
-      assert:
+      ansible.builtin.assert:
         that:
           - item.stat.exists
           - item.stat.isreg
@@ -116,19 +113,19 @@
       loop: "{{ file_verification.results }}"
 
     - name: Verify scripts are executable
-      stat:
+      ansible.builtin.stat:
         path: "{{ toolkit_path }}/scripts/01-ssh-hardening.sh"
       register: script_perms
 
     - name: Assert scripts have execute permissions
-      assert:
+      ansible.builtin.assert:
         that:
           - script_perms.stat.executable
         fail_msg: "Scripts are not executable"
         success_msg: "Scripts have correct permissions"
 
     - name: Verify users created
-      getent:
+      ansible.builtin.getent:
         database: passwd
         key: "{{ item }}"
       loop: "{{ ssh_allow_users.split() }}"
@@ -136,21 +133,21 @@
       failed_when: false
 
     - name: Display user verification results
-      debug:
+      ansible.builtin.debug:
         msg: "User {{ item.item }}: {{ 'EXISTS' if item.ansible_facts is defined else 'NOT FOUND' }}"
       loop: "{{ user_verification.results }}"
 
     - name: Verify sudo configuration
-      stat:
+      ansible.builtin.stat:
         path: /etc/sudoers.d/posix-hardening-users
       register: sudoers_check
 
     - name: Display sudo configuration status
-      debug:
+      ansible.builtin.debug:
         msg: "Sudoers file: {{ 'CONFIGURED' if sudoers_check.stat.exists else 'NOT CONFIGURED' }}"
 
     - name: Display test completion message
-      debug:
+      ansible.builtin.debug:
         msg: |
           ========================================
           Week 2 Roles Test Complete

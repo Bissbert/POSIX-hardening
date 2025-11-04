@@ -1,0 +1,97 @@
+---
+# ==============================================================================
+# POSIX Hardening Users Role - Main Tasks
+# ==============================================================================
+# Manages users and SSH key deployment for hardening
+# Extracted from ansible/playbooks/site.yml lines 188-332
+# ==============================================================================
+
+- name: Display user management information
+  ansible.builtin.debug:
+    msg: |
+      Managing users for POSIX Hardening
+      Target: {{ inventory_hostname }}
+      SSH Allow Users: {{ ssh_allow_users }}
+  tags: [users, info]
+
+# ==============================================================================
+# PARSE SSH ALLOW USERS
+# ==============================================================================
+
+- name: Parse ssh_allow_users into list
+  ansible.builtin.set_fact:
+    posix_hardening_users_list: "{{ ssh_allow_users.split() if ssh_allow_users is string else ssh_allow_users }}"
+  when: ssh_allow_users is defined and ssh_allow_users != ""
+  tags: [users, parse]
+
+- name: Validate users list is not empty
+  ansible.builtin.assert:
+    that:
+      - posix_hardening_users_list is defined
+      - posix_hardening_users_list | length > 0
+    fail_msg: |
+      CRITICAL: No users in ssh_allow_users!
+      Root login will be disabled, so you need at least one non-root user.
+      Set ssh_allow_users in ansible/group_vars/all.yml or inventory
+    success_msg: "Will manage {{ posix_hardening_users_list | length }} user(s): {{ posix_hardening_users_list | join(', ') }}"
+  tags: [users, validation]
+
+# ==============================================================================
+# CREATE USERS
+# ==============================================================================
+
+- name: Include user creation tasks
+  ansible.builtin.include_tasks: create_users.yml
+  when: posix_hardening_create_users | bool
+  tags: [users, create]
+
+# ==============================================================================
+# DEPLOY SSH KEYS
+# ==============================================================================
+
+- name: Include SSH key deployment tasks
+  ansible.builtin.include_tasks: deploy_keys.yml
+  when:
+    - posix_hardening_deploy_ansible_key | bool or posix_hardening_deploy_team_key | bool
+  tags: [users, keys]
+
+# ==============================================================================
+# CONFIGURE SUDO ACCESS
+# ==============================================================================
+
+- name: Configure passwordless sudo for hardening users
+  ansible.builtin.template:
+    src: sudoers.j2
+    dest: "/etc/sudoers.d/posix-hardening-users"
+    mode: '0440'
+    owner: root
+    group: root
+    validate: '/usr/sbin/visudo -cf %s'
+  when: posix_hardening_users_passwordless_sudo | bool
+  tags: [users, sudo]
+
+- name: Disable requiretty for automation
+  ansible.builtin.lineinfile:
+    path: /etc/sudoers
+    regexp: '^Defaults\s+requiretty'
+    line: 'Defaults !requiretty'
+    state: present
+    validate: '/usr/sbin/visudo -cf %s'
+  when: posix_hardening_users_passwordless_sudo | bool
+  tags: [users, sudo]
+
+# ==============================================================================
+# COMPLETION STATUS
+# ==============================================================================
+
+- name: Display user management completion
+  ansible.builtin.debug:
+    msg: |
+      ========================================
+      User Management Complete
+      ========================================
+      Users created: {{ posix_hardening_users_list | join(', ') }}
+      SSH keys deployed: {{ 'Yes' if (posix_hardening_deploy_ansible_key or posix_hardening_deploy_team_key) else 'No' }}
+      Sudo access: {{ 'Passwordless' if posix_hardening_users_passwordless_sudo else 'Standard' }}
+      ========================================
+  tags: [users, info]

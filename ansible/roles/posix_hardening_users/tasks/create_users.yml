@@ -1,0 +1,27 @@
+---
+# ==============================================================================
+# POSIX Hardening Users Role - User Creation Tasks
+# ==============================================================================
+# Creates system users for SSH access after hardening
+# ==============================================================================
+
+- name: Ensure hardening users exist with sudo privileges
+  ansible.builtin.user:
+    name: "{{ item }}"
+    comment: "SSH-Allowed User (POSIX Hardening)"
+    groups: sudo
+    append: true
+    shell: /bin/bash
+    create_home: true
+    state: present
+  loop: "{{ posix_hardening_users_list }}"
+  when: posix_hardening_users_list is defined and posix_hardening_users_list | length > 0
+  register: users_creation_result
+  tags: [users, create]
+
+- name: Display user creation results
+  ansible.builtin.debug:
+    msg: "User {{ item.item }}: {{ 'Created' if item.changed else 'Already exists' }}"
+  loop: "{{ users_creation_result.results }}"
+  when: users_creation_result is defined
+  tags: [users, create]
