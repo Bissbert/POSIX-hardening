@@ -5,6 +5,7 @@
 ## 🚀 Fast Track
 
 ### 1. Prerequisites (2 minutes)
+
 ```bash
 # Install dependencies
 pip install -r ansible/requirements.txt
@@ -18,6 +19,7 @@ vim ansible/inventory.ini
 ```
 
 ### 2. Deploy (3 minutes)
+
 ```bash
 cd ansible/
 
@@ -35,6 +37,7 @@ Done! 🎉
 ## 📋 Common Commands
 
 ### Full Deployment
+
 ```bash
 # All 21 roles
 ansible-playbook hardening_master.yml
@@ -44,6 +47,7 @@ ansible-playbook hardening_master.yml --check --diff
 ```
 
 ### By Priority
+
 ```bash
 # Critical only (SSH + Firewall)
 ansible-playbook hardening_master.yml --tags priority1
@@ -56,6 +60,7 @@ ansible-playbook hardening_master.yml --skip-tags priority5
 ```
 
 ### Specific Roles
+
 ```bash
 # Single role (with dependencies)
 ansible-playbook hardening_master.yml --tags ssh
@@ -67,6 +72,7 @@ ansible-playbook hardening_master.yml --tags "ssh,firewall,kernel"
 ```
 
 ### Target Specific Hosts
+
 ```bash
 # Single host
 ansible-playbook hardening_master.yml -l server01
@@ -83,31 +89,37 @@ ansible-playbook hardening_master.yml -l production
 ## 🎯 What Gets Deployed
 
 ### Priority 1: Critical (5-10 min)
+
 - ✅ SSH hardening (port config, key auth, emergency port)
 - ✅ Firewall setup (iptables/ip6tables)
 
 ### Priority 2: Core Security (5-7 min)
+
 - ✅ Kernel parameters (40+ sysctl settings)
 - ✅ Network stack hardening
 - ✅ File permissions (/etc/shadow, SSH configs)
 - ✅ Temporary directory security (/tmp with nosuid/nodev/noexec)
 
 ### Priority 3: Access Control (5-7 min)
+
 - ✅ Password policies (PAM pwquality)
 - ✅ Account lockdown (system accounts)
 - ✅ Sudo restrictions (with visudo validation)
 - ✅ Process limits & core dump disable
 
 ### Priority 4: Services (3-5 min)
+
 - ✅ Disable unnecessary services
 - ✅ Cron/at access restrictions
 
 ### Priority 5: Audit (5-10 min)
+
 - ✅ Audit logging (auditd)
 - ✅ Log retention (90 days)
 - ✅ File integrity monitoring (AIDE)
 
 ### Priority 6: Final (1-2 min)
+
 - ✅ Security banners (CIS/STIG compliant)
 
 **Total Time:** 25-35 minutes for all roles
@@ -148,6 +160,7 @@ cat ansible/roles/posix_hardening_firewall/defaults/main.yml
 ```
 
 Override in playbook or command line:
+
 ```bash
 ansible-playbook hardening_master.yml -e "posix_ssh_port=2022"
 ```
@@ -159,16 +172,19 @@ ansible-playbook hardening_master.yml -e "posix_ssh_port=2022"
 ### SSH Access Lost
 
 **Option 1: Emergency Port**
+
 ```bash
 ssh -p 2222 user@server
 ```
 
 **Option 2: Rollback Playbook**
+
 ```bash
 ansible-playbook rollback.yml -l affected_server
 ```
 
 **Option 3: Console Access**
+
 ```bash
 # Via IPMI/console
 sudo /opt/posix-hardening/emergency-rollback.sh --force
@@ -263,7 +279,8 @@ ansible-playbook hardening_master.yml -e "force_reharden=true"
 ## 📁 File Locations
 
 ### On Control Machine (Ansible)
-```
+
+```text
 ansible/
 ├── hardening_master.yml       # NEW: Role-based playbook
 ├── site.yml                    # OLD: Shell-script-based
@@ -275,7 +292,8 @@ ansible/
 ```
 
 ### On Target Server
-```
+
+```text
 /var/lib/hardening/            # Marker files
 /var/backups/hardening/        # Configuration backups
 /var/log/hardening/            # Deployment logs + reports
@@ -348,6 +366,7 @@ ansible all -m shell -a "grep Port /etc/ssh/sshd_config"
 ### Custom Playbook
 
 Create `my_hardening.yml`:
+
 ```yaml
 ---
 - hosts: webservers
@@ -359,6 +378,7 @@ Create `my_hardening.yml`:
 ```
 
 Run it:
+
 ```bash
 ansible-playbook my_hardening.yml
 ```
@@ -388,7 +408,7 @@ ansible-playbook hardening_master.yml --ask-vault-pass
 
 ## 📞 Support
 
-**Issues:** https://github.com/Bissbert/POSIX-hardening/issues
+**Issues:** <https://github.com/Bissbert/POSIX-hardening/issues>
 
 **Documentation:** All docs in `docs/` directory
 

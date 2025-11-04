@@ -73,7 +73,8 @@ This creates standard warning banners with placeholder organization info.
 ```
 
 Output:
-```
+
+```text
 AUTHORIZED ACCESS ONLY
 ======================
 
@@ -96,7 +97,8 @@ All activities are monitored and logged.
 ```
 
 Output:
-```
+
+```text
 **********************************************************************
 *                      AUTHORIZED ACCESS ONLY                       *
 **********************************************************************

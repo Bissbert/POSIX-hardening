@@ -25,7 +25,8 @@ apply_network_hardening() {
     show_progress "Hardening network stack"
 
     # Network interface hardening
-    for iface in $(ls /proc/sys/net/ipv4/conf/); do
+    for iface_path in /proc/sys/net/ipv4/conf/*; do
+        iface=$(basename "$iface_path")
         # Skip if not a real interface
         [ "$iface" = "all" ] || [ "$iface" = "default" ] || [ "$iface" = "lo" ] && continue
 

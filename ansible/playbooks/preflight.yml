@@ -13,6 +13,7 @@
 
   tasks:
     - name: Check Ansible Controller SSH Keys
+      tags: [ssh_keys]
       block:
         - name: Check if team keys exist on controller
           ansible.builtin.stat:
@@ -44,7 +45,6 @@
             not controller_keys.results[1].stat.exists or
             not controller_keys.results[2].stat.exists or
             not controller_keys.results[3].stat.exists
-      tags: [ssh_keys]
 
     - name: System Information
       ansible.builtin.debug:
@@ -108,7 +108,7 @@
     - name: Check System Resources
       block:
         - name: Check available disk space
-          ansible.builtin.shell: df -BM / | awk 'NR==2 {print $4}' | sed 's/M//'
+          ansible.builtin.shell: set -o pipefail && df -BM / | awk 'NR==2 {print $4}' | sed 's/M//'
           register: disk_space_check
           changed_when: false
 
@@ -120,7 +120,7 @@
             success_msg: "✓ Sufficient disk space ({{ disk_space_check.stdout }}MB free)"
 
         - name: Check memory usage
-          ansible.builtin.shell: free -m | awk 'NR==2 {printf "%.0f", $3*100/$2}'
+          ansible.builtin.shell: set -o pipefail && free -m | awk 'NR==2 {printf "%.0f", $3*100/$2}'
           register: memory_usage
           changed_when: false
 
@@ -200,20 +200,28 @@
 
     - name: Check Running Services
       block:
-        - name: Get list of running services
-          ansible.builtin.shell: systemctl list-units --state=running --type=service | grep -c ".service"
-          register: service_count
-          changed_when: false
-
         - name: Check critical services
-          ansible.builtin.systemd:
+          ansible.builtin.systemd_service:
             name: "{{ item }}"
-            state: started
           register: critical_services
           failed_when: false
           loop:
             - ssh
             - sshd
+
+        - name: Count running services
+          ansible.builtin.systemd_service:
+            name: "{{ item }}"
+          register: all_services
+          loop:
+            - ssh
+            - sshd
+          changed_when: false
+
+        - name: Set service count
+          ansible.builtin.set_fact:
+            service_count:
+              stdout: "{{ critical_services.results | selectattr('status.ActiveState', 'defined') | selectattr('status.ActiveState', 'equalto', 'active') | list | length }}"
 
         - name: Report service status
           ansible.builtin.debug:
@@ -273,6 +281,7 @@
           ansible.builtin.copy:
             content: "{{ preflight_report }}"
             dest: "/tmp/preflight_report_{{ ansible_hostname }}_{{ ansible_date_time.epoch }}.txt"
+            mode: '0644'
           delegate_to: localhost
 
         - name: Fail if critical errors

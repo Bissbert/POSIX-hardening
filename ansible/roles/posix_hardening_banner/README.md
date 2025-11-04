@@ -162,7 +162,7 @@ None.
 
 ### /etc/issue and /etc/issue.net
 
-```
+```text
 ###############################################################
 #              AUTHORIZED ACCESS ONLY                        #
 ###############################################################
@@ -181,7 +181,7 @@ Contact: security@example.com
 
 ### /etc/motd
 
-```
+```text
 WARNING: This system is for authorized use only.
 All activities are subject to monitoring and logging.
 Disconnect immediately if you are not an authorized user.
@@ -235,15 +235,20 @@ ansible-playbook site.yml --tags validate
 
 ## Security Considerations
 
-1. **No OS Information**: By default, banners do NOT include OS name, version, kernel info, or hostname. This prevents information disclosure to attackers.
+1. **No OS Information**: By default, banners do NOT include OS name, version, kernel info, or hostname.
+   This prevents information disclosure to attackers.
 
-2. **Legal Protection**: The warning text establishes that users have no expectation of privacy and that all activity is monitored. Consult your legal team for appropriate language.
+2. **Legal Protection**: The warning text establishes that users have no expectation of privacy and that all
+   activity is monitored. Consult your legal team for appropriate language.
 
-3. **Permissions**: Banner files are world-readable (0644) as required by the system, but owned by root to prevent tampering.
+3. **Permissions**: Banner files are world-readable (0644) as required by the system, but owned by root to
+   prevent tampering.
 
-4. **Pre-Authentication**: `issue` and `issue.net` are shown BEFORE login, so they apply even to unauthorized access attempts.
+4. **Pre-Authentication**: `issue` and `issue.net` are shown BEFORE login, so they apply even to unauthorized
+   access attempts.
 
-5. **Post-Authentication**: `motd` is shown AFTER login, reminding authorized users of their responsibilities.
+5. **Post-Authentication**: `motd` is shown AFTER login, reminding authorized users of their
+   responsibilities.
 
 ## Compliance
 
@@ -266,7 +271,7 @@ grep Banner /etc/ssh/sshd_config
 
 Should show:
 
-```
+```text
 Banner /etc/issue.net
 ```
 

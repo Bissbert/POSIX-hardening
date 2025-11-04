@@ -1,0 +1,43 @@
+---
+# ==============================================================================
+# Molecule Test - Group Variables
+# ==============================================================================
+# Variables required for testing SSH hardening role
+# ==============================================================================
+
+# DEPLOYMENT PATHS
+# ==============================================================================
+toolkit_path: "/opt/posix-hardening"
+backup_path: "/var/backups/hardening"
+log_path: "/var/log/hardening"
+state_path: "/var/lib/hardening"
+
+# SSH CONFIGURATION
+# ==============================================================================
+# Standard SSH Port (test environment)
+ssh_port: 22
+
+# Admin IP for SSH access control (allow all for testing)
+admin_ip: "0.0.0.0/0"
+
+# SSH Hardening Role Variables
+# ==============================================================================
+posix_ssh_permit_root_login: "no"
+posix_ssh_password_authentication: false
+posix_ssh_pubkey_authentication: true
+posix_ssh_emergency_port: 2222
+posix_ssh_admin_ip: "0.0.0.0/0"
+posix_ssh_banner_enabled: true
+posix_ssh_drift_detection_enabled: true
+posix_ssh_max_auth_tries: 3
+posix_ssh_max_sessions: 10
+posix_ssh_login_grace_time: 30
+posix_ssh_client_alive_interval: 300
+posix_ssh_client_alive_count_max: 2
+
+# VALIDATION SETTINGS
+# ==============================================================================
+# Skip some validations in test environment
+skip_package_validation: false
+skip_disk_validation: true  # Containers may have limited disk
+skip_network_validation: false

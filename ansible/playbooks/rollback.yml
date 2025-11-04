@@ -55,7 +55,7 @@
     - name: Manual SSH restoration
       block:
         - name: Find SSH backup
-          ansible.builtin.shell: ls -t {{ toolkit_path }}/backups/sshd_config.*.bak 2>/dev/null | head -1
+          ansible.builtin.shell: set -o pipefail && ls -t {{ toolkit_path }}/backups/sshd_config.*.bak 2>/dev/null | head -1
           register: ssh_backup
           changed_when: false
           failed_when: false
@@ -66,6 +66,7 @@
             dest: /etc/ssh/sshd_config
             remote_src: true
             backup: true
+            mode: '0644'
           when: ssh_backup.stdout != ""
 
         - name: Reset SSH to safe defaults
@@ -101,7 +102,9 @@
             iptables -P INPUT ACCEPT
             iptables -P FORWARD ACCEPT
             iptables -P OUTPUT ACCEPT
-          ignore_errors: true
+          failed_when: false
+          register: iptables_flush
+
         - name: Flush ip6tables rules
           ansible.builtin.shell: |
             ip6tables -F
@@ -109,12 +112,15 @@
             ip6tables -P INPUT ACCEPT
             ip6tables -P FORWARD ACCEPT
             ip6tables -P OUTPUT ACCEPT
-          ignore_errors: true
+          failed_when: false
+          register: ip6tables_flush
+
         - name: Save cleared firewall rules
           ansible.builtin.shell: |
             iptables-save > /etc/iptables/rules.v4
             ip6tables-save > /etc/iptables/rules.v6
-          ignore_errors: true
+          failed_when: false
+          register: iptables_save
     - name: Restore file permissions
       block:
         - name: Reset critical file permissions
@@ -126,11 +132,12 @@
             - { path: '/etc/gshadow', mode: '0640' }
             - { path: '/etc/ssh/sshd_config', mode: '0644' }
             - { path: '/etc/sudoers', mode: '0440' }
-          ignore_errors: true
+          failed_when: false
+          register: file_perms_reset
     - name: Find and restore from snapshots
       block:
         - name: List available snapshots
-          ansible.builtin.shell: ls -dt /var/backups/hardening/snapshots/* 2>/dev/null | head -5
+          ansible.builtin.shell: set -o pipefail && ls -dt /var/backups/hardening/snapshots/* 2>/dev/null | head -5
           register: snapshots
           changed_when: false
           failed_when: false
@@ -152,7 +159,8 @@
               restore_system_snapshot "$snapshot_id"
             fi
           when: snapshots.stdout != ""
-          ignore_errors: true
+          failed_when: false
+          register: snapshot_restore
     - name: Clear hardening state
       block:
         - name: Remove state files
@@ -163,7 +171,8 @@
             - "/var/lib/hardening/completed"
             - "/var/lib/hardening/current_state"
             - "/var/lib/hardening/rollback_stack"
-          ignore_errors: true
+          failed_when: false
+          register: state_cleanup
     - name: Re-enable critical services
       ansible.builtin.systemd:
         name: "{{ item }}"
@@ -172,7 +181,8 @@
       loop:
         - ssh
         - networking
-      ignore_errors: true
+      failed_when: false
+      register: service_enable
     - name: Verify SSH connectivity
       ansible.builtin.wait_for_connection:
         timeout: 30
@@ -208,6 +218,7 @@
       ansible.builtin.copy:
         content: "{{ rollback_report }}"
         dest: "/tmp/rollback_report_{{ inventory_hostname }}_{{ ansible_date_time.epoch }}.txt"
+        mode: '0644'
       delegate_to: localhost
 
 - name: Rollback Summary

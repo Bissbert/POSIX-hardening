@@ -45,7 +45,7 @@
       when: ssh_keys.results | selectattr('stat.exists', 'equalto', false) | list | length == ssh_keys.results | length
 
     - name: Check disk space
-      ansible.builtin.shell: df -h / | awk 'NR==2 {print $4}'
+      ansible.builtin.shell: set -o pipefail && df -h / | awk 'NR==2 {print $4}'
       register: disk_space
       changed_when: false
 
@@ -205,12 +205,12 @@
         success_msg: "Will create {{ allowed_users_list | length }} user(s): {{ allowed_users_list | join(', ') }}"
 
     - name: Create each allowed user with sudo privileges
-      user:
+      ansible.builtin.user:
         name: "{{ item }}"
         comment: "SSH-Allowed User"
         groups: sudo
         append: true
-        ansible.builtin.shell: /bin/bash
+        shell: /bin/bash
         create_home: true
         state: present
       loop: "{{ allowed_users_list }}"
@@ -359,7 +359,8 @@
         . ./lib/ssh_safety.sh
         create_emergency_ssh_access {{ emergency_ssh_port | default(2222) }}
       when: enable_emergency_ssh | default(true) | bool
-      ignore_errors: true
+      failed_when: false
+      register: emergency_ssh_create
     - name: Execute SSH hardening
       ansible.builtin.shell: |
         cd {{ toolkit_path }}
@@ -506,7 +507,8 @@
       when:
         - enable_emergency_ssh | default(true) | bool
         - remove_emergency_ssh | default(false) | bool
-      ignore_errors: true
+      failed_when: false
+      register: emergency_ssh_remove
     - name: Create completion report
       ansible.builtin.copy:
         content: |
@@ -530,6 +532,7 @@
           - Rollback script: {{ toolkit_path }}/emergency-rollback.sh
           - Snapshot location: /var/backups/hardening/snapshots/
         dest: "{{ toolkit_path }}/deployment_report_{{ ansible_date_time.epoch }}.txt"
+        mode: '0644'
 
     - name: Final SSH connectivity check
       ansible.builtin.wait_for_connection:

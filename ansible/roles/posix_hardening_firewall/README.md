@@ -28,6 +28,7 @@ Comprehensive firewall hardening role converted from the POSIX hardening shell s
 This role implements **7 layers of protection** against lockout:
 
 ### 1. Pre-flight Validation
+
 - Verifies iptables binaries exist
 - Checks SSH service is running
 - Validates SSH port configuration
@@ -36,6 +37,7 @@ This role implements **7 layers of protection** against lockout:
 - Warns about container environments
 
 ### 2. Current Rules Backup
+
 - Timestamped backup of current rules
 - Both IPv4 and IPv6 rules saved
 - Stored in `/var/backups/hardening/`
@@ -43,6 +45,7 @@ This role implements **7 layers of protection** against lockout:
 - Backup paths stored for automatic rollback
 
 ### 3. Safety Timeout Mechanism
+
 - Background script auto-resets firewall after 5 minutes (default)
 - Prevents permanent lockout from crashes
 - Automatically cancelled on successful completion
@@ -50,18 +53,21 @@ This role implements **7 layers of protection** against lockout:
 - Can be disabled for testing
 
 ### 4. Admin IP Priority Access
+
 - Admin IP gets first rule (bypasses all restrictions)
 - Always allowed regardless of other rules
 - Supports both IPv4 and IPv6
 - Prevents accidental self-lockout
 
 ### 5. SSH Protection Always First
+
 - SSH always allowed before any DROP rules
 - Established connections preserved
 - Optional rate limiting for brute-force protection
 - Verified after application
 
 ### 6. Connectivity Validation
+
 - Tests SSH port accessibility
 - Verifies rules are in iptables
 - Checks established connections work
@@ -69,6 +75,7 @@ This role implements **7 layers of protection** against lockout:
 - Confirms policies are set correctly
 
 ### 7. Automatic Rollback
+
 - Triggered on any critical failure
 - Restores from timestamped backup
 - Falls back to permissive state if no backup
@@ -109,6 +116,7 @@ ansible-playbook playbooks/firewall_hardening.yml -e "posix_firewall_force_rehar
 ## Firewall Rules Applied
 
 ### Default Policies
+
 - **INPUT**: DROP (reject all inbound by default)
 - **FORWARD**: DROP (reject all forwarding)
 - **OUTPUT**: ACCEPT (allow all outbound)
@@ -116,43 +124,52 @@ ansible-playbook playbooks/firewall_hardening.yml -e "posix_firewall_force_rehar
 ### Critical Rules (Always Applied)
 
 1. **Established/Related Connections** (FIRST)
+
    - Always allow existing connections
    - Prevents disruption of active sessions
 
 2. **Admin IP Priority** (if configured)
+
    - Full access for admin IP
    - First rule, bypasses all restrictions
    - Supports IPv4 and IPv6
 
 3. **SSH Protection**
+
    - Always allowed on configured port
    - Optional rate limiting (4 attempts per 60 seconds)
    - Applied before any DROP rules
 
 4. **Loopback Interface**
+
    - Full access for localhost (127.0.0.1)
    - Required for many system services
 
 5. **Invalid Packets Dropped**
+
    - Security: Drop packets with INVALID state
    - Prevents certain types of attacks
 
 ### Optional Rules
 
 6. **ICMP (Ping)**
+
    - Enabled by default with rate limiting
    - Supports multiple ICMP types
    - Rate: 1 per second (configurable)
 
 7. **Additional TCP Ports**
+
    - Add ports via `posix_firewall_allowed_ports`
    - Example: HTTP (80), HTTPS (443)
 
 8. **Trusted Networks**
+
    - Full access from trusted CIDR blocks
    - Useful for internal networks
 
 9. **Outbound Services**
+
    - DNS (53): Enabled by default
    - NTP (123): Enabled by default
    - HTTP (80): Enabled by default
@@ -160,6 +177,7 @@ ansible-playbook playbooks/firewall_hardening.yml -e "posix_firewall_force_rehar
    - Custom ports supported
 
 10. **Logging Chain** (if enabled)
+
     - Logs all dropped packets
     - Rate limited to prevent log spam
     - Custom prefix for easy filtering
@@ -486,7 +504,8 @@ posix_firewall_custom_chains:
 
 ### Custom IPv4 Rules (Advanced)
 
-For complex rules not covered by the role's built-in options, you can use raw iptables commands, but this is NOT recommended. Instead, request new features or use the trusted networks option.
+For complex rules not covered by the role's built-in options, you can use raw iptables commands, but this is NOT
+recommended. Instead, request new features or use the trusted networks option.
 
 ### Fail2ban Integration
 
@@ -576,6 +595,7 @@ iptables -P OUTPUT ACCEPT
 #### Issue: iptables command not found
 
 **Solution:** Install iptables package
+
 ```bash
 # Debian/Ubuntu
 apt-get install iptables
@@ -587,6 +607,7 @@ yum install iptables
 #### Issue: Rules don't persist after reboot
 
 **Solution:** Install persistence package
+
 ```bash
 # Debian/Ubuntu
 apt-get install iptables-persistent
@@ -601,17 +622,20 @@ systemctl enable iptables
 **Cause:** SSH port blocked or admin IP wrong
 
 **Solution:**
+
 1. Wait for safety timeout (5 minutes)
 2. Fix configuration
 3. Re-run with correct values
 
 #### Issue: Container environment warnings
 
-**Solution:** Firewall in containers may have limitations. Consider using host-level firewall instead or skip firewall role for containers.
+**Solution:** Firewall in containers may have limitations. Consider using host-level firewall instead or skip
+firewall role for containers.
 
 #### Issue: IPv6 rules fail
 
 **Solution:** Disable IPv6 or check kernel support
+
 ```yaml
 posix_firewall_ipv6_enabled: false
 ```
@@ -663,22 +687,27 @@ If you have no console access and are locked out:
 ### Debian/Ubuntu
 
 Rules saved to:
+
 - `/etc/iptables/rules.v4`
 - `/etc/iptables/rules.v6`
 
 Network hook created:
+
 - `/etc/network/if-pre-up.d/iptables`
 
 Package installed (optional):
+
 - `iptables-persistent`
 
 ### RHEL/CentOS
 
 Rules saved to:
+
 - `/etc/sysconfig/iptables`
 - `/etc/sysconfig/ip6tables`
 
 Service enabled:
+
 - `systemctl enable iptables`
 
 ## Performance Considerations
@@ -736,6 +765,7 @@ ansible-playbook playbook.yml --tags backup
 ```
 
 Available tags:
+
 - `firewall` - All firewall tasks
 - `validation` - Validation tasks
 - `backup` - Backup tasks
@@ -790,6 +820,7 @@ Converted from shell script: `scripts/02-firewall-setup.sh`
 ## Support
 
 For issues and questions:
+
 1. Check troubleshooting section above
 2. Review logs in `/var/log/hardening/`
 3. Verify backups in `/var/backups/hardening/`
@@ -798,6 +829,7 @@ For issues and questions:
 ## Changelog
 
 ### Version 1.0.0
+
 - Initial conversion from shell script
 - Full IPv4 and IPv6 support
 - Comprehensive safety mechanisms

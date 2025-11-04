@@ -18,6 +18,7 @@ See [testing/README.md](testing/README.md) for complete Docker testing documenta
 ### Prerequisites for Production
 
 1. **Ansible installed on control machine**:
+
 ```bash
 # Ubuntu/Debian
 sudo apt-get update
@@ -96,6 +97,7 @@ ansible-playbook preflight.yml -l server1.example.com
 ```
 
 This verifies:
+
 - ✓ Debian-based OS
 - ✓ SSH connectivity
 - ✓ SSH keys present
@@ -105,6 +107,7 @@ This verifies:
 ### Deployment Options
 
 #### Full Deployment (All Scripts)
+
 ```bash
 ansible-playbook site.yml
 ```
@@ -112,11 +115,13 @@ ansible-playbook site.yml
 #### Priority-Based Deployment
 
 Deploy only critical scripts (SSH + Firewall):
+
 ```bash
 ansible-playbook site.yml --tags priority1
 ```
 
 Deploy by priority level:
+
 ```bash
 # Priority 1: SSH and Firewall (Critical)
 ansible-playbook site.yml --tags priority1
@@ -215,6 +220,7 @@ rollback_enabled: 1
 #### Per-Environment Settings
 
 Create `group_vars/production.yml`:
+
 ```yaml
 dry_run: 0
 run_full_hardening: true
@@ -222,6 +228,7 @@ enable_emergency_ssh: true
 ```
 
 Create `group_vars/staging.yml`:
+
 ```yaml
 dry_run: 0
 run_full_hardening: true
@@ -229,6 +236,7 @@ enable_emergency_ssh: true
 ```
 
 Create `group_vars/test.yml`:
+
 ```yaml
 dry_run: 1
 run_full_hardening: false
@@ -252,6 +260,7 @@ vault_admin_ip: "203.0.113.10"
 ```
 
 Run playbook with vault:
+
 ```bash
 ansible-playbook site.yml --ask-vault-pass
 ```
@@ -262,10 +271,13 @@ ansible-playbook site.yml --ask-vault-pass
 
 1. **Wait 60 seconds** - Automatic rollback will trigger
 2. **Use emergency SSH port**:
+
    ```bash
    ssh -p 2222 user@server
    ```
+
 3. **Run emergency rollback**:
+
    ```bash
    ansible-playbook rollback.yml -l affected_server
    ```
@@ -390,7 +402,7 @@ ansible all -m shell -a "cd /opt/posix-hardening && ./lib/common.sh && verify_ss
 
 ## 📁 File Structure
 
-```
+```text
 ansible/
 ├── site.yml              # Main deployment playbook
 ├── preflight.yml         # Pre-deployment checks
@@ -453,6 +465,7 @@ ansible-playbook site.yml -l server1.example.com --tags harden
 ## 📊 Reporting
 
 Deployment creates reports in:
+
 - `/opt/posix-hardening/deployment_report_*.txt` on each server
 - `/tmp/preflight_report_*.txt` on Ansible controller
 - `ansible.log` in the ansible/ directory
@@ -496,6 +509,7 @@ See [TESTING.md](TESTING.md) for complete testing guide.
 ## 🤝 Support
 
 For issues:
+
 1. Check `ansible.log` for errors
 2. Run pre-flight checks
 3. Verify variables in group_vars/all.yml
