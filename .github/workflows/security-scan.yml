@@ -38,8 +38,6 @@ jobs:
         uses: trufflesecurity/trufflehog@main
         with:
           path: ./
-          base: ${{ github.event.repository.default_branch }}
-          head: HEAD
           extra_args: --debug --only-verified
 
   codeql:
@@ -103,7 +101,7 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: '3.x'
+          python-version: '3.11'
 
       - name: Install Ansible and security tools
         run: |
@@ -111,11 +109,16 @@ jobs:
 
       - name: Check for sensitive data in playbooks
         run: |
-          echo "Checking for potential secrets in Ansible files..."
-          ! grep -r "password\|secret\|token\|key" ansible/*.yml ansible/group_vars/ ansible/host_vars/ || {
-            echo "WARNING: Found potential sensitive data. Review manually."
+          echo "Checking for potential hardcoded secrets in Ansible files..."
+          # Look for actual hardcoded values (key/password/secret/token followed by : or = and a quoted value)
+          # This excludes variable names and role references like "posix_hardening_password"
+          if grep -rE '(password|secret|token|key|api_key|private_key)\s*[:=]\s*["\047][^"\047$]{8,}["\047]' \
+               ansible/*.yml ansible/group_vars/ ansible/host_vars/ 2>/dev/null | \
+               grep -v '{{' | grep -v 'vault_'; then
+            echo "ERROR: Found potential hardcoded secrets. Review above matches."
             exit 1
-          }
+          fi
+          echo "No hardcoded secrets detected."
 
       - name: Verify vault files are encrypted
         run: |
