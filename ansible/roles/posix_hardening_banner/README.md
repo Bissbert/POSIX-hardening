@@ -35,17 +35,17 @@ Original shell script: `scripts/18-banner-warnings.sh`
 ### Control Flags
 
 ```yaml
-posix_banner_force_reharden: false        # Force re-apply even if already done
-posix_banner_backup_before_changes: true  # Backup existing banners
-posix_banner_validate_after_apply: true   # Validate after applying
+posix_banner_force_reharden: false # Force re-apply even if already done
+posix_banner_backup_before_changes: true # Backup existing banners
+posix_banner_validate_after_apply: true # Validate after applying
 ```
 
 ### Banner Control
 
 ```yaml
-posix_banner_enable_issue: true       # Console login banner
-posix_banner_enable_issue_net: true   # Network login banner (SSH)
-posix_banner_enable_motd: true        # Message of the day
+posix_banner_enable_issue: true # Console login banner
+posix_banner_enable_issue_net: true # Network login banner (SSH)
+posix_banner_enable_motd: true # Message of the day
 ```
 
 ### Organization Info
@@ -73,24 +73,24 @@ posix_banner_warning_footer: |
 ### Security Settings
 
 ```yaml
-posix_banner_remove_os_info: true  # Remove OS/kernel info from banners
-posix_banner_file_mode: "0644"     # Banner file permissions
+posix_banner_remove_os_info: true # Remove OS/kernel info from banners
+posix_banner_file_mode: "0644" # Banner file permissions
 ```
 
 ### Appearance
 
 ```yaml
-posix_banner_use_decorations: true           # Use decorative borders
-posix_banner_decoration_char: "#"            # Border character
-posix_banner_decoration_width: 63            # Banner width
-posix_banner_include_org_info: true          # Include org/contact info
+posix_banner_use_decorations: true # Use decorative borders
+posix_banner_decoration_char: "#" # Border character
+posix_banner_decoration_width: 63 # Banner width
+posix_banner_include_org_info: true # Include org/contact info
 ```
 
 ### Custom Text
 
 ```yaml
-posix_banner_custom_text: ""        # Additional text to append
-posix_banner_custom_motd: ""        # Override default MOTD entirely
+posix_banner_custom_text: "" # Additional text to append
+posix_banner_custom_motd: "" # Override default MOTD entirely
 ```
 
 ## Dependencies
@@ -235,20 +235,19 @@ ansible-playbook site.yml --tags validate
 
 ## Security Considerations
 
-1. **No OS Information**: By default, banners do NOT include OS name, version, kernel info, or hostname.
-   This prevents information disclosure to attackers.
+1. **No OS Information**: By default, banners do NOT include OS name, version, kernel info, or hostname. This prevents
+   information disclosure to attackers.
 
-2. **Legal Protection**: The warning text establishes that users have no expectation of privacy and that all
-   activity is monitored. Consult your legal team for appropriate language.
+2. **Legal Protection**: The warning text establishes that users have no expectation of privacy and that all activity is
+   monitored. Consult your legal team for appropriate language.
 
-3. **Permissions**: Banner files are world-readable (0644) as required by the system, but owned by root to
-   prevent tampering.
+3. **Permissions**: Banner files are world-readable (0644) as required by the system, but owned by root to prevent
+   tampering.
 
-4. **Pre-Authentication**: `issue` and `issue.net` are shown BEFORE login, so they apply even to unauthorized
-   access attempts.
+4. **Pre-Authentication**: `issue` and `issue.net` are shown BEFORE login, so they apply even to unauthorized access
+   attempts.
 
-5. **Post-Authentication**: `motd` is shown AFTER login, reminding authorized users of their
-   responsibilities.
+5. **Post-Authentication**: `motd` is shown AFTER login, reminding authorized users of their responsibilities.
 
 ## Compliance
 

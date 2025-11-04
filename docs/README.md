@@ -1,32 +1,38 @@
 # POSIX Hardening Toolkit Documentation
 
-Welcome to the comprehensive documentation for the POSIX Shell Server Hardening Toolkit. This documentation is organized to help you quickly find the information you need.
+Welcome to the comprehensive documentation for the POSIX Shell Server Hardening Toolkit. This documentation is organized
+to help you quickly find the information you need.
 
 ## 📚 Documentation Structure
 
 ### Getting Started
+
 - **[Getting Started Guide](GETTING_STARTED.md)** - **START HERE** - 5-minute quick start
 - [Main README](../README.md) - Project overview
 - [Ansible Quick Start](../ansible/QUICK_START_ROLES.md) - Ansible command reference
 - [Script Documentation](SCRIPTS.md) - Shell script documentation (22 scripts)
 
 ### Implementation Guides
+
 - [Hardening Requirements](guides/HARDENING_REQUIREMENTS.md) - Security requirements and compliance standards
 - [Implementation Guide](guides/IMPLEMENTATION_GUIDE.md) - Step-by-step deployment instructions
 - [Testing Framework](guides/TESTING_FRAMEWORK.md) - Testing and validation procedures
 
 ### Development
+
 - [Contributing Guide](development/CONTRIBUTING.md) - How to contribute to the project
 - [Authors](development/AUTHORS.md) - Project contributors and maintainers
 
 ### Releases
+
 - [Changelog](releases/CHANGELOG.md) - Version history and release notes
 
 ## 🎯 Quick Navigation
 
 ### By Task
 
-#### I want to...
+#### I want to
+
 - **Get started quickly** → [Getting Started Guide](GETTING_STARTED.md) - **5-minute start**
 - **Deploy with Ansible** → [Ansible Quick Start](../ansible/QUICK_START_ROLES.md)
 - **Use shell scripts** → [Scripts Documentation](SCRIPTS.md)
@@ -38,23 +44,26 @@ Welcome to the comprehensive documentation for the POSIX Shell Server Hardening 
 ### By Priority
 
 #### Critical Documentation
+
 1. [SSH Hardening](SCRIPTS.md#01-ssh-hardening) - Never lose SSH access
 2. [Firewall Setup](SCRIPTS.md#02-firewall-setup) - Network security with safety
 3. [Emergency Recovery](../README.md#emergency-recovery) - What to do when things go wrong
 
 #### Implementation Documentation
+
 1. [Implementation Guide](guides/IMPLEMENTATION_GUIDE.md) - Full deployment process
 2. [Script Documentation](SCRIPTS.md) - All 20 scripts explained
 3. [Configuration Options](../README.md#configuration-options) - Customization guide
 
 #### Reference Documentation
+
 1. [Quick Reference](guides/QUICK_REFERENCE.md) - Commands and options
 2. [Hardening Requirements](guides/HARDENING_REQUIREMENTS.md) - Security standards
 3. [Testing Framework](guides/TESTING_FRAMEWORK.md) - Validation procedures
 
 ## 📖 Documentation Map
 
-```
+```text
 Documentation Overview
 ├── User Documentation
 │   ├── Getting Started (README.md)
@@ -80,7 +89,9 @@ Documentation Overview
 ## 🔍 Finding Information
 
 ### Script-Specific Documentation
+
 Each script has detailed documentation in [SCRIPTS.md](SCRIPTS.md) including:
+
 - Purpose and description
 - Safety mechanisms
 - Configuration options
@@ -89,11 +100,14 @@ Each script has detailed documentation in [SCRIPTS.md](SCRIPTS.md) including:
 - Common issues and troubleshooting
 
 ### Safety and Security
+
 - **Safety Mechanisms**: Every script includes multiple safety features documented in [SCRIPTS.md](SCRIPTS.md)
-- **Rollback Procedures**: Detailed in both script documentation and [Emergency Recovery](../README.md#emergency-recovery)
+- **Rollback Procedures**: Detailed in both script documentation and
+  [Emergency Recovery](../README.md#emergency-recovery)
 - **Security Principles**: Outlined in [Hardening Requirements](guides/HARDENING_REQUIREMENTS.md)
 
 ### Configuration and Customization
+
 - **Configuration File**: `config/defaults.conf` - see [Configuration Options](../README.md#configuration-options)
 - **Script Customization**: Each script's options in [SCRIPTS.md](SCRIPTS.md)
 - **Environment Variables**: Listed in [Quick Reference](guides/QUICK_REFERENCE.md)
@@ -101,21 +115,25 @@ Each script has detailed documentation in [SCRIPTS.md](SCRIPTS.md) including:
 ## 🚀 Recommended Reading Order
 
 ### For First-Time Users
+
 1. [Main README](../README.md) - Overview and quick start
 2. [Scripts Documentation](SCRIPTS.md) - Understand what changes will be made
 3. [Implementation Guide](guides/IMPLEMENTATION_GUIDE.md) - Deploy step by step
 
 ### For System Administrators
+
 1. [Implementation Guide](guides/IMPLEMENTATION_GUIDE.md) - Deployment process
 2. [Testing Framework](guides/TESTING_FRAMEWORK.md) - Validation procedures
 3. [Ansible Guide](../ansible/README.md) - Automation for multiple servers
 
 ### For Security Auditors
+
 1. [Hardening Requirements](guides/HARDENING_REQUIREMENTS.md) - Security standards
 2. [Scripts Documentation](SCRIPTS.md) - Detailed security measures
 3. [Testing Framework](guides/TESTING_FRAMEWORK.md) - Compliance validation
 
 ### For Contributors
+
 1. [Contributing Guide](development/CONTRIBUTING.md) - Contribution process
 2. [Implementation Guide](guides/IMPLEMENTATION_GUIDE.md) - System architecture
 3. [Testing Framework](guides/TESTING_FRAMEWORK.md) - Testing requirements
@@ -123,6 +141,7 @@ Each script has detailed documentation in [SCRIPTS.md](SCRIPTS.md) including:
 ## 📝 Documentation Standards
 
 All documentation follows these principles:
+
 - **Safety First**: Every procedure emphasizes maintaining system access
 - **Clear Examples**: Practical commands and configurations
 - **Rollback Procedures**: Every change is reversible
@@ -132,13 +151,16 @@ All documentation follows these principles:
 ## 🔧 Maintaining Documentation
 
 ### Updating Documentation
+
 When making changes:
+
 1. Update relevant script documentation in `SCRIPTS.md`
 2. Update changelog in `releases/CHANGELOG.md`
 3. Update any affected guides
 4. Test all examples and commands
 
 ### Documentation Locations
+
 - **Script docs**: `docs/SCRIPTS.md`
 - **Guides**: `docs/guides/`
 - **Development**: `docs/development/`
@@ -147,24 +169,27 @@ When making changes:
 
 ## 📊 Documentation Coverage
 
-| Component | Documentation | Location |
-|-----------|--------------|----------|
-| Scripts (20) | ✓ Complete | [SCRIPTS.md](SCRIPTS.md) |
-| Libraries (4) | ✓ Complete | [Implementation Guide](guides/IMPLEMENTATION_GUIDE.md) |
-| Ansible | ✓ Complete | [ansible/README.md](../ansible/README.md) |
-| Testing | ✓ Complete | [Testing Framework](guides/TESTING_FRAMEWORK.md) |
-| Emergency | ✓ Complete | [README.md](../README.md#emergency-recovery) |
-| Configuration | ✓ Complete | [Quick Reference](guides/QUICK_REFERENCE.md) |
+| Component     | Documentation | Location                                               |
+| ------------- | ------------- | ------------------------------------------------------ |
+| Scripts (20)  | ✓ Complete    | [SCRIPTS.md](SCRIPTS.md)                               |
+| Libraries (4) | ✓ Complete    | [Implementation Guide](guides/IMPLEMENTATION_GUIDE.md) |
+| Ansible       | ✓ Complete    | [ansible/README.md](../ansible/README.md)              |
+| Testing       | ✓ Complete    | [Testing Framework](guides/TESTING_FRAMEWORK.md)       |
+| Emergency     | ✓ Complete    | [README.md](../README.md#emergency-recovery)           |
+| Configuration | ✓ Complete    | [Quick Reference](guides/QUICK_REFERENCE.md)           |
 
 ## 🆘 Getting Help
 
 ### Documentation Issues
+
 If you find issues with documentation:
+
 1. Check the [latest version](releases/CHANGELOG.md)
 2. Review [known issues](../README.md#troubleshooting)
 3. Submit an issue with documentation label
 
 ### Quick Support Checklist
+
 - [ ] Checked relevant script documentation in SCRIPTS.md
 - [ ] Reviewed troubleshooting section in README
 - [ ] Tested with dry-run mode enabled
@@ -181,5 +206,4 @@ If you find issues with documentation:
 
 ---
 
-*Documentation Version: 1.0.0*
-*Last Updated: See [CHANGELOG.md](releases/CHANGELOG.md)*
+_Documentation Version: 1.0.0_ _Last Updated: See [CHANGELOG.md](releases/CHANGELOG.md)_

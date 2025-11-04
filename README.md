@@ -1,11 +1,13 @@
 # POSIX Shell Server Hardening Toolkit
 
-A comprehensive, safety-first server hardening toolkit written in pure POSIX shell for maximum compatibility with Debian-based systems accessed remotely via SSH.
+A comprehensive, safety-first server hardening toolkit written in pure POSIX shell for maximum compatibility with
+Debian-based systems accessed remotely via SSH.
 
 ## Documentation
 
 - **[Complete Documentation](docs/README.md)** - Full documentation index
-- **[Script Documentation](docs/SCRIPTS.md)** - Detailed documentation for all 21 hardening scripts (including SSH package verification)
+- **[Script Documentation](docs/SCRIPTS.md)** - Detailed documentation for all 21 hardening scripts (including SSH
+  package verification)
 - **[Implementation Guide](docs/guides/IMPLEMENTATION_GUIDE.md)** - Step-by-step deployment instructions
 - **[Ansible Deployment](ansible/README.md)** - Automated deployment for multiple servers
 
@@ -44,8 +46,7 @@ A comprehensive, safety-first server hardening toolkit written in pure POSIX she
 
 ## Quick Start
 
-For detailed instructions, see the
-[Implementation Guide](docs/guides/IMPLEMENTATION_GUIDE.md).
+For detailed instructions, see the [Implementation Guide](docs/guides/IMPLEMENTATION_GUIDE.md).
 
 ### Prerequisites
 
@@ -56,10 +57,9 @@ For detailed instructions, see the
 
 ### SSH Key Management (Important)
 
-After SSH hardening, password authentication will be disabled. To prevent
-lockout:
+After SSH hardening, password authentication will be disabled. To prevent lockout:
 
-**Option 1: For Ansible Deployment (Recommended)**
+### Option 1: For Ansible Deployment (Recommended)
 
 ```bash
 # Generate centralized SSH keys for team access
@@ -81,7 +81,7 @@ ssh root@server-hostname  # Works automatically, no -i flag needed!
 # Team members can install with: ./install_team_key.sh team_shared_ed25519
 ```
 
-**Option 2: Manual SSH Key Setup**
+### Option 2: Manual SSH Key Setup
 
 ```bash
 # On your local machine, generate an SSH key if you don't have one
@@ -96,8 +96,7 @@ ssh -i ~/.ssh/id_ed25519 root@your-server
 # ONLY THEN proceed with hardening
 ```
 
-**Emergency Access**: Port 2222 provides emergency SSH access with password
-authentication if you get locked out.
+**Emergency Access**: Port 2222 provides emergency SSH access with password authentication if you get locked out.
 
 ### Interactive Setup (Recommended)
 
@@ -120,14 +119,16 @@ vi config/defaults.conf
 # - Set SSH_ALLOW_USERS or SSH_ALLOW_GROUPS
 ```
 
-2. **Test in dry-run mode**:
+<!-- markdownlint-disable MD029 -->
+
+1. **Test in dry-run mode**:
 
 ```bash
 # Test without making changes
 DRY_RUN=1 sudo sh scripts/01-ssh-hardening.sh
 ```
 
-3. **Run individual scripts**:
+1. **Run individual scripts**:
 
 ```bash
 # Run SSH hardening (most critical)
@@ -140,12 +141,14 @@ sudo sh scripts/02-firewall-setup.sh
 sudo sh scripts/03-kernel-params.sh
 ```
 
-4. **Run with orchestrator** (when available):
+1. **Run with orchestrator** (when available):
 
 ```bash
 # Run all hardening scripts in safe order
 sudo sh orchestrator.sh
 ```
+
+<!-- markdownlint-enable MD029 -->
 
 ## Directory Structure
 
@@ -170,15 +173,12 @@ sudo sh orchestrator.sh
 
 ## Script Overview
 
-See [Script Documentation](docs/SCRIPTS.md) for detailed information about
-each script.
+See [Script Documentation](docs/SCRIPTS.md) for detailed information about each script.
 
 ### Critical Priority (Run First)
 
-1. **[01-ssh-hardening.sh](docs/SCRIPTS.md#01-ssh-hardening)** - SSH
-   configuration (preserves access)
-2. **[02-firewall-setup.sh](docs/SCRIPTS.md#02-firewall-setup)** - Firewall
-   rules (with SSH protection)
+1. **[01-ssh-hardening.sh](docs/SCRIPTS.md#01-ssh-hardening)** - SSH configuration (preserves access)
+2. **[02-firewall-setup.sh](docs/SCRIPTS.md#02-firewall-setup)** - Firewall rules (with SSH protection)
 
 ### High Priority
 
@@ -209,8 +209,7 @@ Key settings in `config/defaults.conf`:
 
 ### Advanced Firewall Configuration (`config/firewall.conf`)
 
-For full control over iptables firewall rules, create a custom firewall
-configuration:
+For full control over iptables firewall rules, create a custom firewall configuration:
 
 ```bash
 # Copy the example configuration
@@ -239,8 +238,8 @@ CUSTOM_RULES_IPV4="
 "
 ```
 
-See `config/firewall.conf.example` for complete documentation and preset
-configurations (web server, database server, etc.).
+See `config/firewall.conf.example` for complete documentation and preset configurations (web server, database server,
+etc.).
 
 ## Emergency Recovery
 
@@ -354,11 +353,10 @@ cat /var/lib/hardening/current_state
 
 ### Ansible "sorry, you must have a tty to run sudo"
 
-This error occurs when sudo's `requiretty` is enabled but Ansible runs
-non-interactively.
+This error occurs when sudo's `requiretty` is enabled but Ansible runs non-interactively.
 
-**Solution**: The toolkit automatically sets `Defaults !requiretty` in
-`/etc/sudoers.d/hardening` to support Ansible and other automation tools.
+**Solution**: The toolkit automatically sets `Defaults !requiretty` in `/etc/sudoers.d/hardening` to support Ansible and
+other automation tools.
 
 If you need `requiretty` for additional security:
 
@@ -401,17 +399,13 @@ If you need `requiretty` for additional security:
 
 ### Full POSIX Compliance
 
-- **Removed all bash-isms**: All library files now use only POSIX sh
-  constructs
-- **Eliminated `local` keyword**: 100+ instances replaced with
-  function-scoped variables
-- **GNU/BSD command replacements**: Created `lib/posix_compat.sh` with
-  portable alternatives
-- **Multi-shell tested**: Verified compatibility with dash, ash, BusyBox,
-  and sh
+- **Removed all bash-isms**: All library files now use only POSIX sh constructs
+- **Eliminated `local` keyword**: 100+ instances replaced with function-scoped variables
+- **GNU/BSD command replacements**: Created `lib/posix_compat.sh` with portable alternatives
+- **Multi-shell tested**: Verified compatibility with dash, ash, BusyBox, and sh
 
-**Impact**: Scripts now work on minimal Linux environments (Alpine, embedded
-systems, containers) without bash dependency.
+**Impact**: Scripts now work on minimal Linux environments (Alpine, embedded systems, containers) without bash
+dependency.
 
 ### CI/CD & Automation
 
@@ -422,59 +416,43 @@ systems, containers) without bash dependency.
   - Security scanning (Gitleaks, TruffleHog, CodeQL)
 - **Multi-shell testing**: Automatic validation on dash, bash, and BusyBox
 - **Pull request templates**: Comprehensive checklists for contributions
-- **Issue templates**: Structured bug reports, feature requests, and security
-  vulnerabilities
+- **Issue templates**: Structured bug reports, feature requests, and security vulnerabilities
 
 ### Enhanced Documentation
 
-- **[Architecture Overview](docs/architecture/overview.md)** - Complete
-  system design with diagrams
-- **[Configuration Reference](docs/reference/configuration.md)** - All 70+
-  variables documented
-- **[Troubleshooting Guide](docs/user-guide/troubleshooting.md)** - Common
-  issues and solutions
-- **[Ansible Review](docs/ANSIBLE_REVIEW_AND_RECOMMENDATIONS.md)** -
-  Comprehensive assessment and migration plan
-- **[Security Policy](SECURITY.md)** - Vulnerability reporting and response
-  process
+- **[Architecture Overview](docs/architecture/overview.md)** - Complete system design with diagrams
+- **[Configuration Reference](docs/reference/configuration.md)** - All 70+ variables documented
+- **[Troubleshooting Guide](docs/user-guide/troubleshooting.md)** - Common issues and solutions
+- **[Ansible Review](docs/ANSIBLE_REVIEW_AND_RECOMMENDATIONS.md)** - Comprehensive assessment and migration plan
+- **[Security Policy](SECURITY.md)** - Vulnerability reporting and response process
 
 ### Configuration Management
 
-- **Configuration template**: `config/defaults.conf.template` with all
-  variables documented
+- **Configuration template**: `config/defaults.conf.template` with all variables documented
 - **Enhanced Ansible template**: Synchronized with all group_vars
 - **Better organization**: Clear precedence and override mechanisms
 
 ### Security Enhancements
 
-- **Security policy**: Defined vulnerability reporting process via GitHub
-  Security Advisories
-- **Automated security scanning**: Continuous secret detection and
-  vulnerability analysis
-- **Improved .gitignore**: Prevents accidental commit of generated files and
-  secrets
+- **Security policy**: Defined vulnerability reporting process via GitHub Security Advisories
+- **Automated security scanning**: Continuous secret detection and vulnerability analysis
+- **Improved .gitignore**: Prevents accidental commit of generated files and secrets
 
-**Upgrade Note**: All changes are backward compatible. Existing
-configurations continue to work without modification.
+**Upgrade Note**: All changes are backward compatible. Existing configurations continue to work without modification.
 
 ## Additional Resources
 
-- **[Testing Framework](docs/guides/TESTING_FRAMEWORK.md)** - Comprehensive
-  testing procedures
-- **[Hardening Requirements](docs/guides/HARDENING_REQUIREMENTS.md)** -
-  Security standards and compliance
-- **[Quick Reference](docs/guides/QUICK_REFERENCE.md)** - Command reference
-  and cheat sheet
-- **[Contributing](docs/development/CONTRIBUTING.md)** - How to contribute to
-  the project
+- **[Testing Framework](docs/guides/TESTING_FRAMEWORK.md)** - Comprehensive testing procedures
+- **[Hardening Requirements](docs/guides/HARDENING_REQUIREMENTS.md)** - Security standards and compliance
+- **[Quick Reference](docs/guides/QUICK_REFERENCE.md)** - Command reference and cheat sheet
+- **[Contributing](docs/development/CONTRIBUTING.md)** - How to contribute to the project
 
 ## Support
 
 For issues or questions:
 
 1. Check the **[Documentation Index](docs/README.md)**
-2. Review **[Script Documentation](docs/SCRIPTS.md)** for script-specific
-   help
+2. Review **[Script Documentation](docs/SCRIPTS.md)** for script-specific help
 3. Check logs in `/var/log/hardening/`
 4. Test with DRY_RUN=1 first
 
@@ -484,8 +462,7 @@ MIT License - See [LICENSE](LICENSE) file for details.
 
 ## Version
 
-Current Version: **1.1.0** - See [Changelog](docs/releases/CHANGELOG.md) for
-release history.
+Current Version: **1.1.0** - See [Changelog](docs/releases/CHANGELOG.md) for release history.
 
 **v1.1.0 Highlights:**
 

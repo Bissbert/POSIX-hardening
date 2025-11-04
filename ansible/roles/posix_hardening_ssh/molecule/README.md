@@ -87,7 +87,7 @@ posix_ssh_password_authentication: false
 posix_ssh_pubkey_authentication: true
 posix_ssh_emergency_port_enabled: true
 posix_ssh_emergency_port: 2222
-posix_ssh_skip_connectivity_test: true  # Container limitation
+posix_ssh_skip_connectivity_test: true # Container limitation
 ```
 
 ## Running Tests

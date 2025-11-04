@@ -770,3 +770,4 @@ echo "Hardening complete. Review log at $LOG_FILE" | tee -a "$LOG_FILE"
 # Final validation
 echo "Running validation checks..." | tee -a "$LOG_FILE"
 /usr/sbin/sshd -t && echo "SSH configuration valid" | tee -a "$LOG_FILE"
+```

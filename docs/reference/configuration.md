@@ -2,9 +2,9 @@
 
 ## Quick Start
 
-> **📍 Full variable reference:** See `ansible/group_vars/all.yml` for complete list with defaults
-> **🔧 Override:** Use `ansible/inventory.ini` or environment variables
-> **📚 Examples:** Jump to [Common Scenarios](#common-configuration-scenarios)
+> **📍 Full variable reference:** See `ansible/group_vars/all.yml` for complete list with defaults **🔧 Override:** Use
+> `ansible/inventory.ini` or environment variables **📚 Examples:** Jump to
+> [Common Scenarios](#common-configuration-scenarios)
 
 ## Configuration Overview
 
@@ -15,6 +15,7 @@
 3. **Runtime** (Testing): Environment variables override all settings
 
 ### Precedence (Highest → Lowest)
+
 1. Runtime environment variables
 2. Ansible inventory variables
 3. Ansible group variables
@@ -22,6 +23,7 @@
 5. Built-in defaults
 
 ### Key Files
+
 - **Runtime config:** `/opt/posix-hardening/config/defaults.conf`
 - **Ansible defaults:** `ansible/group_vars/all.yml` (⚠️ Master reference - 100+ variables)
 - **Environment overrides:** `ansible/inventory.ini`
@@ -32,38 +34,35 @@
 
 ### Must-Set Variables ⚠️
 
-| Variable | Purpose | Example | Without It |
-|----------|---------|---------|------------|
-| **`ADMIN_IP`** | Your management IP for firewall whitelist | `203.0.113.10` or `10.0.0.0/8` | **DEPLOYMENT FAILS** - Locked out |
-| **`SSH_ALLOW_USERS`** | Users allowed SSH access | `"admin john deploy"` | **NO SSH ACCESS** - Complete lockout |
+| Variable              | Purpose                                   | Example                        | Without It                           |
+| --------------------- | ----------------------------------------- | ------------------------------ | ------------------------------------ |
+| **`ADMIN_IP`**        | Your management IP for firewall whitelist | `203.0.113.10` or `10.0.0.0/8` | **DEPLOYMENT FAILS** - Locked out    |
+| **`SSH_ALLOW_USERS`** | Users allowed SSH access                  | `"admin john deploy"`          | **NO SSH ACCESS** - Complete lockout |
 
 ### Critical Safety Controls
 
-| Variable | Default | Purpose | Warning |
-|----------|---------|---------|---------|
-| **`SAFETY_MODE`** | `1` | Master safety switch | ⚠️ NEVER set to 0 in production |
-| **`ROLLBACK_ENABLED`** | `1` | Auto-rollback on failure | Prevents permanent lockout |
-| **`SSH_ROLLBACK_TIMEOUT`** | `60` | Seconds before rollback | Time to verify changes work |
-| **`ENABLE_EMERGENCY_SSH`** | `1` | Backup SSH on port 2222 | Keep during initial setup |
+| Variable                   | Default | Purpose                  | Warning                         |
+| -------------------------- | ------- | ------------------------ | ------------------------------- |
+| **`SAFETY_MODE`**          | `1`     | Master safety switch     | ⚠️ NEVER set to 0 in production |
+| **`ROLLBACK_ENABLED`**     | `1`     | Auto-rollback on failure | Prevents permanent lockout      |
+| **`SSH_ROLLBACK_TIMEOUT`** | `60`    | Seconds before rollback  | Time to verify changes work     |
+| **`ENABLE_EMERGENCY_SSH`** | `1`     | Backup SSH on port 2222  | Keep during initial setup       |
 
 ### Key Configuration Variables
 
-| Category | Variable | Default | Purpose |
-|----------|----------|---------|---------|
-| **SSH** | `SSH_PORT` | `22` | Primary SSH port |
-| | `EMERGENCY_SSH_PORT` | `2222` | Backup access port |
-| | `SSH_TEST_PORT` | `2222` | Temporary test port |
-| **Firewall** | `ENABLE_FIREWALL` | `1` | Activate iptables |
-| | `FIREWALL_TIMEOUT` | `300` | Auto-rollback timer |
-| | `ALLOWED_PORTS` | `""` | Additional open ports |
-| **Execution** | `DRY_RUN` | `0` | Simulation mode |
-| | `VERBOSE` | `0` | Debug output |
-| | `RUN_FULL_HARDENING` | `1` | All scripts vs priority only |
-| **Paths** | `TOOLKIT_PATH` | `/opt/posix-hardening` | Install location |
-| | `BACKUP_DIR` | `/var/backups/hardening` | Backup storage |
-
-
-
+| Category      | Variable             | Default                  | Purpose                      |
+| ------------- | -------------------- | ------------------------ | ---------------------------- |
+| **SSH**       | `SSH_PORT`           | `22`                     | Primary SSH port             |
+|               | `EMERGENCY_SSH_PORT` | `2222`                   | Backup access port           |
+|               | `SSH_TEST_PORT`      | `2222`                   | Temporary test port          |
+| **Firewall**  | `ENABLE_FIREWALL`    | `1`                      | Activate iptables            |
+|               | `FIREWALL_TIMEOUT`   | `300`                    | Auto-rollback timer          |
+|               | `ALLOWED_PORTS`      | `""`                     | Additional open ports        |
+| **Execution** | `DRY_RUN`            | `0`                      | Simulation mode              |
+|               | `VERBOSE`            | `0`                      | Debug output                 |
+|               | `RUN_FULL_HARDENING` | `1`                      | All scripts vs priority only |
+| **Paths**     | `TOOLKIT_PATH`       | `/opt/posix-hardening`   | Install location             |
+|               | `BACKUP_DIR`         | `/var/backups/hardening` | Backup storage               |
 
 ---
 
@@ -185,14 +184,14 @@ ansible-playbook preflight.yml
 
 ### What Happens if Variables Are Not Set
 
-| Variable | If Not Set | Result |
-|----------|------------|--------|
-| ADMIN_IP | Empty | **DEPLOYMENT FAILS** - Firewall would lock you out |
-| SSH_ALLOW_USERS | Empty | **CRITICAL FAILURE** - No SSH access |
-| SSH_PORT | Not set | Defaults to 22 |
-| ALLOWED_PORTS | Empty | Only SSH allowed |
-| DISABLE_SERVICES | Empty | No services disabled |
-| Most others | Not set | Safe defaults applied |
+| Variable         | If Not Set | Result                                             |
+| ---------------- | ---------- | -------------------------------------------------- |
+| ADMIN_IP         | Empty      | **DEPLOYMENT FAILS** - Firewall would lock you out |
+| SSH_ALLOW_USERS  | Empty      | **CRITICAL FAILURE** - No SSH access               |
+| SSH_PORT         | Not set    | Defaults to 22                                     |
+| ALLOWED_PORTS    | Empty      | Only SSH allowed                                   |
+| DISABLE_SERVICES | Empty      | No services disabled                               |
+| Most others      | Not set    | Safe defaults applied                              |
 
 ---
 
@@ -201,22 +200,25 @@ ansible-playbook preflight.yml
 ### Common Misconfigurations
 
 #### Problem: Locked out after hardening
-**Cause**: ADMIN_IP not set or incorrect
-**Solution**:
+
+**Cause**: ADMIN_IP not set or incorrect **Solution**:
+
 1. Use emergency SSH port: `ssh -p 2222 user@server`
 2. Fix ADMIN_IP in config
 3. Re-run hardening
 
 #### Problem: SSH connection refused
-**Cause**: User not in SSH_ALLOW_USERS
-**Solution**:
+
+**Cause**: User not in SSH_ALLOW_USERS **Solution**:
+
 1. Use emergency access
 2. Add user to SSH_ALLOW_USERS
 3. Restart SSH: `systemctl restart sshd`
 
 #### Problem: Firewall blocks legitimate traffic
-**Cause**: Port not in ALLOWED_PORTS
-**Solution**:
+
+**Cause**: Port not in ALLOWED_PORTS **Solution**:
+
 ```bash
 # Temporarily disable firewall
 iptables -F
@@ -226,15 +228,17 @@ ALLOWED_PORTS="80 443 3306"
 ```
 
 #### Problem: Services needed but disabled
-**Cause**: Service in DISABLE_SERVICES list
-**Solution**:
+
+**Cause**: Service in DISABLE_SERVICES list **Solution**:
+
 1. Remove from DISABLE_SERVICES
 2. Start service: `systemctl start service-name`
 3. Enable service: `systemctl enable service-name`
 
 #### Problem: Can't write to /tmp
-**Cause**: noexec mount option
-**Solution**:
+
+**Cause**: noexec mount option **Solution**:
+
 ```bash
 # Temporarily remount
 mount -o remount,exec /tmp
@@ -271,16 +275,21 @@ If completely locked out:
 
 1. **Boot to single-user mode** (physical/console access)
 2. **Restore backups**:
+
    ```bash
    cp /var/backups/hardening/sshd_config.* /etc/ssh/sshd_config
    cp /var/backups/hardening/iptables.* /etc/iptables/rules.v4
    ```
+
 3. **Disable hardening**:
+
    ```bash
    systemctl stop iptables
    systemctl disable iptables
    ```
+
 4. **Reset SSH**:
+
    ```bash
    sed -i 's/^AllowUsers.*/# AllowUsers/' /etc/ssh/sshd_config
    systemctl restart sshd
@@ -313,4 +322,4 @@ If completely locked out:
 
 ---
 
-*Configuration Reference v1.0 - POSIX Hardening Toolkit*
+## Configuration Reference v1.0 - POSIX Hardening Toolkit

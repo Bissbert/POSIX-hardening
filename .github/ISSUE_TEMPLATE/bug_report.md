@@ -1,9 +1,9 @@
 ---
 name: Bug Report
 about: Report a bug in the POSIX hardening scripts
-title: '[BUG] '
+title: "[BUG] "
 labels: bug
-assignees: ''
+assignees: ""
 ---
 
 ## Bug Description
@@ -13,6 +13,7 @@ assignees: ''
 ## Environment
 
 **Operating System:**
+
 - [ ] Debian 11
 - [ ] Debian 12
 - [ ] Ubuntu 20.04
@@ -20,6 +21,7 @@ assignees: ''
 - [ ] Other: <!-- specify -->
 
 **Shell:**
+
 - [ ] `/bin/sh`
 - [ ] `dash`
 - [ ] `bash`
@@ -27,12 +29,15 @@ assignees: ''
 - [ ] Other: <!-- specify -->
 
 **Deployment Method:**
+
 - [ ] Standalone shell scripts (orchestrator.sh)
 - [ ] Ansible automation
 - [ ] Manual script execution
 
 **Version:**
+
 <!-- Check VERSION file or git commit hash -->
+
 ```
 Version:
 ```
@@ -45,6 +50,7 @@ Version:
 4. <!-- And so on... -->
 
 **Command executed:**
+
 ```bash
 # Paste the exact command you ran
 
@@ -61,20 +67,25 @@ Version:
 ## Logs
 
 **Hardening Log:**
+
 <!-- Contents of /var/log/hardening/hardening-*.log -->
+
 ```
 # Paste relevant log entries
 
 ```
 
 **Error Output:**
+
 ```
 # Paste any error messages from terminal
 
 ```
 
 **System Logs:**
+
 <!-- If relevant, include /var/log/syslog or journalctl output -->
+
 ```
 # Paste relevant system logs
 
@@ -83,6 +94,7 @@ Version:
 ## Impact
 
 <!-- Select all that apply -->
+
 - [ ] SSH lockout (cannot connect to server)
 - [ ] Service disruption (services stopped working)
 - [ ] Data loss or corruption
@@ -92,6 +104,7 @@ Version:
 - [ ] Other: <!-- specify -->
 
 **Severity:**
+
 - [ ] Critical (system unusable, locked out)
 - [ ] High (major feature broken)
 - [ ] Medium (feature partially broken)
@@ -100,6 +113,7 @@ Version:
 ## System State
 
 **Before hardening:**
+
 ```bash
 # Output of: uname -a
 
@@ -108,6 +122,7 @@ Version:
 ```
 
 **After hardening:**
+
 ```bash
 # Current SSH configuration (if accessible)
 # cat /etc/ssh/sshd_config | grep -v '^#' | grep -v '^$'
@@ -120,7 +135,9 @@ Version:
 ## Configuration
 
 **Config file used:**
+
 <!-- Contents of config/defaults.conf if using standalone, or relevant ansible/group_vars/all.yml if using Ansible -->
+
 ```bash
 # Paste your configuration (redact sensitive IPs/usernames if needed)
 
@@ -135,6 +152,7 @@ Version:
 - [ ] No rollback attempted
 
 **Rollback log:**
+
 ```
 # Contents of /var/log/hardening/rollback.log if available
 
@@ -151,6 +169,7 @@ Version:
 ## Recovery Method Used
 
 <!-- If you regained access to the system, how did you do it? -->
+
 - [ ] Emergency SSH port (2222)
 - [ ] Console access (physical/IPMI/KVM)
 - [ ] Single-user mode
@@ -161,6 +180,7 @@ Version:
 ## Files for Debugging
 
 <!-- Attach or link to any relevant files -->
+
 - [ ] Complete log from /var/log/hardening/
 - [ ] Backup files from /var/backups/hardening/
 - [ ] Configuration file used
@@ -170,6 +190,7 @@ Version:
 ---
 
 **Checklist before submitting:**
+
 - [ ] I have checked existing issues for duplicates
 - [ ] I have included all relevant logs
 - [ ] I have redacted sensitive information (IPs, usernames, keys)

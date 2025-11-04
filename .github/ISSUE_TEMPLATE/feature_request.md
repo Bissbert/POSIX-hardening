@@ -1,9 +1,9 @@
 ---
 name: Feature Request
 about: Suggest a new feature or enhancement for the POSIX hardening toolkit
-title: '[FEATURE] '
+title: "[FEATURE] "
 labels: enhancement
-assignees: ''
+assignees: ""
 ---
 
 ## Feature Description
@@ -35,6 +35,7 @@ assignees: ''
 ## Use Case
 
 **Who would benefit:**
+
 - [ ] System administrators
 - [ ] Security teams
 - [ ] DevOps engineers
@@ -43,6 +44,7 @@ assignees: ''
 - [ ] Other: <!-- specify -->
 
 **Environment:**
+
 - [ ] Applies to all environments
 - [ ] Production servers
 - [ ] Development/test environments
@@ -95,12 +97,14 @@ assignees: ''
 ## Implementation Priority
 
 **Urgency:**
+
 - [ ] Critical (security issue or major blocker)
 - [ ] High (significantly improves functionality)
 - [ ] Medium (nice to have)
 - [ ] Low (minor improvement)
 
 **Effort Estimate:**
+
 - [ ] Small (< 1 day)
 - [ ] Medium (1-3 days)
 - [ ] Large (1-2 weeks)
@@ -136,6 +140,7 @@ assignees: ''
 ---
 
 **Checklist before submitting:**
+
 - [ ] I have checked existing issues for duplicates
 - [ ] I have clearly described the problem this solves
 - [ ] I have outlined a proposed solution

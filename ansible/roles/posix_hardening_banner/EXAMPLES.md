@@ -383,8 +383,8 @@ docker rm -f test-banner
     - name: Configure SSH to display banner
       lineinfile:
         path: /etc/ssh/sshd_config
-        regexp: '^#?Banner'
-        line: 'Banner /etc/issue.net'
+        regexp: "^#?Banner"
+        line: "Banner /etc/issue.net"
         state: present
       notify: restart sshd
 

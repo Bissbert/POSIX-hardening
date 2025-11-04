@@ -313,10 +313,10 @@ The Molecule tests run automatically on GitHub Actions:
 
 ```yaml
 paths:
-  - 'ansible/roles/posix_hardening_ssh/**'
-  - 'ansible/roles/posix_hardening_firewall/**'
-  - 'ansible/requirements*.txt'
-  - '.github/workflows/molecule-test.yml'
+  - "ansible/roles/posix_hardening_ssh/**"
+  - "ansible/roles/posix_hardening_firewall/**"
+  - "ansible/requirements*.txt"
+  - ".github/workflows/molecule-test.yml"
 ```
 
 ### Viewing CI Results

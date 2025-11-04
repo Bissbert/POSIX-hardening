@@ -3,6 +3,7 @@
 ## Pre-Deployment Testing Protocol
 
 ### 1. Environment Setup
+
 ```sh
 # Create test environment (use VM or container)
 # NEVER test on production systems first
@@ -16,6 +17,7 @@
 ### 2. Individual Script Testing
 
 #### Phase 1: Syntax Validation
+
 ```sh
 #!/bin/sh
 # validate_syntax.sh - Check POSIX compliance
@@ -32,6 +34,7 @@ done
 ```
 
 #### Phase 2: Dry-Run Testing
+
 ```sh
 #!/bin/sh
 # test_dry_run.sh - Test in report-only mode
@@ -52,6 +55,7 @@ fi
 ```
 
 #### Phase 3: Idempotency Testing
+
 ```sh
 #!/bin/sh
 # test_idempotency.sh - Verify scripts can run multiple times
@@ -92,6 +96,7 @@ capture_system_state() {
 ### 3. SSH Access Validation
 
 #### Critical SSH Tests
+
 ```sh
 #!/bin/sh
 # test_ssh_access.sh - Ensure SSH access maintained
@@ -141,6 +146,7 @@ ssh -o PreferredAuthentications=publickey \
 ```
 
 #### Firewall Rule Testing
+
 ```sh
 #!/bin/sh
 # test_firewall_rules.sh - Validate firewall doesn't block legitimate access
@@ -174,6 +180,7 @@ test_ssh_through_firewall() {
 ### 4. Rollback Testing
 
 #### Automatic Rollback Script
+
 ```sh
 #!/bin/sh
 # auto_rollback.sh - Automatic rollback if connection lost
@@ -218,6 +225,7 @@ trap cleanup EXIT
 ### 5. Compliance Validation
 
 #### CIS Benchmark Checks
+
 ```sh
 #!/bin/sh
 # check_cis_compliance.sh - Validate against CIS benchmarks
@@ -296,6 +304,7 @@ check_file_permissions() {
 ```
 
 #### Security Scanner Integration
+
 ```sh
 #!/bin/sh
 # run_security_scan.sh - Run various security scanners
@@ -415,6 +424,7 @@ check_persistence() {
 ## Test Execution Plan
 
 ### Phase 1: Development Environment (1-2 days)
+
 1. Set up isolated VM/container
 2. Run syntax validation
 3. Test each script individually
@@ -422,6 +432,7 @@ check_persistence() {
 5. Test rollback procedures
 
 ### Phase 2: Staging Environment (2-3 days)
+
 1. Full backup of staging system
 2. Apply hardening scripts in sequence
 3. Run compliance checks
@@ -429,6 +440,7 @@ check_persistence() {
 5. 24-hour soak test
 
 ### Phase 3: Limited Production (3-5 days)
+
 1. Select non-critical production server
 2. Full backup and snapshot
 3. Apply during maintenance window
@@ -436,6 +448,7 @@ check_persistence() {
 5. Gather metrics and logs
 
 ### Phase 4: Full Production Rollout
+
 1. Schedule maintenance windows
 2. Create rollback plan for each server
 3. Apply in groups (not all at once)
@@ -445,6 +458,7 @@ check_persistence() {
 ## Success Criteria
 
 ### Must Pass
+
 - [ ] SSH access maintained throughout
 - [ ] No service disruptions
 - [ ] All scripts are idempotent
@@ -452,6 +466,7 @@ check_persistence() {
 - [ ] No performance degradation >10%
 
 ### Should Pass
+
 - [ ] CIS benchmark score improvement >30%
 - [ ] Lynis hardening index >80
 - [ ] No false positive security alerts
@@ -459,6 +474,7 @@ check_persistence() {
 - [ ] Audit trails complete
 
 ### Nice to Have
+
 - [ ] Automated compliance reporting
 - [ ] Integration with monitoring systems
 - [ ] Self-healing capabilities
@@ -467,6 +483,7 @@ check_persistence() {
 ## Emergency Procedures
 
 ### If Locked Out of SSH
+
 1. Use console/OOB access immediately
 2. Check /var/log/auth.log for errors
 3. Restore sshd_config from backup
@@ -474,6 +491,7 @@ check_persistence() {
 5. Test SSH access before other changes
 
 ### If System Becomes Unstable
+
 1. Document symptoms
 2. Check system resources (CPU, memory, disk)
 3. Review recent log entries
@@ -481,6 +499,7 @@ check_persistence() {
 5. Monitor after each rollback step
 
 ### If Services Fail
+
 1. Identify affected services
 2. Check for permission issues
 3. Review recent hardening changes

@@ -4,13 +4,13 @@
 
 **This role modifies SSH configuration with HIGH LOCKOUT RISK.**
 
-Incorrect configuration or missing SSH keys can permanently lock you out of remote systems.
-Always test in a safe environment with console/KVM access available.
+Incorrect configuration or missing SSH keys can permanently lock you out of remote systems. Always test in a safe
+environment with console/KVM access available.
 
 ## Overview
 
-Comprehensive SSH hardening role converted from the POSIX hardening shell script (`01-ssh-hardening.sh`).
-Implements enterprise-grade SSH security with extensive safety mechanisms to prevent lockout.
+Comprehensive SSH hardening role converted from the POSIX hardening shell script (`01-ssh-hardening.sh`). Implements
+enterprise-grade SSH security with extensive safety mechanisms to prevent lockout.
 
 **Source Script:** `scripts/01-ssh-hardening.sh`
 
@@ -63,10 +63,10 @@ This role implements **7 layers of protection** against lockout:
 
 ```yaml
 # group_vars/all.yml
-admin_ip: "203.0.113.10"  # YOUR IP - REQUIRED
+admin_ip: "203.0.113.10" # YOUR IP - REQUIRED
 ssh_allow_users:
   - root
-  - your_username  # REQUIRED - your SSH user
+  - your_username # REQUIRED - your SSH user
 
 ssh_port: 22
 toolkit_path: /opt/posix-hardening
@@ -156,9 +156,9 @@ posix_ssh_allow_users:
 ### Port Configuration
 
 ```yaml
-posix_ssh_port: 22  # Main SSH port
-posix_ssh_emergency_port: 2222  # Emergency/recovery port
-posix_ssh_enable_emergency_port: true  # Enable emergency SSH
+posix_ssh_port: 22 # Main SSH port
+posix_ssh_emergency_port: 2222 # Emergency/recovery port
+posix_ssh_enable_emergency_port: true # Enable emergency SSH
 ```
 
 ### Authentication Settings
@@ -206,10 +206,10 @@ posix_ssh_banner_text: |
 ### Control Flags
 
 ```yaml
-posix_ssh_force_reharden: false  # Re-run even if already hardened
-posix_ssh_skip_connectivity_test: false  # Skip post-hardening tests
-posix_ssh_backup_config: true  # Create backups
-posix_ssh_validate_before_reload: true  # Validate config
+posix_ssh_force_reharden: false # Re-run even if already hardened
+posix_ssh_skip_connectivity_test: false # Skip post-hardening tests
+posix_ssh_backup_config: true # Create backups
+posix_ssh_validate_before_reload: true # Validate config
 ```
 
 ### File Paths

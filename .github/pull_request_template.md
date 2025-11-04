@@ -15,25 +15,28 @@
 ## Related Issues
 
 <!-- Link to related issues using #issue_number -->
-Fixes #
-Relates to #
+
+Fixes # Relates to #
 
 ## Changes Made
 
 <!-- Describe the changes in detail -->
 
 ### Modified Files
+
 -
 -
 -
 
 ### New Files
+
 -
 -
 
 ## Testing
 
 ### Test Environment
+
 - [ ] Tested in Docker container
 - [ ] Tested on Debian 11
 - [ ] Tested on Debian 12
@@ -42,6 +45,7 @@ Relates to #
 - [ ] Other: <!-- specify -->
 
 ### Test Results
+
 - [ ] Dry-run mode verified (`DRY_RUN=1`)
 - [ ] Scripts maintain SSH access throughout execution
 - [ ] Rollback tested and functional
@@ -50,6 +54,7 @@ Relates to #
 - [ ] POSIX compliance verified (tested with dash/ash)
 
 ### Shell Compatibility
+
 - [ ] Tested with `/bin/sh`
 - [ ] Tested with `dash`
 - [ ] Tested with `bash`
@@ -59,6 +64,7 @@ Relates to #
 ## Checklist
 
 ### Code Quality
+
 - [ ] Code follows POSIX sh standards (no bash-specific features)
 - [ ] Scripts are idempotent (can be run multiple times safely)
 - [ ] All functions have error handling
@@ -66,6 +72,7 @@ Relates to #
 - [ ] No hardcoded values (uses configuration variables)
 
 ### Safety
+
 - [ ] Backups are created before modifications
 - [ ] SSH access is preserved throughout
 - [ ] Rollback functionality works correctly
@@ -73,6 +80,7 @@ Relates to #
 - [ ] Emergency access methods remain functional
 
 ### Security
+
 - [ ] No sensitive data committed (passwords, keys, tokens)
 - [ ] No security vulnerabilities introduced
 - [ ] Firewall rules reviewed and validated
@@ -80,6 +88,7 @@ Relates to #
 - [ ] File permissions are appropriate
 
 ### Documentation
+
 - [ ] Code is well-commented
 - [ ] README updated (if applicable)
 - [ ] CHANGELOG.md updated
@@ -87,6 +96,7 @@ Relates to #
 - [ ] Configuration variables documented
 
 ### Ansible (if applicable)
+
 - [ ] `ansible-lint` passes with no errors
 - [ ] Playbooks are idempotent
 - [ ] Variables are defined in `group_vars/all.yml`
@@ -115,11 +125,10 @@ Relates to #
 
 -
 -
--
+- ***
 
----
+  **I confirm that:**
 
-**I confirm that:**
 - [ ] This code has been tested in a safe environment
 - [ ] All tests pass successfully
 - [ ] Documentation has been updated

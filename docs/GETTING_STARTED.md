@@ -38,9 +38,9 @@ server1.example.com ansible_host=192.168.1.10 ansible_user=admin
 **Edit `ansible/group_vars/all.yml`:**
 
 ```yaml
-admin_ip: "YOUR_IP_HERE"        # CRITICAL - your management IP
+admin_ip: "YOUR_IP_HERE" # CRITICAL - your management IP
 ssh_allow_users: "admin deploy" # Users who can SSH
-enable_emergency_ssh: true      # Safety port 2222
+enable_emergency_ssh: true # Safety port 2222
 ```
 
 ### 3. Deploy (2 minutes)
@@ -150,16 +150,17 @@ sudo /opt/posix-hardening/emergency-rollback.sh --force
 
 All settings have sane defaults. Key variables to customize:
 
-| Variable | Purpose | Default |
-|----------|---------|---------|
-| `admin_ip` | **Your management IP (CRITICAL)** | Must set |
-| `ssh_port` | Main SSH port | 22 |
-| `ssh_allow_users` | Who can SSH | Must set |
-| `enable_emergency_ssh` | Safety backup port 2222 | true |
-| `posix_ssh_permit_root_login` | Allow root login | no |
-| `posix_kernel_tcp_syncookies` | SYN flood protection | 1 |
+| Variable                      | Purpose                           | Default  |
+| ----------------------------- | --------------------------------- | -------- |
+| `admin_ip`                    | **Your management IP (CRITICAL)** | Must set |
+| `ssh_port`                    | Main SSH port                     | 22       |
+| `ssh_allow_users`             | Who can SSH                       | Must set |
+| `enable_emergency_ssh`        | Safety backup port 2222           | true     |
+| `posix_ssh_permit_root_login` | Allow root login                  | no       |
+| `posix_kernel_tcp_syncookies` | SYN flood protection              | 1        |
 
-**Full reference:** [`ansible/group_vars/all.yml`](../ansible/group_vars/all.yml) or [`docs/reference/configuration.md`](reference/configuration.md)
+**Full reference:** [`ansible/group_vars/all.yml`](../ansible/group_vars/all.yml) or
+[`docs/reference/configuration.md`](reference/configuration.md)
 
 ---
 

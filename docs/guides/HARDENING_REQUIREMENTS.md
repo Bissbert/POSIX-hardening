@@ -2,7 +2,7 @@
 
 ## Critical Constraints
 
-- **POSIX Shell Only**: No bash-specific features (arrays, [[ ]], etc.)
+- **POSIX Shell Only**: No bash-specific features (arrays, [[]], etc.)
 - **Remote Access Only**: MUST NOT lock out SSH administrators
 - **No Package Manager**: Work with default Debian packages only
 - **Idempotent**: Scripts must be safe to run multiple times
@@ -364,28 +364,28 @@ fi
 
 ## Risk Matrix
 
-| Script | Remote Access Risk | Reversibility | Testing Required |
-|--------|-------------------|---------------|------------------|
-| SSH Config | LOW | Easy | Critical |
-| SSH Keys | MEDIUM | Easy | Critical |
-| Firewall | MEDIUM | Moderate | Critical |
-| User Accounts | LOW | Easy | Important |
-| Sudo Config | MEDIUM | Easy | Critical |
-| File Perms | LOW | Easy | Standard |
-| Kernel Params | LOW | Easy | Important |
-| Process Limits | VERY LOW | Easy | Standard |
-| Audit Logs | VERY LOW | Easy | Minimal |
-| Network Services | LOW | Easy | Important |
-| TCP Wrappers | MEDIUM | Easy | Critical |
-| Cron | VERY LOW | Easy | Minimal |
-| Mount Options | VERY LOW | Moderate | Standard |
-| Core Dumps | NONE | Easy | Minimal |
-| Login Banners | NONE | Easy | Minimal |
-| Session Timeout | LOW | Easy | Standard |
-| Password Aging | VERY LOW | Easy | Minimal |
-| Shared Memory | NONE | Easy | Standard |
-| Kernel Modules | LOW | Easy | Important |
-| Log Rotation | NONE | Easy | Minimal |
+| Script           | Remote Access Risk | Reversibility | Testing Required |
+| ---------------- | ------------------ | ------------- | ---------------- |
+| SSH Config       | LOW                | Easy          | Critical         |
+| SSH Keys         | MEDIUM             | Easy          | Critical         |
+| Firewall         | MEDIUM             | Moderate      | Critical         |
+| User Accounts    | LOW                | Easy          | Important        |
+| Sudo Config      | MEDIUM             | Easy          | Critical         |
+| File Perms       | LOW                | Easy          | Standard         |
+| Kernel Params    | LOW                | Easy          | Important        |
+| Process Limits   | VERY LOW           | Easy          | Standard         |
+| Audit Logs       | VERY LOW           | Easy          | Minimal          |
+| Network Services | LOW                | Easy          | Important        |
+| TCP Wrappers     | MEDIUM             | Easy          | Critical         |
+| Cron             | VERY LOW           | Easy          | Minimal          |
+| Mount Options    | VERY LOW           | Moderate      | Standard         |
+| Core Dumps       | NONE               | Easy          | Minimal          |
+| Login Banners    | NONE               | Easy          | Minimal          |
+| Session Timeout  | LOW                | Easy          | Standard         |
+| Password Aging   | VERY LOW           | Easy          | Minimal          |
+| Shared Memory    | NONE               | Easy          | Standard         |
+| Kernel Modules   | LOW                | Easy          | Important        |
+| Log Rotation     | NONE               | Easy          | Minimal          |
 
 ## Validation Checklist
 

@@ -6,14 +6,12 @@ This document tracks planned enhancements and feature requests for future releas
 
 ## Firewall: Support for Alternative Firewall Tools
 
-**Priority:** Medium
-**Complexity:** High
-**Status:** Planned
+**Priority:** Medium **Complexity:** High **Status:** Planned
 
 ### Overview
 
-Enhance the firewall setup script (02-firewall-setup.sh) to automatically detect and
-use alternative firewall management tools when iptables is not available.
+Enhance the firewall setup script (02-firewall-setup.sh) to automatically detect and use alternative firewall management
+tools when iptables is not available.
 
 ### Current Behavior
 
@@ -125,9 +123,8 @@ nft list ruleset > /etc/nftables.conf
 systemctl enable nftables
 ```
 
-**Safety timeout:**
-`nft flush ruleset && nft add table inet filter &&
-nft add chain inet filter input { type filter hook input priority 0 \; policy accept \; }`
+**Safety timeout:** `nft flush ruleset && nft add table inet filter && nft add chain
+inet filter input { type filter hook input priority 0 \; policy accept \; }`
 
 #### 5. Unified Interface
 
@@ -188,12 +185,12 @@ Critical for preventing lockout:
 
 ### Distribution Compatibility
 
-| Firewall   | Common On                    | Status          |
-|------------|------------------------------|-----------------|
-| iptables   | Legacy/Traditional Linux     | ✅ Implemented  |
-| UFW        | Ubuntu, Debian, Mint         | 📋 Planned      |
-| firewalld  | RHEL, CentOS, Fedora, Rocky  | 📋 Planned      |
-| nftables   | Modern Linux (kernel 3.13+)  | 📋 Planned      |
+| Firewall  | Common On                   | Status         |
+| --------- | --------------------------- | -------------- |
+| iptables  | Legacy/Traditional Linux    | ✅ Implemented |
+| UFW       | Ubuntu, Debian, Mint        | 📋 Planned     |
+| firewalld | RHEL, CentOS, Fedora, Rocky | 📋 Planned     |
+| nftables  | Modern Linux (kernel 3.13+) | 📋 Planned     |
 
 ### Testing Requirements
 
@@ -254,8 +251,8 @@ Critical for preventing lockout:
 
 ### Contributors Welcome
 
-This is a great feature for community contribution! If you have experience with UFW,
-firewalld, or nftables, please consider contributing.
+This is a great feature for community contribution! If you have experience with UFW, firewalld, or nftables, please
+consider contributing.
 
 ---
 
@@ -263,36 +260,31 @@ firewalld, or nftables, please consider contributing.
 
 ### 1. IPv6 Complete Support
 
-**Priority:** Medium
-**Status:** Partial (iptables only)
+**Priority:** Medium **Status:** Partial (iptables only)
 
 Ensure all firewall backends have full IPv6 support matching IPv4 policies.
 
 ### 2. Custom Port Ranges
 
-**Priority:** Low
-**Status:** Planned
+**Priority:** Low **Status:** Planned
 
 Allow configuration like `ALLOWED_PORTS="8000-8100"` for port ranges.
 
 ### 3. Dynamic Firewall Updates
 
-**Priority:** Low
-**Status:** Planned
+**Priority:** Low **Status:** Planned
 
 Allow adding/removing firewall rules without full reconfiguration.
 
 ### 4. Firewall Testing Mode
 
-**Priority:** Medium
-**Status:** Planned
+**Priority:** Medium **Status:** Planned
 
 Add `--test-firewall` flag to validate rules without applying them.
 
 ### 5. Integration with fail2ban
 
-**Priority:** Medium
-**Status:** Planned
+**Priority:** Medium **Status:** Planned
 
 Coordinate with fail2ban for enhanced brute-force protection.
 

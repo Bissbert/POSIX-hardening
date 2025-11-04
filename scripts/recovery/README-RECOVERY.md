@@ -2,8 +2,7 @@
 
 ## Problem: "sorry, you must have a tty to run sudo"
 
-If Ansible is failing with this error after running the hardening scripts, you
-need to fix the `requiretty` setting.
+If Ansible is failing with this error after running the hardening scripts, you need to fix the `requiretty` setting.
 
 ---
 
@@ -91,8 +90,7 @@ If you have physical or IPMI/KVM access:
 
 ### Method 5: Ansible Ad-Hoc Command
 
-If you still have working Ansible access with a different user or can use
-`become_flags`:
+If you still have working Ansible access with a different user or can use `become_flags`:
 
 ```bash
 ansible all -i inventory.ini -m shell \
@@ -142,8 +140,8 @@ Should succeed with `pong`.
 
 ## Prevention for New Servers
 
-For servers you haven't hardened yet, the latest version of the toolkit
-already includes this fix. Simply pull the latest changes:
+For servers you haven't hardened yet, the latest version of the toolkit already includes this fix. Simply pull the
+latest changes:
 
 ```bash
 cd POSIX-hardening
@@ -168,8 +166,7 @@ Then deploy normally - `requiretty` will be disabled by default.
 - Automation tools like Ansible can't provide TTY
 - The fix maintains all other security hardening
 
-**Security note:** If you need stricter control, you can enable requiretty
-per-user:
+**Security note:** If you need stricter control, you can enable requiretty per-user:
 
 ```bash
 # In /etc/sudoers.d/hardening:
@@ -196,7 +193,7 @@ Create a recovery playbook `fix-sudo-tty.yml`:
         sed -i.backup 's/^Defaults requiretty$/Defaults !requiretty/' /etc/sudoers.d/hardening && \
         visudo -c -f /etc/sudoers.d/hardening
       become: yes
-      become_flags: '-i'  # Force interactive shell to get TTY
+      become_flags: "-i" # Force interactive shell to get TTY
 ```
 
 Run with:
@@ -290,4 +287,3 @@ You can restore from backup if needed:
 ```bash
 sudo cp /etc/sudoers.d/hardening.backup-20251021-065558 /etc/sudoers.d/hardening
 ```
-

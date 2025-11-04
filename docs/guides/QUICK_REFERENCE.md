@@ -1,6 +1,7 @@
 # POSIX Shell Hardening Toolkit - Quick Reference Guide
 
 ## ⚠️ CRITICAL SAFETY RULES
+
 1. **NEVER** run on production without testing
 2. **ALWAYS** maintain console/OOB access during changes
 3. **ALWAYS** backup configurations before starting
@@ -9,14 +10,14 @@
 
 ## Script Priority and Risk Matrix
 
-| Priority | Script | Lock-out Risk | Reversible | Critical |
-|----------|--------|--------------|------------|----------|
-| 1 | 01_ssh_config_hardening.sh | LOW | ✓ | ✓✓✓ |
-| 2 | 02_ssh_key_management.sh | MEDIUM | ✓ | ✓✓✓ |
-| 3 | 03_firewall_ssh_protection.sh | MEDIUM | ✓ | ✓✓✓ |
-| 4 | 04_user_account_hardening.sh | LOW | ✓ | ✓✓ |
-| 5 | 05_sudo_configuration.sh | MEDIUM | ✓ | ✓✓ |
-| 6-20 | Remaining scripts | LOW-NONE | ✓ | ✓ |
+| Priority | Script                        | Lock-out Risk | Reversible | Critical |
+| -------- | ----------------------------- | ------------- | ---------- | -------- |
+| 1        | 01_ssh_config_hardening.sh    | LOW           | ✓          | ✓✓✓      |
+| 2        | 02_ssh_key_management.sh      | MEDIUM        | ✓          | ✓✓✓      |
+| 3        | 03_firewall_ssh_protection.sh | MEDIUM        | ✓          | ✓✓✓      |
+| 4        | 04_user_account_hardening.sh  | LOW           | ✓          | ✓✓       |
+| 5        | 05_sudo_configuration.sh      | MEDIUM        | ✓          | ✓✓       |
+| 6-20     | Remaining scripts             | LOW-NONE      | ✓          | ✓        |
 
 ## Pre-Flight Checklist
 
@@ -61,6 +62,7 @@ service ssh restart
 ## Safe Deployment Order
 
 ### Stage 1: Low Risk (Do First)
+
 ```sh
 # These have minimal risk of lockout
 ./15_login_banner.sh
@@ -71,6 +73,7 @@ service ssh restart
 ```
 
 ### Stage 2: System Hardening (Do Second)
+
 ```sh
 # These affect system behavior but not access
 ./07_kernel_parameters.sh
@@ -81,6 +84,7 @@ service ssh restart
 ```
 
 ### Stage 3: Access Controls (Do Third, Carefully)
+
 ```sh
 # These can affect access - test thoroughly
 ./04_user_account_hardening.sh
@@ -90,6 +94,7 @@ service ssh restart
 ```
 
 ### Stage 4: Network Security (Do Last, Most Risk)
+
 ```sh
 # These have highest risk of lockout
 ./01_ssh_config_hardening.sh
@@ -160,6 +165,7 @@ iptables -L -n -v | grep DROP
 ## Rollback Procedures
 
 ### Individual Script Rollback
+
 ```sh
 # Each script creates timestamped backups
 ls -la /etc/ssh/*.backup.*
@@ -171,6 +177,7 @@ service ssh restart
 ```
 
 ### Full System Rollback
+
 ```sh
 # If full rollback needed
 cd /root
@@ -182,14 +189,14 @@ iptables-restore < /root/iptables.backup
 
 ## Common Issues and Solutions
 
-| Issue | Symptom | Solution |
-|-------|---------|----------|
-| SSH Connection Refused | Cannot connect via SSH | Check sshd_config syntax, ensure service running |
-| SSH Key Rejected | "Permission denied (publickey)" | Check .ssh permissions (700), authorized_keys (600) |
-| Firewall Blocking | Connection timeout | Check iptables rules, ensure port 22 open |
-| Sudo Not Working | "user is not in sudoers" | Check /etc/sudoers and /etc/sudoers.d/ |
-| Services Failing | Services won't start | Check file permissions, SELinux contexts |
-| Slow SSH Login | Long delay before prompt | Check DNS resolution, UseDNS no in sshd_config |
+| Issue                  | Symptom                         | Solution                                            |
+| ---------------------- | ------------------------------- | --------------------------------------------------- |
+| SSH Connection Refused | Cannot connect via SSH          | Check sshd_config syntax, ensure service running    |
+| SSH Key Rejected       | "Permission denied (publickey)" | Check .ssh permissions (700), authorized_keys (600) |
+| Firewall Blocking      | Connection timeout              | Check iptables rules, ensure port 22 open           |
+| Sudo Not Working       | "user is not in sudoers"        | Check /etc/sudoers and /etc/sudoers.d/              |
+| Services Failing       | Services won't start            | Check file permissions, SELinux contexts            |
+| Slow SSH Login         | Long delay before prompt        | Check DNS resolution, UseDNS no in sshd_config      |
 
 ## Testing Commands
 
@@ -254,8 +261,8 @@ sysctl net.ipv4.tcp_syncookies | grep "= 1" || echo "FAIL: SYN cookies"
 
 ## Support Resources
 
-- **Logs to Check**: /var/log/auth.log, /var/log/syslog, /var/log/hardening_*.log
-- **Backup Locations**: /root/*backup*, /etc/ssh/*.backup.*
+- **Logs to Check**: /var/log/auth.log, /var/log/syslog, /var/log/hardening\_\*.log
+- **Backup Locations**: /root/_backup_, /etc/ssh/_.backup._
 - **Config Files**: /etc/ssh/sshd_config, /etc/sysctl.d/99-hardening.conf
 - **Documentation**: CIS Debian Benchmark, NIST Guidelines, OWASP
 

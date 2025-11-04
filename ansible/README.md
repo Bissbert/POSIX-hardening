@@ -56,7 +56,7 @@ admin_ip: "YOUR_IP_HERE"
 
 # SSH settings
 ssh_port: 22
-ssh_allow_users: "admin deploy"  # Users who can SSH
+ssh_allow_users: "admin deploy" # Users who can SSH
 
 # Emergency access
 enable_emergency_ssh: true
@@ -209,11 +209,11 @@ ssh_allow_groups: "ssh-users"
 # Emergency SSH backdoor
 enable_emergency_ssh: true
 emergency_ssh_port: 2222
-remove_emergency_ssh: false  # Set true after testing
+remove_emergency_ssh: false # Set true after testing
 
 # Safety settings
-dry_run: 0  # Set to 1 for simulation
-safety_mode: 1  # NEVER disable in production
+dry_run: 0 # Set to 1 for simulation
+safety_mode: 1 # NEVER disable in production
 rollback_enabled: 1
 ```
 

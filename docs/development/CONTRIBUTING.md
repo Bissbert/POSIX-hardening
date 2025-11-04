@@ -1,8 +1,7 @@
 # Contributing to POSIX Shell Server Hardening Toolkit
 
-Thank you for your interest in contributing to this security toolkit! We welcome
-contributions that improve server security while maintaining our core principle:
-**Never lose SSH access**.
+Thank you for your interest in contributing to this security toolkit! We welcome contributions that improve server
+security while maintaining our core principle: **Never lose SSH access**.
 
 ## Code of Conduct
 

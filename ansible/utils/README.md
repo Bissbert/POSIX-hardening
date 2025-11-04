@@ -1,12 +1,11 @@
 # Automatic Inventory Generator
 
-Intelligent network scanning utility that automatically discovers hosts and generates Ansible
-inventory files with suggested security configurations.
+Intelligent network scanning utility that automatically discovers hosts and generates Ansible inventory files with
+suggested security configurations.
 
 ## Features
 
-- **Multi-Zone Support**: Scan different network zones (production, staging, test) with
-  zone-specific configurations
+- **Multi-Zone Support**: Scan different network zones (production, staging, test) with zone-specific configurations
 - **Host Discovery**: Automatic nmap-based host discovery in configured subnets
 - **Service Detection**: Identifies running services and suggests appropriate firewall rules
 - **SSH Port Detection**: Handles non-standard SSH ports automatically
@@ -156,15 +155,15 @@ Each zone in `inventory-config.yml` supports:
 zones:
   zone_name:
     # Required fields
-    subnet: "192.168.1.0/24"          # CIDR notation subnet to scan
-    description: "Zone description"    # Human-readable description
-    scan_ports: "22,80,443"           # Comma-separated ports to scan
+    subnet: "192.168.1.0/24" # CIDR notation subnet to scan
+    description: "Zone description" # Human-readable description
+    scan_ports: "22,80,443" # Comma-separated ports to scan
 
     # Optional zone-specific variables
     vars:
-      remove_emergency_ssh: false     # Auto-remove emergency SSH after deployment
-      run_full_hardening: true        # Run all hardening scripts vs priority 1 only
-      dry_run: 0                      # 1 for simulation mode, 0 for real changes
+      remove_emergency_ssh: false # Auto-remove emergency SSH after deployment
+      run_full_hardening: true # Run all hardening scripts vs priority 1 only
+      dry_run: 0 # 1 for simulation mode, 0 for real changes
 ```
 
 ### Scan Settings
@@ -173,10 +172,10 @@ Configure scanning behavior:
 
 ```yaml
 scan_settings:
-  type: "basic"           # basic|full|fast
-  host_timeout: 300       # Timeout per host in seconds
-  parallel: 10            # Number of hosts to scan simultaneously
-  max_retries: 1          # Retry failed hosts
+  type: "basic" # basic|full|fast
+  host_timeout: 300 # Timeout per host in seconds
+  parallel: 10 # Number of hosts to scan simultaneously
+  max_retries: 1 # Retry failed hosts
   skip_host_discovery: false
 ```
 
@@ -211,8 +210,8 @@ defaults:
   ansible_port: 22
   ansible_python_interpreter: "/usr/bin/python3"
   ansible_become_method: "sudo"
-  admin_ip: "auto"              # auto|prompt|<IP>
-  ssh_allow_users: ""           # Leave empty to prompt
+  admin_ip: "auto" # auto|prompt|<IP>
+  ssh_allow_users: "" # Leave empty to prompt
 ```
 
 ## Generated Inventory Structure
@@ -287,8 +286,7 @@ Scans specified ports on each discovered host.
 
 ### 3. SSH Detection
 
-Checks common SSH ports (22, 2222, 2200, 22000) and identifies the actual SSH port using
-version detection.
+Checks common SSH ports (22, 2222, 2200, 22000) and identifies the actual SSH port using version detection.
 
 ### 4. Service Identification
 
@@ -370,11 +368,11 @@ ansible-vault encrypt_string 'admin,deploy' --name 'ssh_allow_users'
 
 **Problem**: "Found 0 hosts in zone"
 
-**Root Cause**: The scanner uses ping/ARP for host discovery by default. If hosts don't respond
-to ping (ICMP blocked by firewall), they won't be discovered.
+**Root Cause**: The scanner uses ping/ARP for host discovery by default. If hosts don't respond to ping (ICMP blocked by
+firewall), they won't be discovered.
 
-**Automatic Fallback**: The scanner now automatically tries TCP SYN discovery on ports
-22,80,443 if ping scan finds nothing.
+**Automatic Fallback**: The scanner now automatically tries TCP SYN discovery on ports 22,80,443 if ping scan finds
+nothing.
 
 **Manual Solutions:**
 
@@ -393,8 +391,8 @@ to ping (ICMP blocked by firewall), they won't be discovered.
 
 5. **Try with different subnet** to test: `--subnet "10.0.0.0/24"`
 
-**Note**: The scanner automatically falls back to TCP SYN discovery if ping fails, so in most
-cases it should find hosts even with ICMP blocked.
+**Note**: The scanner automatically falls back to TCP SYN discovery if ping fails, so in most cases it should find hosts
+even with ICMP blocked.
 
 ### nmap Not Found
 
@@ -467,7 +465,7 @@ sudo ./generate-inventory.sh --zone production
 2. Reduce scan ports:
 
    ```yaml
-   scan_ports: "22,80,443"  # Instead of many ports
+   scan_ports: "22,80,443" # Instead of many ports
    ```
 
 3. Increase parallel jobs:

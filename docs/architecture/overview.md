@@ -2,8 +2,8 @@
 
 ## Executive Summary
 
-Transaction-based, safety-first server hardening toolkit using orchestrated POSIX shell
-scripts with automatic rollback. Supports both standalone and Ansible deployment.
+Transaction-based, safety-first server hardening toolkit using orchestrated POSIX shell scripts with automatic rollback.
+Supports both standalone and Ansible deployment.
 
 ### Core Principles
 
@@ -148,13 +148,13 @@ Pre-execution (root, OS, commands, space) → During (syntax, health) → Post (
 
 ### Standalone
 
-`quick-start.sh` → Interactive setup → Config generation → Orchestrator →
-Priority-based script execution → Transaction commit → Report
+`quick-start.sh` → Interactive setup → Config generation → Orchestrator → Priority-based script execution → Transaction
+commit → Report
 
 ### Ansible
 
-`ansible-playbook site.yml` → Facts → Pre-flight → Deploy toolkit → Generate config →
-Execute scripts → Validate → Report
+`ansible-playbook site.yml` → Facts → Pre-flight → Deploy toolkit → Generate config → Execute scripts → Validate →
+Report
 
 ## Data Flow
 

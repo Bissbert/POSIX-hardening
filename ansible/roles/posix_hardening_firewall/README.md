@@ -4,14 +4,14 @@
 
 **This role modifies firewall rules with HIGH LOCKOUT RISK.**
 
-Incorrect configuration can prevent SSH access and lock you out of remote systems. Always test
-in a safe environment with console/KVM access available.
+Incorrect configuration can prevent SSH access and lock you out of remote systems. Always test in a safe environment
+with console/KVM access available.
 
 ## Overview
 
-Comprehensive firewall hardening role converted from the POSIX hardening shell script
-(`02-firewall-setup.sh`). Implements production-grade iptables/ip6tables firewall
-configuration with extensive safety mechanisms to prevent lockout.
+Comprehensive firewall hardening role converted from the POSIX hardening shell script (`02-firewall-setup.sh`).
+Implements production-grade iptables/ip6tables firewall configuration with extensive safety mechanisms to prevent
+lockout.
 
 **Source Script:** `scripts/02-firewall-setup.sh`
 
@@ -92,7 +92,7 @@ This role implements **7 layers of protection** against lockout:
 
 ```yaml
 # group_vars/all.yml
-admin_ip: "203.0.113.10"  # YOUR IP - RECOMMENDED
+admin_ip: "203.0.113.10" # YOUR IP - RECOMMENDED
 
 # From SSH role (or override)
 posix_ssh_port: 22
@@ -209,7 +209,7 @@ posix_firewall_admin_ip: "{{ admin_ip | default('') }}"
 posix_firewall_ssh_port: "{{ posix_ssh_port | default(22) }}"
 
 # Safety timeout (seconds)
-posix_firewall_safety_timeout: 300  # 5 minutes
+posix_firewall_safety_timeout: 300 # 5 minutes
 ```
 
 ### Safety Control
@@ -272,17 +272,17 @@ posix_firewall_allow_https: true
 ```yaml
 # Additional inbound TCP ports
 posix_firewall_allowed_ports:
-  - 80    # HTTP
-  - 443   # HTTPS
-  - 3000  # Custom app
+  - 80 # HTTP
+  - 443 # HTTPS
+  - 3000 # Custom app
 
 # Custom outbound ports
 posix_firewall_custom_outbound_tcp:
-  - 3306  # MySQL
-  - 5432  # PostgreSQL
+  - 3306 # MySQL
+  - 5432 # PostgreSQL
 
 posix_firewall_custom_outbound_udp:
-  - 514   # Syslog
+  - 514 # Syslog
 ```
 
 ### Trusted Networks
@@ -298,7 +298,7 @@ posix_firewall_trusted_networks:
 
 ```yaml
 posix_firewall_ipv6_enabled: true
-posix_firewall_ipv6_mode: same  # Options: same, block, custom
+posix_firewall_ipv6_mode: same # Options: same, block, custom
 
 # IPv6 modes explained:
 # - same: Apply same rules as IPv4
@@ -393,9 +393,9 @@ This role has no hard dependencies but works well with:
 
     # Custom ports
     posix_firewall_allowed_ports:
-      - 80    # HTTP
-      - 443   # HTTPS
-      - 8080  # Alt HTTP
+      - 80 # HTTP
+      - 443 # HTTPS
+      - 8080 # Alt HTTP
 
     # Trusted networks
     posix_firewall_trusted_networks:
@@ -462,11 +462,11 @@ This role has no hard dependencies but works well with:
 
     # Only SSH and database port
     posix_firewall_allowed_ports:
-      - 5432  # PostgreSQL
+      - 5432 # PostgreSQL
 
     # Trust application servers
     posix_firewall_trusted_networks:
-      - "10.0.1.0/24"  # App server network
+      - "10.0.1.0/24" # App server network
 
     # Block outbound HTTP/HTTPS (database shouldn't browse web)
     posix_firewall_allow_http: false
@@ -498,8 +498,8 @@ posix_firewall_custom_chains:
 
 ### Custom IPv4 Rules (Advanced)
 
-For complex rules not covered by the role's built-in options, you can use raw iptables commands,
-but this is NOT recommended. Instead, request new features or use the trusted networks option.
+For complex rules not covered by the role's built-in options, you can use raw iptables commands, but this is NOT
+recommended. Instead, request new features or use the trusted networks option.
 
 ### Fail2ban Integration
 
@@ -623,8 +623,8 @@ systemctl enable iptables
 
 #### Issue: Container environment warnings
 
-**Solution:** Firewall in containers may have limitations. Consider using host-level firewall
-instead or skip firewall role for containers.
+**Solution:** Firewall in containers may have limitations. Consider using host-level firewall instead or skip firewall
+role for containers.
 
 #### Issue: IPv6 rules fail
 
@@ -808,8 +808,7 @@ MIT
 
 ## Author Information
 
-POSIX Hardening Project
-Converted from shell script: `scripts/02-firewall-setup.sh`
+POSIX Hardening Project Converted from shell script: `scripts/02-firewall-setup.sh`
 
 ## Support
 
