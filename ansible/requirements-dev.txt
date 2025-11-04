@@ -1,0 +1,28 @@
+# Development and Testing Requirements for Ansible Roles
+# Install with: pip install -r requirements-dev.txt
+
+# Include production requirements
+-r requirements.txt
+
+# Molecule Testing Framework
+molecule>=24.0.0
+molecule-plugins[docker]>=23.5.0
+
+# Testing and Verification
+pytest>=8.0.0
+pytest-testinfra>=10.0.0
+pytest-xdist>=3.5.0  # Parallel test execution
+
+# Docker SDK (required for molecule docker driver)
+docker>=7.0.0
+
+# Additional Testing Tools
+pytest-cov>=4.1.0  # Coverage reporting
+pytest-html>=4.1.0  # HTML test reports
+
+# Ansible Development Tools
+ansible-dev-tools>=24.0.0  # Includes ansible-lint, yamllint, etc.
+
+# Optional but useful
+jmespath>=1.0.1  # For complex JSON queries in tests
+netaddr>=1.2.1  # For network address manipulation

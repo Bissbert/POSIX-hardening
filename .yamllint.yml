@@ -1,0 +1,45 @@
+---
+# YAML Linting Configuration for POSIX Hardening Project
+extends: default
+
+rules:
+  # Line length: Allow longer lines for readability
+  line-length:
+    max: 120
+    level: warning
+
+  # Indentation: 2 spaces
+  indentation:
+    spaces: 2
+    indent-sequences: true
+
+  # Comments: Allow comments without space after #
+  comments:
+    min-spaces-from-content: 1
+
+  # Truthy: Allow yes/no for booleans (Ansible convention)
+  truthy:
+    allowed-values: ['true', 'false', 'yes', 'no', 'on', 'off']
+    check-keys: false
+
+  # Document start: Not required
+  document-start: disable
+
+  # Brackets: Allow empty brackets
+  brackets:
+    max-spaces-inside: 1
+
+  # Braces: Allow empty braces
+  braces:
+    max-spaces-inside: 1
+
+ignore: |
+  .github/
+  .ansible-lint
+  .venv/
+  venv/
+  node_modules/
+  ansible/retry/
+  ansible/testing/
+  testing/
+  .cache/

@@ -71,6 +71,14 @@ ansible/inventories/**/hosts.yml.backup.*
 # Fact cache
 /tmp/ansible_facts
 
+# Molecule ephemeral files
+ansible/roles/**/molecule/**/.cache/
+ansible/roles/**/molecule/**/.pytest_cache/
+ansible/roles/**/molecule/**/.molecule/
+ansible/roles/**/molecule/**/__pycache__/
+ansible/roles/**/molecule/**/*.pyc
+ansible/roles/**/molecule/**/roles/  # Symlinks to test roles
+
 # Vault password (never commit!)
 .vault_pass
 .vault_pass.txt

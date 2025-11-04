@@ -1,0 +1,16 @@
+# Production Ansible Requirements
+# Install with: pip install -r requirements.txt
+
+# Core Ansible
+# Note: ansible package v10+ corresponds to ansible-core 2.17
+ansible>=10.0.0
+ansible-core>=2.17.0
+
+# Required Collections (installed via ansible-galaxy)
+# Run: ansible-galaxy collection install -r collections/requirements.yml
+
+# Ansible Lint (for production validation)
+ansible-lint>=24.0.0
+
+# YAML Linting
+yamllint>=1.35.0
