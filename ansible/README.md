@@ -19,17 +19,17 @@ See [testing/README.md](testing/README.md) for complete Docker testing documenta
 
 1. **Ansible installed on control machine**:
 
-```bash
-# Ubuntu/Debian
-sudo apt-get update
-sudo apt-get install ansible
+   ```bash
+   # Ubuntu/Debian
+   sudo apt-get update
+   sudo apt-get install ansible
 
-# macOS
-brew install ansible
+   # macOS
+   brew install ansible
 
-# Python pip
-pip install ansible
-```
+   # Python pip
+   pip install ansible
+   ```
 
 2. **SSH access to target servers** with sudo privileges
 3. **SSH key authentication configured** (password auth will be disabled!)

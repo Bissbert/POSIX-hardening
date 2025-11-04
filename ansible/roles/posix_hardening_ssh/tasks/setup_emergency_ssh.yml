@@ -28,6 +28,7 @@
     group: root
     backup: true
   register: emergency_config_created
+  changed_when: false
   tags: [ssh, emergency, config]
 
 # ------------------------------------------------------------------------------
@@ -40,6 +41,7 @@
     regexp: '^#?Port\s+'
     line: "Port {{ posix_ssh_emergency_port }}"
     state: present
+  changed_when: false
   tags: [ssh, emergency, config]
 
 - name: Set PID file for emergency SSH
@@ -48,6 +50,7 @@
     regexp: '^#?PidFile\s+'
     line: "PidFile {{ posix_ssh_emergency_pid_file }}"
     state: present
+  changed_when: false
   tags: [ssh, emergency, config]
 
 # Make emergency SSH more permissive (for recovery purposes)
@@ -57,6 +60,7 @@
     regexp: '^#?PasswordAuthentication\s+'
     line: "PasswordAuthentication {{ 'yes' if posix_ssh_emergency_permit_password else 'no' }}"
     state: present
+  changed_when: false
   tags: [ssh, emergency, config]
 
 - name: Permit root login on emergency SSH (recovery only)
@@ -65,6 +69,7 @@
     regexp: '^#?PermitRootLogin\s+'
     line: "PermitRootLogin yes"
     state: present
+  changed_when: false
   tags: [ssh, emergency, config]
 
 # Remove AllowUsers restriction from emergency SSH
@@ -73,6 +78,7 @@
     path: "{{ posix_ssh_emergency_config_file }}"
     regexp: '^AllowUsers\s+'
     state: absent
+  changed_when: false
   tags: [ssh, emergency, config]
 
 # Remove AllowGroups restriction from emergency SSH
@@ -81,6 +87,7 @@
     path: "{{ posix_ssh_emergency_config_file }}"
     regexp: '^AllowGroups\s+'
     state: absent
+  changed_when: false
   tags: [ssh, emergency, config]
 
 # ------------------------------------------------------------------------------

@@ -171,19 +171,19 @@ ansible-playbook hardening_master.yml -e "posix_ssh_port=2022"
 
 ### SSH Access Lost
 
-**Option 1: Emergency Port**
+#### Option 1: Emergency Port
 
 ```bash
 ssh -p 2222 user@server
 ```
 
-**Option 2: Rollback Playbook**
+#### Option 2: Rollback Playbook
 
 ```bash
 ansible-playbook rollback.yml -l affected_server
 ```
 
-**Option 3: Console Access**
+#### Option 3: Console Access
 
 ```bash
 # Via IPMI/console

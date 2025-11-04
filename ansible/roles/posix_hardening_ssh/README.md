@@ -4,11 +4,13 @@
 
 **This role modifies SSH configuration with HIGH LOCKOUT RISK.**
 
-Incorrect configuration or missing SSH keys can permanently lock you out of remote systems. Always test in a safe environment with console/KVM access available.
+Incorrect configuration or missing SSH keys can permanently lock you out of remote systems.
+Always test in a safe environment with console/KVM access available.
 
 ## Overview
 
-Comprehensive SSH hardening role converted from the POSIX hardening shell script (`01-ssh-hardening.sh`). Implements enterprise-grade SSH security with extensive safety mechanisms to prevent lockout.
+Comprehensive SSH hardening role converted from the POSIX hardening shell script (`01-ssh-hardening.sh`).
+Implements enterprise-grade SSH security with extensive safety mechanisms to prevent lockout.
 
 **Source Script:** `scripts/01-ssh-hardening.sh`
 
@@ -89,6 +91,7 @@ ansible-playbook playbooks/test_ssh_hardening.yml --skip-tags pause
 ## SSH Settings Applied
 
 ### Authentication (CRITICAL)
+
 - **PermitRootLogin**: no (root cannot login directly)
 - **PasswordAuthentication**: no (only SSH keys)
 - **PubkeyAuthentication**: yes (SSH key auth only)
@@ -96,6 +99,7 @@ ansible-playbook playbooks/test_ssh_hardening.yml --skip-tags pause
 - **ChallengeResponseAuthentication**: no
 
 ### Connection Limits
+
 - **MaxAuthTries**: 3 (limit login attempts)
 - **MaxSessions**: 10 (concurrent sessions per connection)
 - **MaxStartups**: 10:30:60 (rate limiting)
@@ -104,6 +108,7 @@ ansible-playbook playbooks/test_ssh_hardening.yml --skip-tags pause
 - **ClientAliveCountMax**: 2 (disconnect after 10 min idle)
 
 ### Security Options
+
 - **X11Forwarding**: no
 - **AllowAgentForwarding**: no
 - **AllowTcpForwarding**: no
@@ -115,19 +120,23 @@ ansible-playbook playbooks/test_ssh_hardening.yml --skip-tags pause
 - **UseDNS**: no (performance)
 
 ### Cryptography (Strong Only)
+
 - **Ciphers**: chacha20-poly1305, aes256-gcm, aes128-gcm, aes256-ctr, aes192-ctr, aes128-ctr
 - **MACs**: hmac-sha2-512-etm, hmac-sha2-256-etm, hmac-sha2-512, hmac-sha2-256
 - **KexAlgorithms**: curve25519-sha256, diffie-hellman-group16-sha512, diffie-hellman-group18-sha512
 
 ### Access Control
+
 - **AllowUsers**: Specified in `posix_ssh_allow_users` (REQUIRED)
 - **AllowGroups**: Optional, specified in `posix_ssh_allow_groups`
 
 ### Logging
+
 - **LogLevel**: VERBOSE (detailed logging)
 - **SyslogFacility**: AUTH
 
 ### Banner
+
 - Warning banner displayed before authentication
 - Configurable via `posix_ssh_banner_text`
 
@@ -220,7 +229,7 @@ posix_ssh_hardening_marker: "/var/lib/hardening/ssh_hardened"
 
 ## File Structure
 
-```
+```text
 posix_hardening_ssh/
 ├── defaults/
 │   └── main.yml              # All default variables (162 lines)
@@ -244,6 +253,7 @@ posix_hardening_ssh/
 The role executes in **7 distinct phases**:
 
 ### Phase 1: Pre-flight Validation
+
 - Check if already hardened
 - Verify SSH package installed
 - Validate allowed users exist
@@ -252,6 +262,7 @@ The role executes in **7 distinct phases**:
 - Create backup directories
 
 ### Phase 2: Emergency SSH Setup
+
 - Create emergency config from main config
 - Set emergency port (2222)
 - Enable password auth for recovery
@@ -260,6 +271,7 @@ The role executes in **7 distinct phases**:
 - Add firewall rule
 
 ### Phase 3: SSH Configuration Hardening (CRITICAL)
+
 - Backup current config
 - Apply all security settings using `lineinfile`
 - Each change validated with `sshd -t`
@@ -268,6 +280,7 @@ The role executes in **7 distinct phases**:
 - Triggers rollback on failure
 
 ### Phase 4: SSH Permissions Hardening
+
 - Fix /etc/ssh directory permissions
 - Secure SSH host keys (600)
 - Fix root .ssh directory
@@ -276,11 +289,13 @@ The role executes in **7 distinct phases**:
 - Validate permissions
 
 ### Phase 5: SSH Banner Configuration
+
 - Create banner file
 - Configure sshd to use banner
 - Set correct permissions
 
 ### Phase 6: Post-Hardening Validation (CRITICAL)
+
 - Flush handlers (reload SSH)
 - Test SSH port accessibility
 - Test SSH connection
@@ -290,6 +305,7 @@ The role executes in **7 distinct phases**:
 - Trigger rollback if tests fail
 
 ### Phase 7: Cleanup and Finalization
+
 - Display success message
 - Monitor SSH connections
 - Show cleanup instructions
@@ -300,11 +316,13 @@ The role executes in **7 distinct phases**:
 ### Automatic Rollback
 
 Triggered automatically if:
+
 - Configuration validation fails (`sshd -t` error)
 - SSH connectivity test fails
 - Port becomes inaccessible
 
 Rollback process:
+
 1. Find latest backup in `/var/backups/hardening/`
 2. Restore backup to `/etc/ssh/sshd_config`
 3. Reload SSH daemon
@@ -388,6 +406,7 @@ ssh user@host 'sudo cat /var/lib/hardening/ssh_hardened'
 ### Issue: "posix_ssh_allow_users is empty"
 
 **Solution:** Set required variable:
+
 ```yaml
 posix_ssh_allow_users:
   - root
@@ -401,6 +420,7 @@ posix_ssh_allow_users:
 ### Issue: "Locked out after hardening"
 
 **Solutions:**
+
 1. Use emergency SSH: `ssh -p 2222 user@host`
 2. Use console/KVM access
 3. Restore from backup (see Manual Rollback)
@@ -408,6 +428,7 @@ posix_ssh_allow_users:
 ### Issue: "SSH service won't reload"
 
 **Solution:**
+
 ```bash
 # Check config syntax
 sudo /usr/sbin/sshd -t
@@ -422,6 +443,7 @@ sudo journalctl -u ssh -n 50
 ### Issue: "Want to re-run hardening"
 
 **Solution:**
+
 ```yaml
 # Set in playbook or extra-vars
 posix_ssh_force_reharden: true
@@ -500,6 +522,7 @@ The role is fully idempotent:
 - Safe to run multiple times
 
 Force re-execution:
+
 ```yaml
 posix_ssh_force_reharden: true
 ```
@@ -507,15 +530,18 @@ posix_ssh_force_reharden: true
 ## Logs and State Files
 
 ### Logs
+
 - `/var/log/hardening/ssh_hardening.log` - Main log file
 - `journalctl -u ssh` - SSH daemon logs
 - `/var/log/auth.log` - Authentication attempts
 
 ### State Files
+
 - `/var/lib/hardening/ssh_hardened` - Hardening marker
 - `/var/lib/hardening/emergency_ssh_active` - Emergency SSH status
 
 ### Backups
+
 - `/var/backups/hardening/sshd_config.*.bak` - Config backups
 
 ## Emergency Contact
@@ -540,6 +566,7 @@ POSIX Hardening Team
 ## Contributing
 
 Improvements welcome! Please:
+
 1. Test thoroughly in safe environment
 2. Maintain safety mechanisms
 3. Update documentation
@@ -548,6 +575,7 @@ Improvements welcome! Please:
 ## Acknowledgments
 
 Based on industry best practices from:
+
 - OpenSSH documentation
 - CIS Benchmarks
 - NIST guidelines

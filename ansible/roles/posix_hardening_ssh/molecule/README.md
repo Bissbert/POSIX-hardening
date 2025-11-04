@@ -48,7 +48,7 @@ Known failures in containerized environments:
 
 ## File Structure
 
-```
+```text
 molecule/
 └── default/                 # Default test scenario
     ├── molecule.yml         # Molecule configuration
