@@ -7,7 +7,7 @@
 set -e
 
 # Global configuration
-readonly VERSION="1.0.0"
+readonly VERSION="1.1.0"
 readonly TOOLKIT_NAME="POSIX-hardening"
 
 # Safety flags - use config values if set, otherwise use sensible defaults
