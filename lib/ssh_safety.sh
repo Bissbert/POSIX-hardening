@@ -4,9 +4,8 @@
 # Critical: Prevents lockout on remote servers
 
 # Note: common.sh should be sourced before this file
-# Source POSIX compatibility layer
-SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-. "${SCRIPT_DIR}/posix_compat.sh"
+# Source POSIX compatibility layer from the caller-provided library directory.
+. "${LIB_DIR}/posix_compat.sh"
 
 # SSH-specific configuration
 readonly SSHD_CONFIG="${SSHD_CONFIG:-/etc/ssh/sshd_config}"

@@ -4,9 +4,8 @@
 # Provides atomic operations with automatic rollback on failure
 
 # Note: common.sh should be sourced before this file
-# Source POSIX compatibility layer
-SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-. "${SCRIPT_DIR}/posix_compat.sh"
+# Source POSIX compatibility layer from the caller-provided library directory.
+. "${LIB_DIR}/posix_compat.sh"
 
 # Rollback configuration
 readonly ROLLBACK_STACK="$STATE_DIR/rollback_stack"
