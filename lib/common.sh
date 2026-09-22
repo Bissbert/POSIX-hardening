@@ -218,7 +218,7 @@ safe_backup_file() {
     cp -p "$source_file" "$backup_path"
 
     if [ -f "$backup_path" ]; then
-        log "INFO" "Backed up $source_file to $backup_path"
+        log "INFO" "Backed up $source_file to $backup_path" >&2
         echo "$backup_path"
         return 0
     else

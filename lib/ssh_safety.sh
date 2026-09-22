@@ -91,7 +91,7 @@ create_ssh_test_config() {
         echo "PidFile /var/run/sshd_test.pid" >> "$_test_config"
     fi
 
-    log "DEBUG" "Created test SSH config: $_test_config on port $_test_port"
+    log "DEBUG" "Created test SSH config: $_test_config on port $_test_port" >&2
     echo "$_test_config"
     unset _test_port
 }
