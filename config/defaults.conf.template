@@ -60,7 +60,7 @@ SSH_ROLLBACK_TIMEOUT=60      # Seconds to wait before auto-rollback
 # Creates a temporary SSH port with password auth for emergency recovery
 # Recommended: Keep enabled during initial deployment, remove after verification
 
-ENABLE_EMERGENCY_SSH=1       # Create emergency SSH on alternate port (1=on, 0=off)
+ENABLE_EMERGENCY_ACCESS=1    # Create emergency SSH on alternate port (1=on, 0=off)
 EMERGENCY_SSH_PORT=2222      # Emergency SSH port number
 REMOVE_EMERGENCY_SSH=0       # Auto-remove after successful deployment (1=on, 0=off)
                              # Set to 1 for staging/test environments
@@ -195,7 +195,7 @@ OS_VERSION=""                # Auto-detected: 11, 12, 20.04, 22.04, etc.
 # 3. Test in a sandbox environment first (use DRY_RUN=1)
 # 4. Keep SAFETY_MODE=1 for production deployments
 # 5. Review logs in /var/log/hardening/ after execution
-# 6. Emergency access: ssh -p 2222 user@host (if ENABLE_EMERGENCY_SSH=1)
+# 6. Emergency access: ssh -p 2222 user@host (if ENABLE_EMERGENCY_ACCESS=1)
 #
 # Documentation: See README.md and docs/
 # Support: https://github.com/Bissbert/POSIX-hardening

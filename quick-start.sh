@@ -208,7 +208,7 @@ write_config() {
     sed -i "s|ADMIN_EMAIL=\"\"|ADMIN_EMAIL=\"$admin_email\"|" "$CONFIG_FILE"
     sed -i "s|SSH_PORT=22|SSH_PORT=$ssh_port|" "$CONFIG_FILE"
     sed -i "s|SSH_ALLOW_USERS=\"\"|SSH_ALLOW_USERS=\"$ssh_users\"|" "$CONFIG_FILE"
-    sed -i "s|ENABLE_EMERGENCY_SSH=1|ENABLE_EMERGENCY_SSH=$emergency_enabled|" "$CONFIG_FILE"
+    sed -i "s|ENABLE_EMERGENCY_ACCESS=1|ENABLE_EMERGENCY_ACCESS=$emergency_enabled|" "$CONFIG_FILE"
     sed -i "s|EMERGENCY_SSH_PORT=2222|EMERGENCY_SSH_PORT=$emergency_port|" "$CONFIG_FILE"
     sed -i "s|HARDENING_LEVEL=\"standard\"|HARDENING_LEVEL=\"$hardening_level\"|" "$CONFIG_FILE"
     sed -i "s|ALLOWED_PORTS=\"\"|ALLOWED_PORTS=\"$allowed_ports\"|" "$CONFIG_FILE"
