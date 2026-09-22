@@ -315,6 +315,11 @@ mark_completed() {
     script_name="$1"
     completion_file="$STATE_DIR/completed"
 
+    if [ "$DRY_RUN" = "1" ]; then
+        log "DRY_RUN" "Would mark as completed: $script_name"
+        return 0
+    fi
+
     if ! is_completed "$script_name"; then
         echo "$script_name" >> "$completion_file"
         log "INFO" "Marked as completed: $script_name"
