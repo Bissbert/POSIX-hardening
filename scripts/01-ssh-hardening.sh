@@ -330,25 +330,16 @@ main() {
 
         # In dry-run mode, skip port connectivity test (no actual changes were made)
         if [ "$DRY_RUN" != "1" ]; then
-            # Test that we can still connect
-            # Try multiple methods: nc, ss, or netstat
+            # Test that we can still connect using the shared port checker.
             ssh_accessible=0
 
-            if command -v nc >/dev/null 2>&1; then
-                if timeout "$SSH_TEST_TIMEOUT" nc -z localhost "$SSH_PORT" 2>/dev/null; then
-                    ssh_accessible=1
-                fi
-            elif command -v ss >/dev/null 2>&1; then
-                if ss -ltn | grep -q ":$SSH_PORT "; then
-                    ssh_accessible=1
-                fi
-            elif command -v netstat >/dev/null 2>&1; then
-                if netstat -ltn | grep -q ":$SSH_PORT "; then
-                    ssh_accessible=1
-                fi
+            if check_port_listening localhost "$SSH_PORT" "$SSH_TEST_TIMEOUT"; then
+                ssh_accessible=1
             else
-                log "WARN" "No tool available to check SSH port (nc/ss/netstat), skipping port check"
-                ssh_accessible=1  # Assume accessible if we can't check
+                _port_check_status=$?
+                if [ "$_port_check_status" -eq 2 ]; then
+                    log "ERROR" "Cannot verify SSH port: no port-checking tool is available"
+                fi
             fi
 
             if [ "$ssh_accessible" = "1" ]; then

@@ -496,6 +496,7 @@ check_port_listening() {
     _host="${1:-localhost}"
     _port="$2"
     _timeout_sec="${3:-5}"
+    _probe_available=0
 
     if [ -z "$_port" ]; then
         log "ERROR" "Port number required for check_port_listening"
@@ -505,36 +506,48 @@ check_port_listening() {
 
     # Method 1: nc (netcat) - most reliable
     if command -v nc >/dev/null 2>&1; then
+        _probe_available=1
         if timeout "$_timeout_sec" nc -z "$_host" "$_port" 2>/dev/null; then
-            unset _host _port _timeout_sec
+            unset _host _port _timeout_sec _probe_available
             return 0
         fi
     fi
 
     # Method 2: ss (modern alternative)
     if command -v ss >/dev/null 2>&1; then
+        _probe_available=1
         if ss -ltn 2>/dev/null | grep -q ":$_port "; then
-            unset _host _port _timeout_sec
+            unset _host _port _timeout_sec _probe_available
             return 0
         fi
     fi
 
     # Method 3: netstat (legacy fallback)
     if command -v netstat >/dev/null 2>&1; then
+        _probe_available=1
         if netstat -ltn 2>/dev/null | grep -q ":$_port "; then
-            unset _host _port _timeout_sec
+            unset _host _port _timeout_sec _probe_available
             return 0
         fi
     fi
 
     # Method 4: Try direct connection with timeout (last resort)
     # Use /dev/tcp if available (bash feature, but works in some sh)
-    if timeout "$_timeout_sec" sh -c "echo '' | telnet $_host $_port" >/dev/null 2>&1; then
-        unset _host _port _timeout_sec
-        return 0
+    if command -v telnet >/dev/null 2>&1; then
+        _probe_available=1
+        if timeout "$_timeout_sec" sh -c "echo '' | telnet $_host $_port" >/dev/null 2>&1; then
+            unset _host _port _timeout_sec _probe_available
+            return 0
+        fi
     fi
 
-    unset _host _port _timeout_sec
+    if [ "$_probe_available" -eq 0 ]; then
+        log "ERROR" "No port-checking tool available (nc, ss, netstat, or telnet)"
+        unset _host _port _timeout_sec _probe_available
+        return 2
+    fi
+
+    unset _host _port _timeout_sec _probe_available
     return 1
 }
 
