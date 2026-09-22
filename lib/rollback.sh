@@ -444,23 +444,63 @@ rollback_to_checkpoint() {
         return 1
     fi
 
-    # Get actions added after checkpoint
+    # Checkpoint stacks are ordered prefixes, so preserve duplicates and
+    # chronology instead of treating the stacks as sorted sets.
     _temp_actions="${ROLLBACK_STACK}.temp"
-    comm -13 "$_checkpoint_file" "$ROLLBACK_STACK" > "$_temp_actions" 2>/dev/null
+    _checkpoint_prefix="${_temp_actions}.prefix"
+    _reversed_actions="${_temp_actions}.reversed"
+    _checkpoint_lines=$(wc -l < "$_checkpoint_file")
+    _stack_lines=$(wc -l < "$ROLLBACK_STACK")
 
-    # Execute rollback for actions after checkpoint
-    if [ -s "$_temp_actions" ]; then
-        tac "$_temp_actions" 2>/dev/null || tail -r "$_temp_actions" 2>/dev/null | while IFS='|' read -r action_type action_data; do
-            execute_rollback_action "$action_type" "$action_data"
-        done
+    if [ "$_stack_lines" -lt "$_checkpoint_lines" ]; then
+        log "ERROR" "Rollback stack predates checkpoint: $_checkpoint_name"
+        unset _checkpoint_name _checkpoint_file _temp_actions _checkpoint_prefix _reversed_actions _checkpoint_lines _stack_lines
+        return 1
     fi
 
-    # Restore checkpoint stack
-    cp "$_checkpoint_file" "$ROLLBACK_STACK"
+    awk -v limit="$_checkpoint_lines" 'NR <= limit {print}' "$ROLLBACK_STACK" > "$_checkpoint_prefix"
+    if ! cmp -s "$_checkpoint_file" "$_checkpoint_prefix"; then
+        log "ERROR" "Rollback stack does not contain checkpoint prefix: $_checkpoint_name"
+        rm -f "$_temp_actions" "$_checkpoint_prefix" "$_reversed_actions"
+        unset _checkpoint_name _checkpoint_file _temp_actions _checkpoint_prefix _reversed_actions _checkpoint_lines _stack_lines
+        return 1
+    fi
 
-    rm -f "$_temp_actions"
+    _first_new_line=$((_checkpoint_lines + 1))
+    awk -v start="$_first_new_line" 'NR >= start {print}' "$ROLLBACK_STACK" > "$_temp_actions"
+
+    _checkpoint_failed=0
+    if [ -s "$_temp_actions" ]; then
+        if ! posix_reverse "$_temp_actions" > "$_reversed_actions"; then
+            rm -f "$_temp_actions" "$_checkpoint_prefix" "$_reversed_actions"
+            unset _checkpoint_name _checkpoint_file _temp_actions _checkpoint_prefix _reversed_actions _checkpoint_lines _stack_lines _first_new_line _checkpoint_failed
+            return 1
+        fi
+
+        while IFS='|' read -r action_type action_data; do
+            if ! execute_rollback_action "$action_type" "$action_data"; then
+                _checkpoint_failed=1
+            fi
+        done < "$_reversed_actions"
+    fi
+
+    rm -f "$_temp_actions" "$_checkpoint_prefix" "$_reversed_actions"
+
+    if [ "$_checkpoint_failed" -ne 0 ]; then
+        log "ERROR" "Rollback to checkpoint failed; current stack retained"
+        unset _checkpoint_name _checkpoint_file _temp_actions _checkpoint_prefix _reversed_actions _checkpoint_lines _stack_lines _first_new_line _checkpoint_failed
+        return 1
+    fi
+
+    # Restore checkpoint stack only after every appended action succeeds.
+    if ! cp "$_checkpoint_file" "$ROLLBACK_STACK"; then
+        log "ERROR" "Could not restore checkpoint stack: $_checkpoint_name"
+        unset _checkpoint_name _checkpoint_file _temp_actions _checkpoint_prefix _reversed_actions _checkpoint_lines _stack_lines _first_new_line _checkpoint_failed
+        return 1
+    fi
+
     log "INFO" "Rolled back to checkpoint: $_checkpoint_name"
-    unset _checkpoint_name _checkpoint_file _temp_actions
+    unset _checkpoint_name _checkpoint_file _temp_actions _checkpoint_prefix _reversed_actions _checkpoint_lines _stack_lines _first_new_line _checkpoint_failed
     return 0
 }
 
