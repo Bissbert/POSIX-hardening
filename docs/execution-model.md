@@ -85,7 +85,7 @@ sequenceDiagram
         S->>SYS: "append name to /var/lib/hardening/completed"
     else "non-zero"
         R->>R: "rollback_transaction"
-        Note over R,SYS: "logs Rollback completed;<br/>the file is not restored"
+        Note over R,SYS: "logs Rollback completed,<br/>the file is not restored"
     end
 ```
 
