@@ -54,15 +54,15 @@ fi
 
 # Log message with severity level
 log() {
-    level="$1"
+    _log_level="$1"
     shift
-    timestamp=$(date '+%Y-%m-%d %H:%M:%S')
+    _log_timestamp=$(date '+%Y-%m-%d %H:%M:%S')
 
     # Log to file
-    echo "[$timestamp] [$level] $*" >> "$LOG_FILE"
+    echo "[$_log_timestamp] [$_log_level] $*" >> "$LOG_FILE"
 
     # Log to stdout with colors
-    case "$level" in
+    case "$_log_level" in
         ERROR)
             printf "${RED}[ERROR]${RESET} %s\n" "$*" >&2
             ;;
@@ -81,9 +81,11 @@ log() {
             printf "${YELLOW}[DRY-RUN]${RESET} %s\n" "$*"
             ;;
         *)
-            echo "[$level] $*"
+            echo "[$_log_level] $*"
             ;;
     esac
+
+    unset _log_level _log_timestamp
 }
 
 # Log error and exit
