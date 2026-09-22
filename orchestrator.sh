@@ -106,6 +106,7 @@ run_all_scripts() {
     local total_scripts=$(echo "$SCRIPT_ORDER" | grep -c ":")
     local completed=0
     local failed=0
+    local stop=0
 
     # Create initial snapshot
     local snapshot_id
@@ -116,8 +117,9 @@ run_all_scripts() {
     for priority in 1 2 3 4; do
         show_progress "Processing Priority $priority scripts"
 
-        get_scripts_by_priority "$priority" | while IFS=: read -r script deps; do
-            [ -z "$script" ] && continue
+        for entry in $(get_scripts_by_priority "$priority"); do
+            script=${entry%%:*}
+            deps=${entry#*:}
 
             # Check if already completed
             if is_completed "${script%.sh}"; then
@@ -140,13 +142,16 @@ run_all_scripts() {
 
                 if [ "$FAIL_FAST" = "1" ]; then
                     show_error "Stopping execution due to failure"
-                    break 2
+                    stop=1
+                    break
                 fi
             fi
 
             # Brief pause between scripts
             sleep 2
         done
+
+        [ "$stop" -eq 1 ] && break
     done
 
     # Final report
