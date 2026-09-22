@@ -203,9 +203,9 @@
         - name: Get list of running services
           ansible.builtin.systemd:
             name: "{{ item }}"
-            state: started
           register: critical_services
           failed_when: false
+          changed_when: false
           loop:
             - ssh
             - sshd
