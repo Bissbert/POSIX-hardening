@@ -112,7 +112,7 @@
 
     - name: Copy library files
       ansible.builtin.copy:
-        src: "../lib/"
+        src: "../../lib/"
         dest: "{{ toolkit_path }}/lib/"
         mode: '0644'
         owner: root
@@ -120,7 +120,7 @@
         backup: true
     - name: Copy hardening scripts
       ansible.builtin.copy:
-        src: "../scripts/"
+        src: "../../scripts/"
         dest: "{{ toolkit_path }}/scripts/"
         mode: '0755'
         owner: root
@@ -128,7 +128,7 @@
         backup: true
     - name: Copy test scripts
       ansible.builtin.copy:
-        src: "../tests/"
+        src: "../../tests/"
         dest: "{{ toolkit_path }}/tests/"
         mode: '0755'
         owner: root
@@ -136,7 +136,7 @@
 
     - name: Copy orchestrator
       ansible.builtin.copy:
-        src: "../orchestrator.sh"
+        src: "../../orchestrator.sh"
         dest: "{{ toolkit_path }}/orchestrator.sh"
         mode: '0755'
         owner: root
@@ -144,7 +144,7 @@
 
     - name: Copy emergency rollback
       ansible.builtin.copy:
-        src: "../emergency-rollback.sh"
+        src: "../../emergency-rollback.sh"
         dest: "{{ toolkit_path }}/emergency-rollback.sh"
         mode: '0755'
         owner: root
@@ -152,7 +152,7 @@
 
     - name: Deploy configuration
       ansible.builtin.template:
-        src: "templates/defaults.conf.j2"
+        src: "../templates/defaults.conf.j2"
         dest: "{{ toolkit_path }}/config/defaults.conf"
         mode: '0644'
         owner: root
@@ -160,7 +160,7 @@
         backup: true
     - name: Deploy firewall configuration (if variables defined)
       ansible.builtin.template:
-        src: "templates/firewall.conf.j2"
+        src: "../templates/firewall.conf.j2"
         dest: "{{ toolkit_path }}/config/firewall.conf"
         mode: '0644'
         owner: root
@@ -240,7 +240,7 @@
   become: true
   tags: [harden, priority1, ssh_keys]
   vars:
-    team_keys_dir: "{{ playbook_dir }}/team_keys"
+    team_keys_dir: "{{ playbook_dir }}/../team_keys"
     ansible_key_name: "ansible_ed25519"
     team_key_name: "team_shared_ed25519"
 
