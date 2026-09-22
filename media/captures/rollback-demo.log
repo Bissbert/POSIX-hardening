@@ -1,0 +1,28 @@
+== before ==
+ORIGINAL - this must come back after rollback
+
+== what safe_backup_file actually returns ==
+     1	[INFO] Backed up /etc/demo.conf to /var/backups/hardening/demo.conf.20260921-195638.bak
+     2	/var/backups/hardening/demo.conf.20260921-195638.bak
+lines captured: 2
+names an existing file: NO
+
+== transaction ==
+[INFO] Started transaction: 20260921-195638-146-demo (demo)
+after modification:
+HARDENED - this must not survive the rollback
+
+== rollback stack contents ==
+     1	FILE_RESTORE|[INFO] Backed up /etc/demo.conf to /var/backups/hardening/demo.conf.20260921-195638.bak
+     2	/var/backups/hardening/demo.conf.20260921-195638.bak:/etc/demo.conf
+
+== rollback ==
+[WARN] Rolling back transaction: 20260921-195638-146-demo (reason: demo_failed)
+[ERROR] Unknown rollback action type: /var/backups/hardening/demo.conf.20260921-195638.bak:/etc/demo.conf
+[ERROR] Backup file not found: [INFO] Backed up /etc/demo.conf to /var/backups/hardening/demo.conf.20260921-195638.bak
+[INFO] Rollback completed
+
+== after rollback ==
+HARDENED - this must not survive the rollback
+
+RESULT: file was NOT restored - the hardened content survived

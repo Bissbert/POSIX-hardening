@@ -1,0 +1,12 @@
+# Repository as shipped, no workarounds. /bin/sh is dash.
+scripts/01-ssh-hardening.sh        exit=2   scripts/01-ssh-hardening.sh: 9: .: cannot open /opt/posix-hardening/scripts/posix_compat.sh: No such file
+scripts/03-kernel-params.sh        exit=2   scripts/03-kernel-params.sh: 9: .: cannot open /opt/posix-hardening/scripts/posix_compat.sh: No such file
+scripts/05-file-permissions.sh     exit=2   scripts/05-file-permissions.sh: 9: .: cannot open /opt/posix-hardening/scripts/posix_compat.sh: No such file
+orchestrator.sh --status           exit=2   orchestrator.sh: 9: .: cannot open /opt/posix-hardening/posix_compat.sh: No such file
+orchestrator.sh --dry-run --all    exit=2   orchestrator.sh: 9: .: cannot open /opt/posix-hardening/posix_compat.sh: No such file
+emergency-rollback.sh --help       exit=2   emergency-rollback.sh: 14: export: SAFETY_MODE: is read only
+
+# Same entry points under bash, which names the failing library.
+scripts/01-ssh-hardening.sh        exit=1   /opt/posix-hardening/lib/ssh_safety.sh: line 9: /opt/posix-hardening/scripts/posix_compat.sh: No such file or directory
+orchestrator.sh --status           exit=1   /opt/posix-hardening/lib/rollback.sh: line 9: /opt/posix-hardening/posix_compat.sh: No such file or directory
+emergency-rollback.sh --help       exit=1   emergency-rollback.sh: line 14: SAFETY_MODE: readonly variable

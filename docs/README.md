@@ -1,209 +1,103 @@
-# POSIX Hardening Toolkit Documentation
+# Documentation index
 
-Welcome to the comprehensive documentation for the POSIX Shell Server Hardening Toolkit. This documentation is organized
-to help you quickly find the information you need.
+This directory holds two kinds of page.
 
-## 📚 Documentation Structure
+The first group was written during a documentation pass that ran the toolkit
+in throwaway containers and recorded what it did. Those pages carry diagrams
+and captured output, and every number in them comes from a command in
+[`tools/`](../tools) whose raw output is in
+[`media/captures/`](../media/captures). They describe the code as it behaves
+today, including where it does not work.
 
-### Getting Started
+The second group is the project's own earlier documentation. It is kept
+unchanged. Where it disagrees with a measurement, the measured page wins and
+the disagreement is recorded in [BUGS-FOUND.md](BUGS-FOUND.md#bug-12).
 
-- **[Getting Started Guide](GETTING_STARTED.md)** - **START HERE** - 5-minute quick start
-- [Main README](../README.md) - Project overview
-- [Ansible Quick Start](../ansible/QUICK_START_ROLES.md) - Ansible command reference
-- [Script Documentation](SCRIPTS.md) - Shell script documentation (22 scripts)
+```mermaid
+flowchart TD
+    START["Start here"]
 
-### Implementation Guides
+    START --> Q1["Want to run it?"]
+    START --> Q2["Want to know<br/>how it works?"]
+    START --> Q3["Want to know<br/>what is broken?"]
 
-- [Hardening Requirements](guides/HARDENING_REQUIREMENTS.md) - Security requirements and compliance standards
-- [Implementation Guide](guides/IMPLEMENTATION_GUIDE.md) - Step-by-step deployment instructions
-- [Testing Framework](guides/TESTING_FRAMEWORK.md) - Testing and validation procedures
+    Q1 --> GS["GETTING_STARTED.md<br/>pre-existing"]
+    Q1 --> DP["deployment-paths.md<br/>manual vs Ansible"]
 
-### Development
+    Q2 --> EM["execution-model.md<br/>phases of a run"]
+    Q2 --> SS["ssh-safety.md<br/>lockout avoidance"]
+    Q2 --> RB["rollback.md<br/>transactions and undo"]
+    Q2 --> LR["library-reference.md<br/>what lib/ provides"]
 
-- [Contributing Guide](development/CONTRIBUTING.md) - How to contribute to the project
-- [Authors](development/AUTHORS.md) - Project contributors and maintainers
+    Q3 --> BF["BUGS-FOUND.md<br/>24 entries with diffs"]
+    Q3 --> MS["measurement.md<br/>how each number was made"]
 
-### Releases
-
-- [Changelog](releases/CHANGELOG.md) - Version history and release notes
-
-## 🎯 Quick Navigation
-
-### By Task
-
-#### I want to
-
-- **Get started quickly** → [Getting Started Guide](GETTING_STARTED.md) - **5-minute start**
-- **Deploy with Ansible** → [Ansible Quick Start](../ansible/QUICK_START_ROLES.md)
-- **Use shell scripts** → [Scripts Documentation](SCRIPTS.md)
-- **Understand dependencies** → [Role Execution Order](ROLE_EXECUTION_ORDER.md)
-- **Configure settings** → [Configuration Reference](reference/configuration.md)
-- **Test before deploying** → [Testing Framework](guides/TESTING_FRAMEWORK.md)
-- **Troubleshoot issues** → [Ansible Troubleshooting](../ansible/README.md#-troubleshooting)
-
-### By Priority
-
-#### Critical Documentation
-
-1. [SSH Hardening](SCRIPTS.md#01-ssh-hardening) - Never lose SSH access
-2. [Firewall Setup](SCRIPTS.md#02-firewall-setup) - Network security with safety
-3. [Emergency Recovery](../README.md#emergency-recovery) - What to do when things go wrong
-
-#### Implementation Documentation
-
-1. [Implementation Guide](guides/IMPLEMENTATION_GUIDE.md) - Full deployment process
-2. [Script Documentation](SCRIPTS.md) - All 20 scripts explained
-3. [Configuration Options](../README.md#configuration-options) - Customization guide
-
-#### Reference Documentation
-
-1. [Quick Reference](guides/QUICK_REFERENCE.md) - Commands and options
-2. [Hardening Requirements](guides/HARDENING_REQUIREMENTS.md) - Security standards
-3. [Testing Framework](guides/TESTING_FRAMEWORK.md) - Validation procedures
-
-## 📖 Documentation Map
-
-```text
-Documentation Overview
-├── User Documentation
-│   ├── Getting Started (README.md)
-│   ├── Script Details (SCRIPTS.md)
-│   └── Quick Reference Guide
-│
-├── Technical Guides
-│   ├── Implementation Guide
-│   ├── Testing Framework
-│   └── Hardening Requirements
-│
-├── Deployment
-│   ├── Ansible Automation
-│   ├── Configuration Management
-│   └── Emergency Procedures
-│
-└── Development
-    ├── Contributing Guidelines
-    ├── Security Principles
-    └── Architecture Decisions
+    style START fill:#8250df,color:#fff
+    style EM fill:#1f6feb,color:#fff
+    style SS fill:#1f6feb,color:#fff
+    style RB fill:#1f6feb,color:#fff
+    style LR fill:#1f6feb,color:#fff
+    style DP fill:#1f6feb,color:#fff
+    style BF fill:#da3633,color:#fff
+    style MS fill:#9e6a03,color:#fff
+    style GS fill:#238636,color:#fff
 ```
 
-## 🔍 Finding Information
+## Pages written during the documentation pass
 
-### Script-Specific Documentation
+| Page | What it covers | Evidence behind it |
+|---|---|---|
+| [execution-model.md](execution-model.md) | The phases of a hardening run, what the orchestrator does with `SCRIPT_ORDER`, and which of the 21 scripts a real run reached | [`media/captures/orchestrator.log`](../media/captures/orchestrator.log), [`dry-run.txt`](../media/captures/dry-run.txt) |
+| [ssh-safety.md](ssh-safety.md) | The lockout-avoidance chain as a decision flow: test daemon, watchdog, emergency access, `AllowUsers` | [`ssh-watchdog.log`](../media/captures/ssh-watchdog.log), [`emergency-ssh.txt`](../media/captures/emergency-ssh.txt), [`media/ssh-watchdog.gif`](../media/ssh-watchdog.gif) |
+| [rollback.md](rollback.md) | The transaction state machine, what the rollback stack holds, and how much of the toolkit is inside a transaction at all | [`rollback-demo.log`](../media/captures/rollback-demo.log), [`rollback-coverage.txt`](../media/captures/rollback-coverage.txt), [`media/rollback-demo.gif`](../media/rollback-demo.gif) |
+| [deployment-paths.md](deployment-paths.md) | The three entry points — `orchestrator.sh`, `ansible/site.yml`, `ansible/hardening_master.yml` — compared side by side | [`ansible.txt`](../media/captures/ansible.txt) |
+| [library-reference.md](library-reference.md) | The five files in `lib/`, their load order, and which helpers have callers | [`shell-semantics.txt`](../media/captures/shell-semantics.txt), [`summary.txt`](../media/captures/summary.txt) |
+| [BUGS-FOUND.md](BUGS-FOUND.md) | 24 defects, each with a reproduction, what was verified versus inferred, and the diff that would fix it | every capture in [`media/captures/`](../media/captures) |
+| [measurement.md](measurement.md) | Every published number, the command that produced it, and what could not be measured | the tools themselves |
 
-Each script has detailed documentation in [SCRIPTS.md](SCRIPTS.md) including:
+## The project's earlier documentation
 
-- Purpose and description
-- Safety mechanisms
-- Configuration options
-- Modified files
-- Rollback procedures
-- Common issues and troubleshooting
+Kept as written. The "accuracy" column records only what this pass checked
+against the code; a blank cell means the page was not audited, not that it is
+correct.
 
-### Safety and Security
+| Page | Lines | What it covers | Accuracy as checked |
+|---|---|---|---|
+| [GETTING_STARTED.md](GETTING_STARTED.md) | 303 | Five-minute quick start, Ansible and manual | Says "23 roles / 22 scripts" at `:12`; there are 23 roles and 21 scripts |
+| [SCRIPTS.md](SCRIPTS.md) | 937 | Per-script reference for the numbered hardening scripts | Says "all 20 scripts" at `:832`; there are 21 |
+| [ROLE_EXECUTION_ORDER.md](ROLE_EXECUTION_ORDER.md) | 142 | Role dependencies, grouped into priorities 0-6 | Names roles by short name (`ssh`, `firewall`), not by the `posix_hardening_*` directory names `hardening_master.yml` uses |
+| [FUTURE_IMPROVEMENTS.md](FUTURE_IMPROVEMENTS.md) | 295 | Planned work, not current behaviour | Not audited |
+| [architecture/overview.md](architecture/overview.md) | 243 | Layer diagram and design intent | Describes intent; see [execution-model.md](execution-model.md) for measured behaviour |
+| [reference/configuration.md](reference/configuration.md) | 325 | Configuration variables and their precedence | `:17-23` puts environment variables above the config file; `config/defaults.conf.template:38` reverses that, so `DRY_RUN=1` in the environment is discarded ([BUG-14](BUGS-FOUND.md#bug-14)) |
+| [guides/HARDENING_REQUIREMENTS.md](guides/HARDENING_REQUIREMENTS.md) | 421 | Which standards the toolkit targets | Not audited |
+| [guides/IMPLEMENTATION_GUIDE.md](guides/IMPLEMENTATION_GUIDE.md) | 773 | Step-by-step deployment | Not audited |
+| [guides/QUICK_REFERENCE.md](guides/QUICK_REFERENCE.md) | 286 | Safety rules, emergency SSH recovery, and a staged deployment order | Invokes the scripts directly; it documents no `orchestrator.sh` flag, so it sidesteps [BUG-8](BUGS-FOUND.md#bug-8) and [BUG-15](BUGS-FOUND.md#bug-15) |
+| [guides/TESTING_FRAMEWORK.md](guides/TESTING_FRAMEWORK.md) | 507 | The validation suite and testing approach | Not audited |
+| [development/CONTRIBUTING.md](development/CONTRIBUTING.md) | 251 | How to contribute | Not audited |
+| [development/AUTHORS.md](development/AUTHORS.md) | 19 | Contributors | Not audited |
+| [releases/CHANGELOG.md](releases/CHANGELOG.md) | 67 | Version history | Newest released entry is 1.0.0, matching `lib/common.sh:10`; the `VERSION` file says 1.1.0, which no entry covers ([BUG-12](BUGS-FOUND.md#bug-12)) |
 
-- **Safety Mechanisms**: Every script includes multiple safety features documented in [SCRIPTS.md](SCRIPTS.md)
-- **Rollback Procedures**: Detailed in both script documentation and
-  [Emergency Recovery](../README.md#emergency-recovery)
-- **Security Principles**: Outlined in [Hardening Requirements](guides/HARDENING_REQUIREMENTS.md)
+Outside this directory: [`../ansible/README.md`](../ansible/README.md) and
+[`../ansible/QUICK_START_ROLES.md`](../ansible/QUICK_START_ROLES.md) document
+the Ansible tree; [deployment-paths.md](deployment-paths.md) records where
+they diverge from what `ansible.cfg` actually loads.
 
-### Configuration and Customization
+## Reading orders
 
-- **Configuration File**: `config/defaults.conf` - see [Configuration Options](../README.md#configuration-options)
-- **Script Customization**: Each script's options in [SCRIPTS.md](SCRIPTS.md)
-- **Environment Variables**: Listed in [Quick Reference](guides/QUICK_REFERENCE.md)
+| If you are | Read, in order |
+|---|---|
+| Deciding whether to run this on a server | [BUGS-FOUND.md](BUGS-FOUND.md) severity table, then [execution-model.md](execution-model.md) |
+| Running it on one server by hand | [execution-model.md](execution-model.md), [ssh-safety.md](ssh-safety.md), [rollback.md](rollback.md) |
+| Running it on a fleet | [deployment-paths.md](deployment-paths.md), then [`../ansible/README.md`](../ansible/README.md) |
+| Fixing the code | [BUGS-FOUND.md](BUGS-FOUND.md) — each entry ends with the diff — then [library-reference.md](library-reference.md) |
+| Checking this documentation | [measurement.md](measurement.md), then run anything in [`../tools`](../tools) |
 
-## 🚀 Recommended Reading Order
+## Known limitations of this index
 
-### For First-Time Users
-
-1. [Main README](../README.md) - Overview and quick start
-2. [Scripts Documentation](SCRIPTS.md) - Understand what changes will be made
-3. [Implementation Guide](guides/IMPLEMENTATION_GUIDE.md) - Deploy step by step
-
-### For System Administrators
-
-1. [Implementation Guide](guides/IMPLEMENTATION_GUIDE.md) - Deployment process
-2. [Testing Framework](guides/TESTING_FRAMEWORK.md) - Validation procedures
-3. [Ansible Guide](../ansible/README.md) - Automation for multiple servers
-
-### For Security Auditors
-
-1. [Hardening Requirements](guides/HARDENING_REQUIREMENTS.md) - Security standards
-2. [Scripts Documentation](SCRIPTS.md) - Detailed security measures
-3. [Testing Framework](guides/TESTING_FRAMEWORK.md) - Compliance validation
-
-### For Contributors
-
-1. [Contributing Guide](development/CONTRIBUTING.md) - Contribution process
-2. [Implementation Guide](guides/IMPLEMENTATION_GUIDE.md) - System architecture
-3. [Testing Framework](guides/TESTING_FRAMEWORK.md) - Testing requirements
-
-## 📝 Documentation Standards
-
-All documentation follows these principles:
-
-- **Safety First**: Every procedure emphasizes maintaining system access
-- **Clear Examples**: Practical commands and configurations
-- **Rollback Procedures**: Every change is reversible
-- **Testing Focus**: Dry-run and validation for everything
-- **POSIX Compliance**: Shell-agnostic implementations
-
-## 🔧 Maintaining Documentation
-
-### Updating Documentation
-
-When making changes:
-
-1. Update relevant script documentation in `SCRIPTS.md`
-2. Update changelog in `releases/CHANGELOG.md`
-3. Update any affected guides
-4. Test all examples and commands
-
-### Documentation Locations
-
-- **Script docs**: `docs/SCRIPTS.md`
-- **Guides**: `docs/guides/`
-- **Development**: `docs/development/`
-- **Releases**: `docs/releases/`
-- **Main README**: Repository root
-
-## 📊 Documentation Coverage
-
-| Component     | Documentation | Location                                               |
-| ------------- | ------------- | ------------------------------------------------------ |
-| Scripts (20)  | ✓ Complete    | [SCRIPTS.md](SCRIPTS.md)                               |
-| Libraries (4) | ✓ Complete    | [Implementation Guide](guides/IMPLEMENTATION_GUIDE.md) |
-| Ansible       | ✓ Complete    | [ansible/README.md](../ansible/README.md)              |
-| Testing       | ✓ Complete    | [Testing Framework](guides/TESTING_FRAMEWORK.md)       |
-| Emergency     | ✓ Complete    | [README.md](../README.md#emergency-recovery)           |
-| Configuration | ✓ Complete    | [Quick Reference](guides/QUICK_REFERENCE.md)           |
-
-## 🆘 Getting Help
-
-### Documentation Issues
-
-If you find issues with documentation:
-
-1. Check the [latest version](releases/CHANGELOG.md)
-2. Review [known issues](../README.md#troubleshooting)
-3. Submit an issue with documentation label
-
-### Quick Support Checklist
-
-- [ ] Checked relevant script documentation in SCRIPTS.md
-- [ ] Reviewed troubleshooting section in README
-- [ ] Tested with dry-run mode enabled
-- [ ] Checked logs in `/var/log/hardening/`
-- [ ] Verified configuration in `config/defaults.conf`
-
-## 📌 Important Notes
-
-- **Always test first**: Use dry-run mode before production
-- **Keep backups**: Automatic backups are created but keep external backups too
-- **Monitor execution**: Watch logs during hardening
-- **Emergency access**: Keep console access available
-- **Document changes**: Record any customizations made
-
----
-
-_Documentation Version: 1.0.0_ _Last Updated: See [CHANGELOG.md](releases/CHANGELOG.md)_
+- `docs/user-guide/` exists and is empty. `../README.md` links into it; that
+  link is broken ([BUG-12](BUGS-FOUND.md#bug-12)).
+- The "Accuracy as checked" column is not a full audit of the pre-existing
+  pages. Only the claims that collided with something this pass measured were
+  checked.
+- Nothing in the pre-existing pages was edited, so their internal
+  cross-references and their counts still disagree with each other.

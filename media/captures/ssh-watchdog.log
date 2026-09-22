@@ -1,0 +1,17 @@
+harness: sshd killed after reload
+script exit: 1
+sshd running: no
+waiting 30s for the 15s watchdog to fire
+
+sshd_config sha256 before : f7fdf0268371acf5d7277b652179c23ef53ca60d95e934451517f20113463e8e
+sshd_config sha256 after  : 332bb2c5365f29af64a7f215fd700f369964a473147c739750799ab72c7329d5
+RESULT: sshd_config was NOT restored
+sshd back up: no
+
+== the lines that matter, from the run ==
+78:[INFO] SSH config backed up to: [INFO] Backed up /etc/ssh/sshd_config to /var/backups/hardening/sshd_config.20260921-195655.bak
+87:[INFO] Setting up automatic rollback (15s timeout)
+88:[INFO] Reloading SSH daemon
+89:[ERROR] SSH not responding after reload
+97:[ERROR] SSH not responding - executing rollback
+98:cp: cannot stat '[INFO] Backed up /etc/ssh/sshd_config to /var/backups/hardening/sshd_config.20260921-195655.bak'$'\n''/var/backups/hardening/sshd_config.20260921-195655.bak': No such file or directory

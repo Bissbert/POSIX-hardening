@@ -1,0 +1,61 @@
+=== 1. the rollback API lib/rollback.sh exports
+      begin_transaction
+      commit_transaction
+      rollback_transaction
+      transaction_cleanup
+      register_rollback
+      register_file_rollback
+      register_command_rollback
+      register_service_rollback
+      register_firewall_rollback
+      register_sysctl_rollback
+      execute_rollback_action
+      atomic_operation
+      atomic_file_update
+      create_checkpoint
+      rollback_to_checkpoint
+      safe_file_operation
+      safe_service_operation
+      show_rollback_history
+      cleanup_transactions
+
+=== 2. transaction and register calls, per script
+    script                     begin commit rollback register
+    00-ssh-verification.sh         1      1        3        0
+    01-ssh-hardening.sh            1      2        4        0
+    02-firewall-setup.sh           1      1        1        1
+    03-kernel-params.sh            1      1        0        0
+    04-network-stack.sh            1      1        0        0
+    05-file-permissions.sh         1      1        0        0
+    06-process-limits.sh           1      1        0        0
+    07-audit-logging.sh            0      0        0        0
+    08-password-policy.sh          1      1        0        0
+    09-account-lockdown.sh         0      0        0        0
+    10-sudo-restrictions.sh        1      1        0        0
+    11-service-disable.sh          1      1        1        0
+    12-tmp-hardening.sh            0      0        0        0
+    13-core-dump-disable.sh        0      0        0        0
+    14-sysctl-hardening.sh         1      1        0        0
+    15-cron-restrictions.sh        0      0        0        0
+    16-mount-options.sh            0      0        0        0
+    17-shell-timeout.sh            0      0        0        0
+    18-banner-warnings.sh          0      0        0        0
+    19-log-retention.sh            0      0        0        0
+    20-integrity-baseline.sh       0      0        0        0
+    TOTAL over 21 scripts         11     12        9        1
+
+=== 3. summary
+    scripts in scripts/:                     21
+    scripts that open a transaction:         11
+    register_* calls in all of scripts/:     1
+    the one script that registers anything, and what:
+      scripts/02-firewall-setup.sh:94:    register_command_rollback "iptables-restore < $backup_file"
+
+=== 4. the other way a script could give rollback something to do
+    safe_backup_file calls in scripts/:
+      scripts/00-ssh-verification.sh:243:    backup_file=$(safe_backup_file "/etc/ssh/sshd_config")
+    register_* callers anywhere outside lib/:
+      scripts/02-firewall-setup.sh:94:    register_command_rollback "iptables-restore < $backup_file"
+
+=== 5. what lib/ssh_safety.sh registers on its own account
+      187:    _backup_file=$(safe_backup_file "$SSHD_CONFIG")

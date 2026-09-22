@@ -1,0 +1,82 @@
+=== 1. with config/defaults.conf present, as quick-start.sh creates it
+orchestrator.sh: 20: /opt/posix-hardening/config/defaults.conf: BACKUP_DIR: is read only
+exit=2
+
+=== 2. same command with config/defaults.conf removed
+[ ] P3 - 19-log-retention.sh
+[ ] P4 - 20-integrity-baseline.sh
+=====================================
+[INFO] Script completed successfully
+exit=0
+
+=== 3. --dry-run
+orchestrator.sh: 342: export: DRY_RUN: is read only
+[ERROR] Script failed with exit code: 2
+exit=2
+
+=== 4. --script 02-firewall-setup.sh
+    SCRIPT_ORDER declares: 1:02-firewall-setup.sh:01-ssh-hardening.sh
+    01-ssh-hardening has NOT run:
+    (no completion markers yet)
+✓ Completed: 02-firewall-setup.sh
+[INFO] SUCCESS: Completed: 02-firewall-setup.sh
+✗ Script not found: 02-firewall-setup.sh
+[ERROR] Script not found: 02-firewall-setup.sh
+[ERROR] Script failed with exit code: 1
+exit=1
+
+=== 5. --priority 2
+    priority-2 entries in SCRIPT_ORDER:
+      2:03-kernel-params.sh:none
+      2:04-network-stack.sh:02-firewall-setup.sh,03-kernel-params.sh
+      2:05-file-permissions.sh:none
+      2:06-process-limits.sh:03-kernel-params.sh
+      2:10-sudo-restrictions.sh:09-account-lockdown.sh
+      2:14-sysctl-hardening.sh:03-kernel-params.sh,04-network-stack.sh
+    no completion markers exist, so all of them are due to run:
+
+==> Running Priority 2 scripts only
+[INFO] Running Priority 2 scripts only
+[INFO] Script completed successfully
+exit=0
+    the argument get_scripts_by_priority was actually called with,
+    from sh -x:
+      get_scripts_by_priority INFO
+
+=== 6. --all, and what it actually ran
+exit=0
+    the moment FAIL_FAST is supposed to stop the run:
+      ✗ Stopping execution due to failure
+      [ERROR] Stopping execution due to failure
+      
+      ==> Processing Priority 3 scripts
+      --
+      ✗ Stopping execution due to failure
+      [ERROR] Stopping execution due to failure
+      
+      ==> Processing Priority 4 scripts
+    scripts in SCRIPT_ORDER that were never executed:
+      04-network-stack.sh
+      05-file-permissions.sh
+      06-process-limits.sh
+      10-sudo-restrictions.sh
+      14-sysctl-hardening.sh
+      16-mount-options.sh
+      19-log-retention.sh
+    declared / executed:
+      20 / 13
+    a dependency reported unmet immediately after it succeeded:
+      ✓ Completed: 01-ssh-hardening.sh
+      [INFO] SUCCESS: Completed: 01-ssh-hardening.sh
+      [WARN] Dependency not met: 01-ssh-hardening.sh required for 02-firewall-setup.sh
+    completion markers written (note: no ".sh" suffix):
+      00-ssh-verification
+      01-ssh-hardening
+    final summary:
+      Hardening Execution Complete
+      =====================================
+      Total Scripts: 20
+      Completed: 0
+      Failed: 0
+      =====================================
+      [INFO] Script completed successfully
