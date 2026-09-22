@@ -41,6 +41,14 @@ print_banner() {
     echo ""
 }
 
+print_help() {
+    cat <<EOF
+Usage: $0 [--help|-h]
+
+Run the interactive first-time setup, or show this help.
+EOF
+}
+
 # Check prerequisites
 check_prerequisites() {
     print_msg "$BLUE" "Checking prerequisites..."
@@ -281,6 +289,20 @@ show_next_steps() {
 
 # Main execution
 main() {
+    case "${1:-}" in
+        --help|-h)
+            print_help
+            return 0
+            ;;
+        "")
+            ;;
+        *)
+            print_msg "$RED" "Unknown option: $1"
+            print_help >&2
+            return 2
+            ;;
+    esac
+
     print_banner
     check_prerequisites
 
