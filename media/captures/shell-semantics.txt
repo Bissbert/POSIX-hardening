@@ -1,0 +1,85 @@
+shells under test:
+  dash    0.5.12-2
+  bash    GNU bash, version 5.2.15(1)-release (aarch64-unknown-linux-gnu)
+  busybox BusyBox v1.35.0 (Debian 1:1.35.0-4+deb12u1+b1) multi-call binary.
+
+================================================================
+shell: dash
+================================================================
+
+--- 1. a while loop fed by a pipeline runs in a subshell,
+---    so assignments made in it are lost (BUG-9b, BUG-9c)
+  after the loop, n=0 (three lines were read)
+
+--- 2. return inside that subshell leaves the subshell,
+---    not the function (BUG-5, BUG-9a)
+  f returned 0 although its loop returned 1
+
+--- 3. break 2 cannot see a loop in the parent shell (BUG-16)
+  outer iteration 1 ran anyway
+  outer iteration 2 ran anyway
+  outer iteration 3 ran anyway
+
+--- 4. A || B | C parses as A || (B | C), so when A succeeds
+---    the loop in C never runs (BUG-17)
+B|2
+A|1
+  (no LOOP SAW line above: tac printed and the loop was skipped)
+
+--- 5. local is dynamically scoped: a callee that assigns the
+---    same name overwrites the callers local (BUG-15)
+  caller was passed 2, and now sees level=CLOBBERED
+
+================================================================
+shell: bash
+================================================================
+
+--- 1. a while loop fed by a pipeline runs in a subshell,
+---    so assignments made in it are lost (BUG-9b, BUG-9c)
+  after the loop, n=0 (three lines were read)
+
+--- 2. return inside that subshell leaves the subshell,
+---    not the function (BUG-5, BUG-9a)
+  f returned 0 although its loop returned 1
+
+--- 3. break 2 cannot see a loop in the parent shell (BUG-16)
+  outer iteration 1 ran anyway
+  outer iteration 2 ran anyway
+  outer iteration 3 ran anyway
+
+--- 4. A || B | C parses as A || (B | C), so when A succeeds
+---    the loop in C never runs (BUG-17)
+B|2
+A|1
+  (no LOOP SAW line above: tac printed and the loop was skipped)
+
+--- 5. local is dynamically scoped: a callee that assigns the
+---    same name overwrites the callers local (BUG-15)
+  caller was passed 2, and now sees level=CLOBBERED
+
+================================================================
+shell: busybox sh
+================================================================
+
+--- 1. a while loop fed by a pipeline runs in a subshell,
+---    so assignments made in it are lost (BUG-9b, BUG-9c)
+  after the loop, n=0 (three lines were read)
+
+--- 2. return inside that subshell leaves the subshell,
+---    not the function (BUG-5, BUG-9a)
+  f returned 0 although its loop returned 1
+
+--- 3. break 2 cannot see a loop in the parent shell (BUG-16)
+  outer iteration 1 ran anyway
+  outer iteration 2 ran anyway
+  outer iteration 3 ran anyway
+
+--- 4. A || B | C parses as A || (B | C), so when A succeeds
+---    the loop in C never runs (BUG-17)
+B|2
+A|1
+  (no LOOP SAW line above: tac printed and the loop was skipped)
+
+--- 5. local is dynamically scoped: a callee that assigns the
+---    same name overwrites the callers local (BUG-15)
+  caller was passed 2, and now sees level=CLOBBERED

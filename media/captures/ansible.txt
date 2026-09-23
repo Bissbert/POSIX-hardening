@@ -1,0 +1,113 @@
+=== 1. tool versions
+    ansible-playbook [core 2.19.3]
+    ansible-lint 25.9.2 using ansible-core:2.19.3 ansible-compat:25.8.2 ruamel-yaml:0.18.16 ruamel-yaml-clib:0.2.14
+
+=== 2. which playbooks exist, and where
+    tracked playbooks at the ansible/ root and under ansible/playbooks/:
+      ansible/deploy_team_keys.yml
+      ansible/hardening_master.yml
+      ansible/playbooks/deploy_team_keys.yml
+      ansible/playbooks/preflight.yml
+      ansible/playbooks/rollback.yml
+      ansible/playbooks/site.yml
+      ansible/playbooks/test_firewall_hardening.yml
+      ansible/playbooks/test_ssh_hardening.yml
+      ansible/playbooks/test_week2_roles.yml
+      ansible/playbooks/validate.yml
+      ansible/preflight.yml
+      ansible/rollback.yml
+      ansible/site.yml
+      ansible/test_banner_role.yml
+      ansible/validate_config.yml
+
+=== 3. duplicated playbooks: root copy vs playbooks/ copy
+    site.yml               differ: 3 changed hunks
+    preflight.yml          differ: 4 changed hunks
+    rollback.yml           differ: 14 changed hunks
+    deploy_team_keys.yml   identical
+    the substantive difference in preflight.yml:
+      203,204c203,204
+      <         - name: Get list of running services
+      <           ansible.builtin.systemd:
+      ---
+      >         - name: Check critical services
+      >           ansible.builtin.systemd_service:
+      206d205
+      <             state: started
+
+=== 4. how each entry point applies the hardening
+    site.yml                 0 role references, 9 scripts named, 12 more in loops
+    hardening_master.yml     21 role references, 0 script invocations
+    orchestrator.sh in site.yml:
+      137:    - name: Copy orchestrator
+      139:        src: "../orchestrator.sh"
+      140:        dest: "{{ toolkit_path }}/orchestrator.sh"
+    plays, and the priority levels each entry point defines:
+      site.yml                 9 plays, priorities: priority1 priority2 priority3 priority4 
+      hardening_master.yml     8 plays, priorities: priority1 priority2 priority3 priority4 priority5 priority6 
+      ../orchestrator.sh       priorities: 1 2 3 4 
+
+=== 5. roles on disk vs roles a playbook uses
+    roles in ansible/roles/: 23
+    roles used by hardening_master.yml: 21
+    roles not reachable from hardening_master.yml, and what does use them:
+      posix_hardening_deploy     playbooks/test_week2_roles.yml 
+      posix_hardening_users      playbooks/test_week2_roles.yml 
+
+=== 6. which inventory ansible.cfg actually loads
+      inventory = inventories/production/hosts.ini
+      remote_user = ansible
+      host_key_checking = False
+      roles_path = roles
+    file structure section of ansible/README.md names inventory.ini:
+      39:Edit `inventory.ini` to add your target servers:
+      410:├── inventory.ini         # Server inventory
+
+=== 6b. do the relative src: paths in playbooks/site.yml resolve
+    ansible resolves copy: src: against the playbook directory.
+    what playbooks/site.yml asks for, and whether it is there:
+      ../lib/                          -> ansible/playbooks/../lib/                    MISSING
+      ../scripts/                      -> ansible/playbooks/../scripts/                MISSING
+      ../tests/                        -> ansible/playbooks/../tests/                  MISSING
+      ../orchestrator.sh               -> ansible/playbooks/../orchestrator.sh         MISSING
+      ../emergency-rollback.sh         -> ansible/playbooks/../emergency-rollback.sh   MISSING
+      templates/defaults.conf.j2       -> ansible/playbooks/templates/defaults.conf.j2 MISSING
+    the same paths as the root copy resolves them:
+      ../lib/                          -> ansible/../lib/                              present
+      ../scripts/                      -> ansible/../scripts/                          present
+      templates/defaults.conf.j2       -> ansible/templates/defaults.conf.j2           present
+    controlled reproduction of the resolution rule, so the
+    search path is visible rather than asserted:
+        /ansible/playbooks/../lib/
+        /ansible/playbooks/files/../lib/
+        (cwd is not among them: ../lib/ is ansible/playbooks/../lib/)
+
+=== 7. ansible-playbook --syntax-check
+    site.yml                     exit=0
+    hardening_master.yml         exit=0
+    preflight.yml                exit=0
+    rollback.yml                 exit=0
+    validate_config.yml          exit=0
+    deploy_team_keys.yml         exit=0
+    playbooks/site.yml           exit=0
+    playbooks/preflight.yml      exit=0
+    playbooks/rollback.yml       exit=0
+    playbooks/validate.yml       exit=0
+
+=== 8. ansible-lint over the six top-level playbooks
+    (this walks every role they pull in)
+       41 command-instead-of-module profile:basic tags:command-shell,idiom
+       55 key-order profile:basic tags:formatting
+        1 literal-compare profile:basic tags:idiom
+        1 jinja profile:basic tags:formatting
+       21 schema profile:basic tags:core
+      1091 var-naming profile:basic tags:idiom
+        4 yaml profile:basic tags:formatting,yaml
+       74 yaml profile:basic tags:formatting,yaml
+       50 name profile:basic tags:idiom
+       19 risky-shell-pipe profile:basic tags:command-shell
+       18 ignore-errors profile:basic tags:unpredictability
+        3 meta-no-tags profile:basic tags:metadata
+       15 fqcn profile:basic tags:formatting
+        1 fqcn profile:basic tags:formatting
+      Failed: 1394 failure(s), 0 warning(s) in 138 files processed of 138 encountered. Profile 'production' was required, but 'min' profile passed.

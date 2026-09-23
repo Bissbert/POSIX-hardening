@@ -1,0 +1,31 @@
+=== A. DRY_RUN=1 with config/defaults.conf present
+DRY_RUN=0                    # 0=apply changes, 1=simulation only
+    lines containing DRY-RUN: 0
+
+=== B. DRY_RUN=1 with config/defaults.conf removed
+⚠ Running in DRY-RUN mode - no changes will be made
+[WARN] Running in DRY-RUN mode - no changes will be made
+[DRY-RUN] Would secure file permissions
+[INFO] Marked as completed: 05-file-permissions
+    completion markers after the DRY RUN:
+      05-file-permissions
+
+=== C. running the same script directly afterwards
+    (a script invoked directly never consults the markers)
+[INFO] Committing transaction: 20260922-004807-1409-file_permissions
+✓ File permissions hardening completed
+[INFO] SUCCESS: File permissions hardening completed
+
+=== D. what the orchestrator does with a marker a dry run wrote
+    A dry run of 05-file-permissions is not enough to show this:
+    FAIL_FAST abandons the rest of priority 2 before reaching it
+    (BUG-16). Seed the marker for the first script instead, which
+    a dry run of 01-ssh-hardening would have written the same way.
+    marker present before the run:
+      01-ssh-hardening
+    orchestrator.sh --all, lines naming that script:
+      [INFO] Already completed: 01-ssh-hardening.sh
+      [WARN] Dependency not met: 01-ssh-hardening.sh required for 02-firewall-setup.sh
+      [WARN] Dependency not met: 01-ssh-hardening.sh required for 17-shell-timeout.sh
+    note the marker has no ".sh" suffix and the dependency
+    lines do, which is why they read as unmet (BUG-9d)

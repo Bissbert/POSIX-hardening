@@ -1,0 +1,31 @@
+--- sshd -T, settings the toolkit claims to set ---
+port 22
+logingracetime 60
+maxauthtries 3
+clientaliveinterval 300
+clientalivecountmax 2
+permitrootlogin no
+pubkeyauthentication yes
+passwordauthentication no
+x11forwarding no
+permitemptypasswords no
+allowusers ansible
+--- is sshd still reachable on port 22? ---
+yes
+--- backups written ---
+manifest
+snapshots
+sshd_config.20260922-004759.bak
+sysctl.backup.20260922-004807
+sysctl.conf.20260922-004807.bak
+sysctl.conf.20260922-004807.bak.meta
+sysctl.conf.20260922-004807.bak.sha256
+--- completion markers ---
+00-ssh-verification
+01-ssh-hardening
+05-file-permissions
+--- 03-kernel-params rolled back; is its block still in sysctl.conf? ---
+1
+--- which sysctl key does sysctl -p reject here? ---
+sysctl: setting key "net.ipv4.tcp_congestion_control": No such file or directory
+sysctl -p exit: 1

@@ -1,0 +1,18 @@
+
+==> Starting kernel parameter hardening
+[INFO] Starting kernel parameter hardening
+[INFO] =
+[INFO] Starting: 03-kernel-params (v1.0.0)
+[INFO] Timestamp: Tue Sep 22 00:48:07 UTC 2026
+[INFO] Hostname: 3ca4f967acfd
+[INFO] User: root
+[INFO] =
+[INFO] Started transaction: 20260922-004807-1186-kernel_params (kernel_params)
+
+==> Applying kernel security parameters
+[INFO] Applying kernel security parameters
+[INFO] Backed up: /etc/sysctl.conf -> /var/backups/hardening/sysctl.conf.20260922-004807.bak
+/var/backups/hardening/sysctl.conf.20260922-004807.bak
+[ERROR] Transaction failed with exit code 1 - initiating rollback
+[WARN] Rolling back transaction: 20260922-004807-1186-kernel_params (reason: exit_code_1)
+[INFO] Rollback completed

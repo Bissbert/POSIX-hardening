@@ -1,0 +1,3 @@
+01-ssh-hardening       exit=0  lines=129
+03-kernel-params       exit=1  lines=18
+05-file-permissions    exit=0  lines=16

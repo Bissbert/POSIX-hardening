@@ -1,0 +1,129 @@
+
+==> Starting SSH hardening script
+[INFO] Starting SSH hardening script
+[INFO] Started transaction: 20260922-004755-145-ssh_hardening (ssh_hardening)
+
+==> Running pre-flight checks for SSH hardening
+[INFO] Running pre-flight checks for SSH hardening
+[INFO] =
+[INFO] Starting: 01-ssh-hardening (v1.0.0)
+[INFO] Timestamp: Tue Sep 22 00:47:55 UTC 2026
+[INFO] Hostname: 3ca4f967acfd
+[INFO] User: root
+[INFO] =
+[INFO] Running SSH package verification first...
+
+==> Starting SSH package verification
+[INFO] Starting SSH package verification
+[INFO] =
+[INFO] Starting: 00-ssh-verification (v1.0.0)
+[INFO] Timestamp: Tue Sep 22 00:47:55 UTC 2026
+[INFO] Hostname: 3ca4f967acfd
+[INFO] User: root
+[INFO] =
+[INFO] Started transaction: 20260922-004755-175-ssh_verification (ssh_verification)
+
+==> Gathering SSH package information
+[INFO] Gathering SSH package information
+[INFO] Current version: openssh-server 1:9.2p1-2+deb12u10
+[INFO] Architecture: arm64
+[INFO] Package is up to date
+✓ Package information gathered
+[INFO] SUCCESS: Package information gathered
+
+==> Verifying openssh-server package source
+[INFO] Verifying openssh-server package source
+✓ Package source: Official Debian/Ubuntu repository
+[INFO] SUCCESS: Package source: Official Debian/Ubuntu repository
+[INFO] Package source verified as official
+
+==> Verifying package GPG signatures
+[INFO] Verifying package GPG signatures
+✓ Official GPG keys found (modern keyring)
+[INFO] SUCCESS: Official GPG keys found (modern keyring)
+[INFO] Debian/Ubuntu GPG keys present in /etc/apt/trusted.gpg.d
+
+==> Verifying SSH binary integrity
+[INFO] Verifying SSH binary integrity
+
+==> Installing debsums for integrity checking
+[INFO] Installing debsums for integrity checking
+✓ debsums installed
+[INFO] SUCCESS: debsums installed
+✓ Binary integrity verified - no modifications detected
+[INFO] SUCCESS: Binary integrity verified - no modifications detected
+[INFO] All SSH binaries match package checksums
+✓ SSH package verification passed - no reinstall needed
+[INFO] SUCCESS: SSH package verification passed - no reinstall needed
+[INFO] Package source: verified
+[INFO] Binary integrity: verified
+[INFO] Marked as completed: 00-ssh-verification
+[INFO] Committing transaction: 20260922-004755-175-ssh_verification
+[INFO] =================================
+[INFO] SSH Package Verification Summary
+[INFO] =================================
+[INFO] Package Source: VERIFIED
+[INFO] GPG Signatures: VERIFIED
+[INFO] Binary Integrity: VERIFIED
+[INFO] Reinstall Performed: NO
+[INFO] =================================
+✓ SSH package verification complete
+[INFO] SUCCESS: SSH package verification complete
+✓ SSH package verified successfully
+[INFO] SUCCESS: SSH package verified successfully
+[INFO] Adding firewall rule for SSH port 22
+✓ Pre-flight checks completed
+[INFO] SUCCESS: Pre-flight checks completed
+[INFO] Created snapshot: pre_ssh_hardening
+[INFO] SSH config backed up to: [INFO] Backed up /etc/ssh/sshd_config to /var/backups/hardening/sshd_config.20260922-004759.bak
+/var/backups/hardening/sshd_config.20260922-004759.bak
+[INFO] Applying SSH configuration changes
+
+==> Applying SSH hardening to: /etc/ssh/sshd_config.work
+[INFO] Applying SSH hardening to: /etc/ssh/sshd_config.work
+[INFO] Restricted SSH to users: ansible
+[INFO] Testing SSH configuration: /etc/ssh/sshd_config.work
+[INFO] Test SSH daemon is accepting connections
+[INFO] Setting up automatic rollback (60s timeout)
+[INFO] Reloading SSH daemon
+[INFO] SSH is responding after reload
+✓ SSH configuration updated successfully
+[INFO] SUCCESS: SSH configuration updated successfully
+✓ SSH configuration hardened successfully
+[INFO] SUCCESS: SSH configuration hardened successfully
+
+==> Fixing SSH file permissions
+[INFO] Fixing SSH file permissions
+[INFO] Fixed /etc/ssh permissions
+[INFO] Fixed permissions for /root/.ssh/authorized_keys
+[INFO] Fixed permissions for /home/ansible/.ssh/authorized_keys
+✓ SSH permissions fixed
+[INFO] SUCCESS: SSH permissions fixed
+
+==> Configuring SSH banner
+[INFO] Configuring SSH banner
+[INFO] SSH banner configured: /etc/ssh/banner
+
+==> Running validation tests
+[INFO] Running validation tests
+✓ SSH port is still accessible
+[INFO] SUCCESS: SSH port is still accessible
+✓ SSH hardening settings verified
+[INFO] SUCCESS: SSH hardening settings verified
+[INFO] Marked as completed: 01-ssh-hardening
+[INFO] Committing transaction: 20260922-004755-145-ssh_hardening
+✓ SSH hardening completed successfully
+[INFO] SUCCESS: SSH hardening completed successfully
+[INFO] =
+[INFO] SSH Security Status:
+[INFO] - Root login: DISABLED
+[INFO] - Password authentication: DISABLED
+[INFO] - Public key authentication: ENABLED
+[INFO] - Empty passwords: DISABLED
+[INFO] - Strong ciphers: CONFIGURED
+[INFO] - Connection limits: APPLIED
+[INFO] - Warning banner: CONFIGURED
+[INFO] - Access restrictions: APPLIED
+[INFO] =
+[INFO] Current SSH connections:
+Recv-Q Send-Q Local Address:Port Peer Address:PortProcess
