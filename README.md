@@ -9,6 +9,13 @@ is meant to undo its own changes on failure. This README documents what the
 code does today, measured in a container, rather than what it is designed to
 do — and the two differ enough that the difference is the first thing below.
 
+> **Status note.** Every capture, diagram and figure on this page was recorded
+> before the verified-bug fix pass. Fifteen of the twenty-four entries in
+> [`docs/BUGS-FOUND.md`](docs/BUGS-FOUND.md) have since been fixed on the
+> default branch, including the startup failure shown in the next diagram.
+> [Known limitations](#known-limitations) lists what is still open and what
+> was fixed.
+
 ## What a run does, and where it stops
 
 ```mermaid
@@ -278,61 +285,66 @@ is the project's own.
 
 ## Known limitations
 
-Measured, in a container, on Debian 12 arm64. Each item links to a full entry
-with a reproduction and a proposed diff.
+Measured in a container on Debian 12 arm64, **before** the verified-bug fix
+pass. Fifteen entries have since been fixed on the default branch; the ones
+below that are still open each need a decision rather than a patch. Every item
+links to its full entry with a reproduction.
 
-**The toolkit does not start on a clean clone**
+### Still open — each needs a decision
 
-- Every documented entry point exits 2: `lib/rollback.sh:8` and
-  `lib/ssh_safety.sh:8` resolve `posix_compat.sh` against `$0`'s directory
-  rather than `lib/` ([BUG-1](docs/BUGS-FOUND.md#bug-1)).
-- `emergency-rollback.sh` aborts on line 14, exporting a variable
-  `lib/common.sh` has already made read-only
-  ([BUG-2](docs/BUGS-FOUND.md#bug-2)).
-- With `config/defaults.conf` present, `orchestrator.sh` cannot start at all,
-  and `--dry-run` aborts on the same class of error
-  ([BUG-7](docs/BUGS-FOUND.md#bug-7), [BUG-8](docs/BUGS-FOUND.md#bug-8)).
-- `--priority N` runs nothing and exits 0
-  ([BUG-15](docs/BUGS-FOUND.md#bug-15)).
-
-**The safety net does not catch**
-
-- 20 of 21 scripts open transactions but register no undo actions, so their
-  rollback stack is empty and `Rollback completed` means nothing was undone
-  ([BUG-24](docs/BUGS-FOUND.md#bug-24)).
-- Backup paths are captured together with a log line, so the one registration
-  that does exist cannot find its file
-  ([BUG-3](docs/BUGS-FOUND.md#bug-3)).
-- Without `config/defaults.conf`, automatic rollback is silently disabled
-  ([BUG-4](docs/BUGS-FOUND.md#bug-4)).
-- `rollback_transaction` returns 0 whether or not every action in it failed
-  ([BUG-5](docs/BUGS-FOUND.md#bug-5)).
-
-**Wrong results rather than no results**
-
-- A dry run writes the completion marker, so the subsequent real run is
-  skipped ([BUG-13](docs/BUGS-FOUND.md#bug-13)).
 - `config/defaults.conf` is sourced after the environment and overrides it, so
-  `DRY_RUN=1 sh scripts/…` does nothing
-  ([BUG-14](docs/BUGS-FOUND.md#bug-14)).
-- `FAIL_FAST` abandons the rest of one priority level and then continues with
-  the next ([BUG-16](docs/BUGS-FOUND.md#bug-16)).
-- The live-daemon SSH config test passes whenever anything holds port 2222 —
-  including the toolkit's own emergency daemon
-  ([BUG-20](docs/BUGS-FOUND.md#bug-20)).
+  a caller's `DRY_RUN=1` is discarded, and with the file present the
+  orchestrator cannot start. Closing this means committing to a precedence
+  contract between CLI flags, environment and config file
+  ([BUG-7](docs/BUGS-FOUND.md#bug-7), [BUG-8](docs/BUGS-FOUND.md#bug-8),
+  [BUG-14](docs/BUGS-FOUND.md#bug-14)).
+- Without `config/defaults.conf`, automatic rollback is silently disabled.
+  Picking a default changes the toolkit's behaviour on failure
+  ([BUG-4](docs/BUGS-FOUND.md#bug-4)).
+- 20 of 21 scripts open transactions but register no undo actions, so their
+  rollback stack is empty and `Rollback completed` means nothing was undone.
+  Registering real undo actions requires deciding what each script guarantees
+  ([BUG-24](docs/BUGS-FOUND.md#bug-24)).
 - A fresh clone ships public keys nobody holds the private half of, and the
-  Ansible path deploys them ([BUG-18](docs/BUGS-FOUND.md#bug-18)).
-- Dependency checks in `orchestrator.sh` never block and never match, and the
-  final summary always counts zero
-  ([BUG-9](docs/BUGS-FOUND.md#bug-9)).
+  Ansible path deploys them. Removal, rotation or documented ownership is a
+  policy call ([BUG-18](docs/BUGS-FOUND.md#bug-18)).
+- The emergency options and the emergency SSH template use different names.
+  Renaming them activates an additional password-enabled SSH service, so a
+  provisional fix was written and then reverted
+  ([BUG-21](docs/BUGS-FOUND.md#bug-21)).
 
-**Nine further entries**, including two drifted Ansible playbook copies
-that cannot resolve their own sources, a pre-flight check that starts services
-instead of reporting on them, and disagreeing script counts and version
-numbers across the documentation. See the severity table at the top of
-[`docs/BUGS-FOUND.md`](docs/BUGS-FOUND.md).
+### Unresolved
 
-**Limits of this evidence**
+- The live-daemon SSH config test passes whenever anything holds port 2222 —
+  including the toolkit's own emergency daemon. Settling this needs an
+  isolated OpenSSH target, which was not available
+  ([BUG-20](docs/BUGS-FOUND.md#bug-20)).
+
+### Fixed on the default branch since this pass
+
+Library path resolution and the readonly-assignment abort that made every
+entry point exit 2 ([BUG-1](docs/BUGS-FOUND.md#bug-1),
+[BUG-2](docs/BUGS-FOUND.md#bug-2)); the backup path captured together with a
+log line ([BUG-3](docs/BUGS-FOUND.md#bug-3)); rollback reporting success after
+failed actions ([BUG-5](docs/BUGS-FOUND.md#bug-5)); suppressed sysctl
+diagnostics ([BUG-6](docs/BUGS-FOUND.md#bug-6)); dependency checks that never
+matched and a summary that always counted zero
+([BUG-9](docs/BUGS-FOUND.md#bug-9)); `--help` handling
+([BUG-11](docs/BUGS-FOUND.md#bug-11)); the script-count and version
+disagreements ([BUG-12](docs/BUGS-FOUND.md#bug-12)); the dry run writing the
+completion marker ([BUG-13](docs/BUGS-FOUND.md#bug-13)); `--priority N`
+running nothing ([BUG-15](docs/BUGS-FOUND.md#bug-15)); `FAIL_FAST` continuing
+into the next priority ([BUG-16](docs/BUGS-FOUND.md#bug-16)); the checkpoint
+action loop ([BUG-17](docs/BUGS-FOUND.md#bug-17)); the unguarded SSH probes
+([BUG-19](docs/BUGS-FOUND.md#bug-19)); the two drifted Ansible playbook copies
+([BUG-22](docs/BUGS-FOUND.md#bug-22)); and the pre-flight check that started
+services instead of reporting on them
+([BUG-23](docs/BUGS-FOUND.md#bug-23)).
+
+[BUG-10](docs/BUGS-FOUND.md#bug-10) was rejected on review: the modern-Bash
+requirement it describes is documented and intended.
+
+### Limits of this evidence
 
 - Only Debian 12 on arm64 was tested. RHEL and Alpine are claimed and were not
   tested.

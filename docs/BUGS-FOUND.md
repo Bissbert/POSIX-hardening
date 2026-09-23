@@ -3,8 +3,19 @@
 [← back to the documentation index](README.md)
 
 This file was written during a documentation pass. Nothing in the toolkit's
-source was changed: every defect below is recorded rather than fixed, and the
-diff that would fix it is given so a maintainer can apply it deliberately.
+source was changed at the time: every defect below is recorded rather than
+fixed, and the diff that would fix it is given so a maintainer can apply it
+deliberately.
+
+> **Since this pass:** an independent adjudication confirmed 22 of these 24
+> entries, rejected BUG-10 and left BUG-20 unresolved for want of an isolated
+> OpenSSH target. A subsequent fix pass applied 15 of them to the default
+> branch: BUG-1, BUG-2, BUG-3, BUG-5, BUG-6, BUG-9, BUG-11, BUG-12, BUG-13,
+> BUG-15, BUG-16, BUG-17, BUG-19, BUG-22 and BUG-23. BUG-4, BUG-7, BUG-8,
+> BUG-14, BUG-18, BUG-21 and BUG-24 were deferred because each needs a design
+> decision, not a patch. The reproductions and diffs below are kept as
+> recorded; read them as the state at the time of the pass, not as the
+> current state of the default branch.
 
 Each entry says what was **verified** by running it and what was **inferred**
 by reading the code. Most reproductions ran in a throwaway Debian 12 container
@@ -92,14 +103,14 @@ scripts/01-ssh-hardening.sh        exit=1   /opt/posix-hardening/lib/ssh_safety.
 orchestrator.sh --status           exit=1   /opt/posix-hardening/lib/rollback.sh: line 9: /opt/posix-hardening/posix_compat.sh: No such file or directory
 ```
 
-**Reproduction**
+### Reproduction
 
 ```sh
 sh tools/capture-hardening-run.sh
 cat media/captures/pristine.txt
 ```
 
-**Fix that was not applied**
+### Fix that was not applied
 
 Every caller already sets `LIB_DIR` before sourcing, so the libraries can use
 it and fall back to the current behaviour when it is unset.
@@ -177,7 +188,7 @@ emergency-rollback.sh --help       exit=1   emergency-rollback.sh: line 14: SAFE
 **Reproduction:** `sh tools/capture-hardening-run.sh`, then read
 `media/captures/pristine.txt`.
 
-**Fix that was not applied**
+### Fix that was not applied
 
 ```diff
 --- a/emergency-rollback.sh
@@ -339,14 +350,14 @@ A fourth instance appears without any demo harness at all: in
 its own line, and after `[INFO] Rollback completed` the hardening block is
 still in `/etc/sysctl.conf`.
 
-**Reproduction**
+### Reproduction
 
 ```sh
 sh tools/capture-rollback-demo.sh    # the transaction path
 sh tools/capture-ssh-watchdog.sh     # the SSH lockout watchdog
 ```
 
-**Fix that was not applied**
+### Fix that was not applied
 
 Send diagnostics to stderr and leave stdout for values. This is the smallest
 change that fixes all four observed symptoms at once:
@@ -459,7 +470,7 @@ script still fails, but the two rollback lines that appear otherwise are gone:
 
 No `[ERROR] Transaction failed with exit code 1`, no `[WARN] Rolling back`.
 
-**Reproduction**
+### Reproduction
 
 ```sh
 # in a throwaway container with the repository at /opt/posix-hardening
@@ -467,7 +478,7 @@ rm -f config/defaults.conf
 sh scripts/03-kernel-params.sh; echo "exit=$?"
 ```
 
-**Fix that was not applied**
+### Fix that was not applied
 
 ```diff
 --- a/lib/rollback.sh
@@ -512,7 +523,7 @@ Both captures above end that way.
 **Verified** as a consequence of the BUG-3 captures: in both, every action
 failed and the function still reported completion and exited 0.
 
-**Fix that was not applied**
+### Fix that was not applied
 
 ```diff
 --- a/lib/rollback.sh
@@ -587,7 +598,7 @@ unsupported key is fatal and unidentifiable.
 `media/captures/03-kernel-params.log` and the last lines of
 `media/captures/effects.txt`.
 
-**Fix that was not applied**
+### Fix that was not applied
 
 ```diff
 --- a/scripts/03-kernel-params.sh
@@ -669,7 +680,7 @@ automatic rollback ([BUG-4](#bug-4)).
 
 **Reproduction:** `sh tools/capture-orchestrator.sh`, sections 1 and 2.
 
-**Fix that was not applied**
+### Fix that was not applied
 
 ```diff
 --- a/orchestrator.sh
@@ -731,7 +742,7 @@ orchestrator.sh: 342: export: DRY_RUN: is read only
 
 **Reproduction:** `sh tools/capture-orchestrator.sh`, section 3.
 
-**Fix that was not applied**
+### Fix that was not applied
 
 The variable must be set before `lib/common.sh` is sourced, which means
 detecting the flag before the sourcing block rather than in the main parser:
@@ -877,7 +888,7 @@ and always returns success.
 be destroyed mid-way. It follows from the same subshell rule as the two
 confirmed cases and from reading `:106-161`, but it has not been seen.
 
-**Fix that was not applied**
+### Fix that was not applied
 
 The general shape is to stop piping into the `while`, using a here-document or
 a temporary file so the loop body runs in the current shell:
