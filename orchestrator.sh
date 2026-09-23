@@ -55,7 +55,8 @@ check_script_dependencies() {
     [ "$deps" = "none" ] && return 0
     [ "$deps" = "all" ] && return 0  # Special case for final script
 
-    echo "$deps" | tr ',' '\n' | while read -r dep; do
+    for dep in $(printf '%s\n' "$deps" | tr ',' ' '); do
+        dep=${dep%.sh}
         if ! is_completed "$dep"; then
             log "WARN" "Dependency not met: $dep required for $script"
             return 1
@@ -105,6 +106,7 @@ run_all_scripts() {
     local total_scripts=$(echo "$SCRIPT_ORDER" | grep -c ":")
     local completed=0
     local failed=0
+    local stop=0
 
     # Create initial snapshot
     local snapshot_id
@@ -115,8 +117,9 @@ run_all_scripts() {
     for priority in 1 2 3 4; do
         show_progress "Processing Priority $priority scripts"
 
-        get_scripts_by_priority "$priority" | while IFS=: read -r script deps; do
-            [ -z "$script" ] && continue
+        for entry in $(get_scripts_by_priority "$priority"); do
+            script=${entry%%:*}
+            deps=${entry#*:}
 
             # Check if already completed
             if is_completed "${script%.sh}"; then
@@ -139,13 +142,16 @@ run_all_scripts() {
 
                 if [ "$FAIL_FAST" = "1" ]; then
                     show_error "Stopping execution due to failure"
-                    break 2
+                    stop=1
+                    break
                 fi
             fi
 
             # Brief pause between scripts
             sleep 2
         done
+
+        [ "$stop" -eq 1 ] && break
     done
 
     # Final report
@@ -163,11 +169,13 @@ run_all_scripts() {
 
 run_priority_level() {
     local level="$1"
+    local result=0
 
     show_progress "Running Priority $level scripts only"
 
-    get_scripts_by_priority "$level" | while IFS=: read -r script deps; do
-        [ -z "$script" ] && continue
+    for entry in $(get_scripts_by_priority "$level"); do
+        script=${entry%%:*}
+        deps=${entry#*:}
 
         if is_completed "${script%.sh}"; then
             log "INFO" "Already completed: $script"
@@ -175,11 +183,17 @@ run_priority_level() {
         fi
 
         if check_script_dependencies "$script" "$deps"; then
-            run_script "$script"
+            if ! run_script "$script"; then
+                result=1
+                [ "$FAIL_FAST" = "1" ] && break
+            fi
         else
             log "WARN" "Skipping $script - dependencies not met"
+            result=1
         fi
     done
+
+    return "$result"
 }
 
 run_single_script() {
@@ -187,15 +201,25 @@ run_single_script() {
 
     # Find script in order
     local found=0
-    echo "$SCRIPT_ORDER" | while IFS=: read -r priority script deps; do
+    local result=1
+    for entry in $SCRIPT_ORDER; do
+        priority=${entry%%:*}
+        remainder=${entry#*:}
+        script=${remainder%%:*}
+        deps=${remainder#*:}
+
         if [ "$script" = "$script_name" ]; then
             found=1
 
             if check_script_dependencies "$script" "$deps"; then
-                run_script "$script"
+                if run_script "$script"; then
+                    result=0
+                else
+                    result=$?
+                fi
             else
                 show_error "Dependencies not met for $script"
-                return 1
+                result=1
             fi
             break
         fi
@@ -205,6 +229,8 @@ run_single_script() {
         show_error "Script not found: $script_name"
         return 1
     fi
+
+    return "$result"
 }
 
 show_status() {

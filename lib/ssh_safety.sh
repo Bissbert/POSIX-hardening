@@ -4,9 +4,8 @@
 # Critical: Prevents lockout on remote servers
 
 # Note: common.sh should be sourced before this file
-# Source POSIX compatibility layer
-SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-. "${SCRIPT_DIR}/posix_compat.sh"
+# Source POSIX compatibility layer from the caller-provided library directory.
+. "${LIB_DIR}/posix_compat.sh"
 
 # SSH-specific configuration
 readonly SSHD_CONFIG="${SSHD_CONFIG:-/etc/ssh/sshd_config}"
@@ -38,14 +37,17 @@ verify_ssh_connection() {
     fi
 
     # Check 3: Can we connect to SSH port?
-    if command -v nc >/dev/null 2>&1; then
-        if timeout "$SSH_TEST_TIMEOUT" nc -z localhost "$SSH_PORT" 2>/dev/null; then
-            log "DEBUG" "SSH port $SSH_PORT is open"
+    if check_port_listening localhost "$SSH_PORT" "$SSH_TEST_TIMEOUT"; then
+        log "DEBUG" "SSH port $SSH_PORT is open"
+    else
+        _port_check_status=$?
+        if [ "$_port_check_status" -eq 2 ]; then
+            log "ERROR" "Cannot verify SSH port $SSH_PORT: no port-checking tool is available"
         else
             log "ERROR" "SSH port $SSH_PORT is not responding"
-            unset _connection_ok
-            return 1
         fi
+        unset _connection_ok _port_check_status
+        return 1
     fi
 
     # Check 4: Test SSH configuration syntax
@@ -92,7 +94,7 @@ create_ssh_test_config() {
         echo "PidFile /var/run/sshd_test.pid" >> "$_test_config"
     fi
 
-    log "DEBUG" "Created test SSH config: $_test_config on port $_test_port"
+    log "DEBUG" "Created test SSH config: $_test_config on port $_test_port" >&2
     echo "$_test_config"
     unset _test_port
 }
@@ -127,7 +129,7 @@ test_ssh_config() {
             sleep 2
 
             # Test connection to test instance
-            if timeout "$SSH_TEST_TIMEOUT" nc -z localhost "$SSHD_TEST_PORT" 2>/dev/null; then
+            if check_port_listening localhost "$SSHD_TEST_PORT" "$SSH_TEST_TIMEOUT"; then
                 log "INFO" "Test SSH daemon is accepting connections"
 
                 # Kill test daemon
@@ -139,7 +141,12 @@ test_ssh_config() {
                 unset _config_file _test_config_result
                 return 0
             else
-                log "ERROR" "Test SSH daemon not accepting connections"
+                _port_check_status=$?
+                if [ "$_port_check_status" -eq 2 ]; then
+                    log "ERROR" "Cannot verify test SSH daemon: no port-checking tool is available"
+                else
+                    log "ERROR" "Test SSH daemon not accepting connections"
+                fi
 
                 # Kill test daemon
                 if [ -f /var/run/sshd_test.pid ]; then
@@ -147,7 +154,7 @@ test_ssh_config() {
                 fi
 
                 rm -f "$_test_config_result"
-                unset _config_file _test_config_result
+                unset _config_file _test_config_result _port_check_status
                 return 1
             fi
         else
@@ -226,12 +233,40 @@ update_ssh_config_safe() {
     log "INFO" "Setting up automatic rollback (${SSH_ROLLBACK_TIMEOUT}s timeout)"
     (
         sleep "$SSH_ROLLBACK_TIMEOUT"
-        if ! timeout "$SSH_TEST_TIMEOUT" nc -z localhost "$SSH_PORT" 2>/dev/null; then
+        if check_port_listening localhost "$SSH_PORT" "$SSH_TEST_TIMEOUT"; then
+            :
+        else
+            _port_check_status=$?
+            if [ "$_port_check_status" -eq 2 ]; then
+                log "ERROR" "Cannot verify SSH after update: no port-checking tool is available; rolling back"
+            fi
             log "ERROR" "SSH not responding - executing rollback"
-            cp "$_backup_file" "$SSHD_CONFIG"
-            kill -HUP "$(cat /var/run/sshd.pid 2>/dev/null)" 2>/dev/null || \
-                /usr/sbin/sshd
-            log "INFO" "SSH configuration rolled back"
+            if ! cp "$_backup_file" "$SSHD_CONFIG"; then
+                log "ERROR" "Failed to restore SSH configuration during rollback"
+                exit 1
+            fi
+            if [ -f /var/run/sshd.pid ]; then
+                if ! kill -HUP "$(cat /var/run/sshd.pid 2>/dev/null)" 2>/dev/null; then
+                    if ! /usr/sbin/sshd; then
+                        log "ERROR" "Failed to restart SSH after rollback"
+                        exit 1
+                    fi
+                fi
+            elif ! /usr/sbin/sshd; then
+                log "ERROR" "Failed to start SSH after rollback"
+                exit 1
+            fi
+            if check_port_listening localhost "$SSH_PORT" "$SSH_TEST_TIMEOUT"; then
+                log "INFO" "SSH configuration rolled back and connectivity restored"
+            else
+                _port_check_status=$?
+                if [ "$_port_check_status" -eq 2 ]; then
+                    log "ERROR" "Rollback completed but connectivity could not be verified"
+                else
+                    log "ERROR" "SSH connectivity was not restored after rollback"
+                fi
+                exit 1
+            fi
         fi
     ) &
     _rollback_pid=$!
@@ -252,7 +287,7 @@ update_ssh_config_safe() {
     sleep 3
 
     # Verify SSH is still accessible
-    if timeout "$SSH_TEST_TIMEOUT" nc -z localhost "$SSH_PORT" 2>/dev/null; then
+    if check_port_listening localhost "$SSH_PORT" "$SSH_TEST_TIMEOUT"; then
         log "INFO" "SSH is responding after reload"
 
         # Cancel rollback
@@ -265,10 +300,14 @@ update_ssh_config_safe() {
         show_success "SSH configuration updated successfully"
         return 0
     else
+        _port_check_status=$?
+        if [ "$_port_check_status" -eq 2 ]; then
+            log "ERROR" "Cannot verify SSH after reload: no port-checking tool is available"
+        fi
         log "ERROR" "SSH not responding after reload"
 
         # Rollback will happen automatically
-        unset _changes_function _rollback_pid _backup_file _work_config
+        unset _changes_function _rollback_pid _backup_file _work_config _port_check_status
         show_error "SSH update failed - automatic rollback in progress"
         return 1
     fi

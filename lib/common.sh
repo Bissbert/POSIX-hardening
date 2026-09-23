@@ -7,7 +7,7 @@
 set -e
 
 # Global configuration
-readonly VERSION="1.0.0"
+readonly VERSION="1.1.0"
 readonly TOOLKIT_NAME="POSIX-hardening"
 
 # Safety flags - use config values if set, otherwise use sensible defaults
@@ -54,15 +54,15 @@ fi
 
 # Log message with severity level
 log() {
-    level="$1"
+    _log_level="$1"
     shift
-    timestamp=$(date '+%Y-%m-%d %H:%M:%S')
+    _log_timestamp=$(date '+%Y-%m-%d %H:%M:%S')
 
     # Log to file
-    echo "[$timestamp] [$level] $*" >> "$LOG_FILE"
+    echo "[$_log_timestamp] [$_log_level] $*" >> "$LOG_FILE"
 
     # Log to stdout with colors
-    case "$level" in
+    case "$_log_level" in
         ERROR)
             printf "${RED}[ERROR]${RESET} %s\n" "$*" >&2
             ;;
@@ -81,9 +81,11 @@ log() {
             printf "${YELLOW}[DRY-RUN]${RESET} %s\n" "$*"
             ;;
         *)
-            echo "[$level] $*"
+            echo "[$_log_level] $*"
             ;;
     esac
+
+    unset _log_level _log_timestamp
 }
 
 # Log error and exit
@@ -218,7 +220,7 @@ safe_backup_file() {
     cp -p "$source_file" "$backup_path"
 
     if [ -f "$backup_path" ]; then
-        log "INFO" "Backed up $source_file to $backup_path"
+        log "INFO" "Backed up $source_file to $backup_path" >&2
         echo "$backup_path"
         return 0
     else
@@ -314,6 +316,11 @@ is_completed() {
 mark_completed() {
     script_name="$1"
     completion_file="$STATE_DIR/completed"
+
+    if [ "$DRY_RUN" = "1" ]; then
+        log "DRY_RUN" "Would mark as completed: $script_name"
+        return 0
+    fi
 
     if ! is_completed "$script_name"; then
         echo "$script_name" >> "$completion_file"
@@ -489,6 +496,7 @@ check_port_listening() {
     _host="${1:-localhost}"
     _port="$2"
     _timeout_sec="${3:-5}"
+    _probe_available=0
 
     if [ -z "$_port" ]; then
         log "ERROR" "Port number required for check_port_listening"
@@ -498,36 +506,48 @@ check_port_listening() {
 
     # Method 1: nc (netcat) - most reliable
     if command -v nc >/dev/null 2>&1; then
+        _probe_available=1
         if timeout "$_timeout_sec" nc -z "$_host" "$_port" 2>/dev/null; then
-            unset _host _port _timeout_sec
+            unset _host _port _timeout_sec _probe_available
             return 0
         fi
     fi
 
     # Method 2: ss (modern alternative)
     if command -v ss >/dev/null 2>&1; then
+        _probe_available=1
         if ss -ltn 2>/dev/null | grep -q ":$_port "; then
-            unset _host _port _timeout_sec
+            unset _host _port _timeout_sec _probe_available
             return 0
         fi
     fi
 
     # Method 3: netstat (legacy fallback)
     if command -v netstat >/dev/null 2>&1; then
+        _probe_available=1
         if netstat -ltn 2>/dev/null | grep -q ":$_port "; then
-            unset _host _port _timeout_sec
+            unset _host _port _timeout_sec _probe_available
             return 0
         fi
     fi
 
     # Method 4: Try direct connection with timeout (last resort)
     # Use /dev/tcp if available (bash feature, but works in some sh)
-    if timeout "$_timeout_sec" sh -c "echo '' | telnet $_host $_port" >/dev/null 2>&1; then
-        unset _host _port _timeout_sec
-        return 0
+    if command -v telnet >/dev/null 2>&1; then
+        _probe_available=1
+        if timeout "$_timeout_sec" sh -c "echo '' | telnet $_host $_port" >/dev/null 2>&1; then
+            unset _host _port _timeout_sec _probe_available
+            return 0
+        fi
     fi
 
-    unset _host _port _timeout_sec
+    if [ "$_probe_available" -eq 0 ]; then
+        log "ERROR" "No port-checking tool available (nc, ss, netstat, or telnet)"
+        unset _host _port _timeout_sec _probe_available
+        return 2
+    fi
+
+    unset _host _port _timeout_sec _probe_available
     return 1
 }
 

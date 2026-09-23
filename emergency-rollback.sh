@@ -6,13 +6,14 @@
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 LIB_DIR="$SCRIPT_DIR/lib"
 
-# Source only essential functions
-. "$LIB_DIR/common.sh"
-. "$LIB_DIR/backup.sh"
-
 # Force safety off for emergency
 export SAFETY_MODE=0
 export DRY_RUN=0
+
+# Source only essential functions after establishing emergency mode so the
+# common library can safely make the values immutable.
+. "$LIB_DIR/common.sh"
+. "$LIB_DIR/backup.sh"
 
 # ============================================================================
 # Emergency Recovery Functions

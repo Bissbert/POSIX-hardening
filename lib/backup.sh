@@ -57,7 +57,7 @@ backup_file() {
         ls -la "$_source_file" > "${_backup_path}.meta"
         sha256sum "$_source_file" 2>/dev/null | cut -d' ' -f1 > "${_backup_path}.sha256"
 
-        log "INFO" "Backed up: $_source_file -> $_backup_path"
+        log "INFO" "Backed up: $_source_file -> $_backup_path" >&2
         echo "$_backup_path"
         return 0
     else
@@ -88,7 +88,7 @@ backup_directory() {
         # Record in manifest
         echo "$(date +%Y-%m-%d-%H:%M:%S)|DIR|$_source_dir|$_backup_path" >> "$BACKUP_MANIFEST"
 
-        log "INFO" "Backed up directory: $_source_dir -> $_backup_path"
+        log "INFO" "Backed up directory: $_source_dir -> $_backup_path" >&2
         echo "$_backup_path"
         return 0
     else
@@ -107,7 +107,7 @@ create_system_snapshot() {
     _snapshot_path="$SNAPSHOT_DIR/$_snapshot_id"
     _snapshot_manifest="$_snapshot_path/manifest"
 
-    log "INFO" "Creating system snapshot: $_snapshot_id"
+    log "INFO" "Creating system snapshot: $_snapshot_id" >&2
 
     # Create snapshot directory
     mkdir -p "$_snapshot_path"
@@ -214,7 +214,7 @@ EOF
     # Record snapshot in main manifest
     echo "$(date +%Y-%m-%d-%H:%M:%S)|SNAPSHOT|$_snapshot_id|$_snapshot_path" >> "$BACKUP_MANIFEST"
 
-    log "INFO" "System snapshot created: $_snapshot_path"
+    log "INFO" "System snapshot created: $_snapshot_path" >&2
     echo "$_snapshot_id"
     return 0
 }

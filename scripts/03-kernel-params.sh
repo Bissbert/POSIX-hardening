@@ -117,8 +117,14 @@ kernel.sysrq = 0
 # === End POSIX Hardening ===
 EOF
 
-    # Apply settings
-    sysctl -p /etc/sysctl.conf >/dev/null 2>&1
+    # Apply settings and preserve the per-key diagnostics on failure.
+    if ! _sysctl_output=$(sysctl -p /etc/sysctl.conf 2>&1); then
+        log "ERROR" "Failed to apply kernel parameters"
+        printf '%s\n' "$_sysctl_output" >&2
+        unset _sysctl_output
+        return 1
+    fi
+    unset _sysctl_output
 
     show_success "Kernel parameters hardened"
 }

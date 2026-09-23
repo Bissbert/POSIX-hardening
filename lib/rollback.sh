@@ -4,9 +4,8 @@
 # Provides atomic operations with automatic rollback on failure
 
 # Note: common.sh should be sourced before this file
-# Source POSIX compatibility layer
-SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-. "${SCRIPT_DIR}/posix_compat.sh"
+# Source POSIX compatibility layer from the caller-provided library directory.
+. "${LIB_DIR}/posix_compat.sh"
 
 # Rollback configuration
 readonly ROLLBACK_STACK="$STATE_DIR/rollback_stack"
@@ -83,15 +82,46 @@ rollback_transaction() {
     # Execute rollback actions in reverse order
     if [ -f "$ROLLBACK_STACK" ] && [ -s "$ROLLBACK_STACK" ]; then
         _temp_stack="${ROLLBACK_STACK}.processing"
-        mv "$ROLLBACK_STACK" "$_temp_stack"
+        _reversed_stack="${_temp_stack}.reversed"
+        _failed_stack="${ROLLBACK_STACK}.failed"
 
-        # Read stack in reverse order
-        posix_reverse "$_temp_stack" | while IFS='|' read -r action_type action_data; do
-            execute_rollback_action "$action_type" "$action_data"
-        done
+        if ! mv "$ROLLBACK_STACK" "$_temp_stack"; then
+            log "ERROR" "Could not prepare rollback stack"
+            unset _reason _temp_stack _reversed_stack _failed_stack
+            return 1
+        fi
 
-        rm -f "$_temp_stack"
-        unset _temp_stack
+        : > "$_failed_stack"
+        if ! posix_reverse "$_temp_stack" > "$_reversed_stack"; then
+            mv "$_temp_stack" "$ROLLBACK_STACK"
+            rm -f "$_failed_stack" "$_reversed_stack"
+            unset _reason _temp_stack _reversed_stack _failed_stack
+            return 1
+        fi
+
+        _rollback_failed=0
+        while IFS='|' read -r action_type action_data; do
+            if ! execute_rollback_action "$action_type" "$action_data"; then
+                printf '%s|%s\n' "$action_type" "$action_data" >> "$_failed_stack"
+                _rollback_failed=1
+            fi
+        done < "$_reversed_stack"
+
+        rm -f "$_temp_stack" "$_reversed_stack"
+
+        if [ "$_rollback_failed" -ne 0 ]; then
+            if ! mv "$_failed_stack" "$ROLLBACK_STACK"; then
+                log "ERROR" "Could not preserve failed rollback actions"
+            fi
+            > "$TRANSACTION_ID_FILE"
+            CURRENT_TRANSACTION=""
+            log "ERROR" "Rollback completed with failures; failed actions were retained"
+            unset _reason _temp_stack _reversed_stack _failed_stack _rollback_failed
+            return 1
+        fi
+
+        rm -f "$_failed_stack"
+        unset _temp_stack _reversed_stack _failed_stack _rollback_failed
     fi
 
     # Clear transaction state
@@ -218,10 +248,17 @@ execute_rollback_action() {
             _original_file="${_action_data#*:}"
 
             if [ -f "$_backup_file" ]; then
-                cp -p "$_backup_file" "$_original_file" && \
+                if cp -p "$_backup_file" "$_original_file"; then
                     log "INFO" "Restored file: $_original_file"
+                else
+                    log "ERROR" "Failed to restore file: $_original_file"
+                    unset _backup_file _original_file _action_type _action_data
+                    return 1
+                fi
             else
                 log "ERROR" "Backup file not found: $_backup_file"
+                unset _backup_file _original_file _action_type _action_data
+                return 1
             fi
             unset _backup_file _original_file
             ;;
@@ -229,8 +266,11 @@ execute_rollback_action() {
         COMMAND)
             # Execute rollback command
             log "DEBUG" "Executing rollback command: $_action_data"
-            eval "$_action_data" || \
+            if ! eval "$_action_data"; then
                 log "ERROR" "Rollback command failed: $_action_data"
+                unset _action_type _action_data
+                return 1
+            fi
             ;;
 
         SERVICE)
@@ -240,11 +280,16 @@ execute_rollback_action() {
 
             case "$_action" in
                 start|stop|restart|reload)
-                    safe_service_${_action} "$_service_name" || \
+                    if ! safe_service_${_action} "$_service_name"; then
                         log "ERROR" "Failed to $_action service: $_service_name"
+                        unset _service_name _action _action_type _action_data
+                        return 1
+                    fi
                     ;;
                 *)
                     log "ERROR" "Unknown service action: $_action"
+                    unset _service_name _action _action_type _action_data
+                    return 1
                     ;;
             esac
             unset _service_name _action
@@ -252,9 +297,14 @@ execute_rollback_action() {
 
         FIREWALL)
             # Restore firewall rule
-            if command -v iptables >/dev/null 2>&1; then
-                eval "$_action_data" || \
-                    log "ERROR" "Failed to restore firewall rule"
+            if ! command -v iptables >/dev/null 2>&1; then
+                log "ERROR" "iptables is unavailable; cannot restore firewall rule"
+                unset _action_type _action_data
+                return 1
+            elif ! eval "$_action_data"; then
+                log "ERROR" "Failed to restore firewall rule"
+                unset _action_type _action_data
+                return 1
             fi
             ;;
 
@@ -263,13 +313,18 @@ execute_rollback_action() {
             _parameter="${_action_data%:*}"
             _value="${_action_data#*:}"
 
-            sysctl -w "$_parameter=$_value" >/dev/null 2>&1 || \
+            if ! sysctl -w "$_parameter=$_value" >/dev/null 2>&1; then
                 log "ERROR" "Failed to restore sysctl: $_parameter=$_value"
+                unset _parameter _value _action_type _action_data
+                return 1
+            fi
             unset _parameter _value
             ;;
 
         *)
             log "ERROR" "Unknown rollback action type: $_action_type"
+            unset _action_type _action_data
+            return 1
             ;;
     esac
 
@@ -389,23 +444,63 @@ rollback_to_checkpoint() {
         return 1
     fi
 
-    # Get actions added after checkpoint
+    # Checkpoint stacks are ordered prefixes, so preserve duplicates and
+    # chronology instead of treating the stacks as sorted sets.
     _temp_actions="${ROLLBACK_STACK}.temp"
-    comm -13 "$_checkpoint_file" "$ROLLBACK_STACK" > "$_temp_actions" 2>/dev/null
+    _checkpoint_prefix="${_temp_actions}.prefix"
+    _reversed_actions="${_temp_actions}.reversed"
+    _checkpoint_lines=$(wc -l < "$_checkpoint_file")
+    _stack_lines=$(wc -l < "$ROLLBACK_STACK")
 
-    # Execute rollback for actions after checkpoint
-    if [ -s "$_temp_actions" ]; then
-        tac "$_temp_actions" 2>/dev/null || tail -r "$_temp_actions" 2>/dev/null | while IFS='|' read -r action_type action_data; do
-            execute_rollback_action "$action_type" "$action_data"
-        done
+    if [ "$_stack_lines" -lt "$_checkpoint_lines" ]; then
+        log "ERROR" "Rollback stack predates checkpoint: $_checkpoint_name"
+        unset _checkpoint_name _checkpoint_file _temp_actions _checkpoint_prefix _reversed_actions _checkpoint_lines _stack_lines
+        return 1
     fi
 
-    # Restore checkpoint stack
-    cp "$_checkpoint_file" "$ROLLBACK_STACK"
+    awk -v limit="$_checkpoint_lines" 'NR <= limit {print}' "$ROLLBACK_STACK" > "$_checkpoint_prefix"
+    if ! cmp -s "$_checkpoint_file" "$_checkpoint_prefix"; then
+        log "ERROR" "Rollback stack does not contain checkpoint prefix: $_checkpoint_name"
+        rm -f "$_temp_actions" "$_checkpoint_prefix" "$_reversed_actions"
+        unset _checkpoint_name _checkpoint_file _temp_actions _checkpoint_prefix _reversed_actions _checkpoint_lines _stack_lines
+        return 1
+    fi
 
-    rm -f "$_temp_actions"
+    _first_new_line=$((_checkpoint_lines + 1))
+    awk -v start="$_first_new_line" 'NR >= start {print}' "$ROLLBACK_STACK" > "$_temp_actions"
+
+    _checkpoint_failed=0
+    if [ -s "$_temp_actions" ]; then
+        if ! posix_reverse "$_temp_actions" > "$_reversed_actions"; then
+            rm -f "$_temp_actions" "$_checkpoint_prefix" "$_reversed_actions"
+            unset _checkpoint_name _checkpoint_file _temp_actions _checkpoint_prefix _reversed_actions _checkpoint_lines _stack_lines _first_new_line _checkpoint_failed
+            return 1
+        fi
+
+        while IFS='|' read -r action_type action_data; do
+            if ! execute_rollback_action "$action_type" "$action_data"; then
+                _checkpoint_failed=1
+            fi
+        done < "$_reversed_actions"
+    fi
+
+    rm -f "$_temp_actions" "$_checkpoint_prefix" "$_reversed_actions"
+
+    if [ "$_checkpoint_failed" -ne 0 ]; then
+        log "ERROR" "Rollback to checkpoint failed; current stack retained"
+        unset _checkpoint_name _checkpoint_file _temp_actions _checkpoint_prefix _reversed_actions _checkpoint_lines _stack_lines _first_new_line _checkpoint_failed
+        return 1
+    fi
+
+    # Restore checkpoint stack only after every appended action succeeds.
+    if ! cp "$_checkpoint_file" "$ROLLBACK_STACK"; then
+        log "ERROR" "Could not restore checkpoint stack: $_checkpoint_name"
+        unset _checkpoint_name _checkpoint_file _temp_actions _checkpoint_prefix _reversed_actions _checkpoint_lines _stack_lines _first_new_line _checkpoint_failed
+        return 1
+    fi
+
     log "INFO" "Rolled back to checkpoint: $_checkpoint_name"
-    unset _checkpoint_name _checkpoint_file _temp_actions
+    unset _checkpoint_name _checkpoint_file _temp_actions _checkpoint_prefix _reversed_actions _checkpoint_lines _stack_lines _first_new_line _checkpoint_failed
     return 0
 }
 
