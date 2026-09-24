@@ -213,7 +213,7 @@ Reproduce with `sh tools/analysis-env.sh`
 | `ansible-lint`, six top-level playbooks | 1394 findings in 138 files; `min` profile passes, `production` does not |
 | Numbered scripts / libraries / Ansible roles | 21 / 6 / 23 |
 | Entries in `orchestrator.sh` `SCRIPT_ORDER` | 20 |
-| Files tracked by git | 336 |
+| Files tracked by git | 335 |
 | Shell bytes (lib + scripts + root scripts) | 210,706 |
 
 The `local` findings matter for the "no bash required" claim: `dash`,

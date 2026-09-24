@@ -7,8 +7,9 @@ in throwaway Linux containers and recorded what it did. Those pages carry
 diagrams and captured output, and every number in them comes from a command in
 [`tools/`](../tools) whose raw output is in
 [`media/captures/`](../media/captures). The captures were re-recorded against
-the default branch after the fix pass, so the pages describe the code as it
-behaves today, including the defects that are still open.
+the default branch after the fixes for issues #12 to #19, so the pages
+describe the code as it behaves today. Defects are tracked as
+[GitHub issues](https://github.com/Bissbert/POSIX-hardening/issues).
 
 The second group is the project's own earlier documentation. It is kept
 unchanged. Where it disagrees with a measurement, the measured page wins.
@@ -19,7 +20,7 @@ flowchart TD
 
     START --> Q1["Want to run it?"]
     START --> Q2["Want to know<br/>how it works?"]
-    START --> Q3["Want to know<br/>what is still open?"]
+    START --> Q3["Want to check<br/>a number?"]
 
     Q1 --> GS["GETTING_STARTED.md<br/>pre-existing"]
     Q1 --> DP["deployment-paths.md<br/>manual vs Ansible"]
@@ -29,7 +30,6 @@ flowchart TD
     Q2 --> RB["rollback.md<br/>transactions and undo"]
     Q2 --> LR["library-reference.md<br/>what lib/ provides"]
 
-    Q3 --> BF["BUGS-FOUND.md<br/>24 entries, 7 still open"]
     Q3 --> MS["measurement.md<br/>how each number was made"]
 
     style START fill:#8250df,color:#fff
@@ -38,7 +38,6 @@ flowchart TD
     style RB fill:#1f6feb,color:#fff
     style LR fill:#1f6feb,color:#fff
     style DP fill:#1f6feb,color:#fff
-    style BF fill:#da3633,color:#fff
     style MS fill:#9e6a03,color:#fff
     style GS fill:#238636,color:#fff
 ```
@@ -52,7 +51,6 @@ flowchart TD
 | [rollback.md](rollback.md) | The transaction state machine, what the rollback stack holds, and what each script registers for undo | [`rollback-demo.log`](../media/captures/rollback-demo.log), [`rollback-coverage.txt`](../media/captures/rollback-coverage.txt), [`media/rollback-demo.gif`](../media/rollback-demo.gif) |
 | [deployment-paths.md](deployment-paths.md) | The three entry points — `orchestrator.sh`, `ansible/site.yml`, `ansible/hardening_master.yml` — compared side by side | [`ansible.txt`](../media/captures/ansible.txt) |
 | [library-reference.md](library-reference.md) | The six files in `lib/`, their load order, and which helpers have callers | [`shell-semantics.txt`](../media/captures/shell-semantics.txt), [`summary.txt`](../media/captures/summary.txt) |
-| [BUGS-FOUND.md](BUGS-FOUND.md) | 24 defects, each with its current status (15 fixed, 7 open, 1 rejected, 1 unresolved), a reproduction, and the fix proposed at the time | every capture in [`media/captures/`](../media/captures) |
 | [measurement.md](measurement.md) | Every published number, the command that produced it, and what could not be measured | the tools themselves |
 
 ## The project's earlier documentation
@@ -86,10 +84,10 @@ they diverge from what `ansible.cfg` actually loads.
 
 | If you are | Read, in order |
 |---|---|
-| Deciding whether to run this on a server | [BUGS-FOUND.md](BUGS-FOUND.md) status column, then [execution-model.md](execution-model.md) |
+| Deciding whether to run this on a server | The [open issues](https://github.com/Bissbert/POSIX-hardening/issues), then [execution-model.md](execution-model.md) |
 | Running it on one server by hand | [execution-model.md](execution-model.md), [ssh-safety.md](ssh-safety.md), [rollback.md](rollback.md) |
 | Running it on a fleet | [deployment-paths.md](deployment-paths.md), then [`../ansible/README.md`](../ansible/README.md) |
-| Fixing the code | The open entries in [BUGS-FOUND.md](BUGS-FOUND.md) — each says why it was deferred — then [library-reference.md](library-reference.md) |
+| Fixing the code | The [open issues](https://github.com/Bissbert/POSIX-hardening/issues), then [library-reference.md](library-reference.md) and the regression tests in [measurement.md](measurement.md#regression-tests) |
 | Checking this documentation | [measurement.md](measurement.md), then run anything in [`../tools`](../tools) |
 
 ## Known limitations of this index

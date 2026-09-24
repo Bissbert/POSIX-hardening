@@ -243,8 +243,7 @@ pull in, reports 1394 findings across 138 files:
 | `literal-compare`, `jinja` | 2 | one each |
 
 The run ends `Profile 'production' was required, but 'min' profile passed`.
-These are style findings, not the defects in
-[BUGS-FOUND.md](BUGS-FOUND.md); none of them was counted as a bug. The
+These are style findings; none of them was filed as a bug. The
 `var-naming` total dominates the list and is cosmetic.
 
 ## Choosing between the paths

@@ -129,7 +129,7 @@ Repository totals, from the same script:
 | Libraries in `lib/` | 6 |
 | Entries in `orchestrator.sh` `SCRIPT_ORDER` | 20 |
 | Ansible roles | 23 |
-| Files tracked by git | 336 |
+| Files tracked by git | 335 |
 | Shell bytes in the CI file set | 210,706 |
 
 ## Captured runs
