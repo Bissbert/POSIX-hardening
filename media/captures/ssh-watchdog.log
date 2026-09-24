@@ -9,9 +9,9 @@ RESULT: sshd_config was restored
 sshd back up: yes
 
 == the lines that matter, from the run ==
-79:[INFO] SSH config backed up to: /var/backups/hardening/sshd_config.20260924-084123.bak
+79:[INFO] SSH config backed up to: /var/backups/hardening/sshd_config.20260924-193810.bak
 87:[INFO] Setting up automatic rollback (15s timeout)
 88:[INFO] Reloading SSH daemon
 89:[ERROR] SSH not responding after reload
-97:[ERROR] SSH not responding - executing rollback
-98:[INFO] SSH configuration rolled back and connectivity restored
+101:[ERROR] SSH not responding - executing rollback
+102:[INFO] SSH configuration rolled back and connectivity restored

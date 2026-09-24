@@ -11,7 +11,9 @@ TOOLKIT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 LIB_DIR="$TOOLKIT_ROOT/lib"
 CONFIG_FILE="$TOOLKIT_ROOT/config/defaults.conf"
 # Load configuration first (before libraries set readonly variables)
-[ -f "$CONFIG_FILE" ] && . "$CONFIG_FILE"
+# Environment values win over the file (see lib/config.sh)
+. "$LIB_DIR/config.sh"
+load_config "$CONFIG_FILE"
 . "$LIB_DIR/common.sh"
 . "$LIB_DIR/backup.sh"
 . "$LIB_DIR/rollback.sh"
@@ -24,12 +26,14 @@ configure_sudo() {
     [ -f /etc/sudoers ] && backup_file /etc/sudoers
 
     # Create sudoers.d directory if needed
+    track_dir /etc/sudoers.d
     [ ! -d /etc/sudoers.d ] && mkdir -p /etc/sudoers.d
 
     # Detect current user (typically the Ansible remote user)
     local current_user="${SUDO_USER:-${USER}}"
 
     # Add hardening rules
+    track_file /etc/sudoers.d/hardening
     cat > /etc/sudoers.d/hardening <<EOF
 # POSIX Hardening Sudo Configuration
 # Note: requiretty is disabled for automation tools like Ansible

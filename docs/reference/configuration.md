@@ -46,7 +46,7 @@
 | **`SAFETY_MODE`**          | `1`     | Master safety switch     | ⚠️ NEVER set to 0 in production |
 | **`ROLLBACK_ENABLED`**     | `1`     | Auto-rollback on failure | Prevents permanent lockout      |
 | **`SSH_ROLLBACK_TIMEOUT`** | `60`    | Seconds before rollback  | Time to verify changes work     |
-| **`ENABLE_EMERGENCY_SSH`** | `1`     | Backup SSH on port 2222  | Keep during initial setup       |
+| **`ENABLE_EMERGENCY_SSH`** | `0`     | Backup SSH on port 2222  | Enable during initial setup     |
 
 ### Key Configuration Variables
 
@@ -54,7 +54,7 @@
 | ------------- | -------------------- | ------------------------ | ---------------------------- |
 | **SSH**       | `SSH_PORT`           | `22`                     | Primary SSH port             |
 |               | `EMERGENCY_SSH_PORT` | `2222`                   | Backup access port           |
-|               | `SSH_TEST_PORT`      | `2222`                   | Temporary test port          |
+|               | `SSH_TEST_PORT`      | `2223`                   | Temporary test port          |
 | **Firewall**  | `ENABLE_FIREWALL`    | `1`                      | Activate iptables            |
 |               | `FIREWALL_TIMEOUT`   | `300`                    | Auto-rollback timer          |
 |               | `ALLOWED_PORTS`      | `""`                     | Additional open ports        |

@@ -11,9 +11,12 @@ TOOLKIT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 LIB_DIR="$TOOLKIT_ROOT/lib"
 CONFIG_FILE="$TOOLKIT_ROOT/config/defaults.conf"
 # Load configuration first (before libraries set readonly variables)
-[ -f "$CONFIG_FILE" ] && . "$CONFIG_FILE"
+# Environment values win over the file (see lib/config.sh)
+. "$LIB_DIR/config.sh"
+load_config "$CONFIG_FILE"
 . "$LIB_DIR/common.sh"
 . "$LIB_DIR/backup.sh"
+. "$LIB_DIR/rollback.sh"
 
 SCRIPT_NAME="19-log-retention"
 
@@ -23,6 +26,7 @@ configure_log_retention() {
     # Configure logrotate
     if [ -f /etc/logrotate.conf ]; then
         backup_file /etc/logrotate.conf
+        track_file /etc/logrotate.conf
 
         # Update rotation settings
         sed -i 's/^rotate .*/rotate 90/' /etc/logrotate.conf
@@ -34,6 +38,7 @@ configure_log_retention() {
     fi
 
     # Create security log rotation
+    track_file /etc/logrotate.d/security
     cat > /etc/logrotate.d/security <<'EOF'
 /var/log/auth.log
 /var/log/secure
@@ -54,12 +59,14 @@ EOF
 
 main() {
     init_hardening_environment "$SCRIPT_NAME"
+    begin_transaction "log_retention"
 
     if [ "$DRY_RUN" != "1" ]; then
         configure_log_retention
     fi
 
     mark_completed "$SCRIPT_NAME"
+    commit_transaction
     exit 0
 }
 

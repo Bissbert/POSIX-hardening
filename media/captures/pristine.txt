@@ -2,6 +2,6 @@
 scripts/01-ssh-hardening.sh        exit=0   
 scripts/03-kernel-params.sh        exit=1   
 scripts/05-file-permissions.sh     exit=0   [INFO] =
-orchestrator.sh --status           exit=2   orchestrator.sh: 20: /opt/posix-hardening/config/defaults.conf: BACKUP_DIR: is read only
-orchestrator.sh --dry-run --all    exit=2   orchestrator.sh: 20: /opt/posix-hardening/config/defaults.conf: BACKUP_DIR: is read only
+orchestrator.sh --status           exit=0   
+orchestrator.sh --dry-run --all    exit=0   
 emergency-rollback.sh --help       exit=1   

@@ -10,6 +10,10 @@
 # Or let Ansible generate it from group_vars/all.yml:
 #   ansible-playbook site.yml --tags deploy
 #
+# Precedence, first wins: command-line flag, environment, this file, built-in
+# default. So DRY_RUN=1 sh scripts/05-file-permissions.sh simulates even though
+# this file says DRY_RUN=0. An empty environment variable does not override.
+#
 # ==============================================================================
 
 # ==============================================================================
@@ -51,16 +55,18 @@ ADMIN_IP=""                  # YOUR MANAGEMENT IP - REQUIRED! Example: "203.0.11
 SSH_ALLOW_USERS="admin"      # Users allowed to SSH (space-separated)
                              # WARNING: Do not leave empty!
 SSH_ALLOW_GROUPS=""          # Groups allowed to SSH (space-separated)
-SSH_TEST_PORT=2222           # Port for connectivity testing
+SSH_TEST_PORT=2223           # Port for the pre-flight test sshd; not EMERGENCY_SSH_PORT
 SSH_ROLLBACK_TIMEOUT=60      # Seconds to wait before auto-rollback
 
 # ==============================================================================
 # EMERGENCY ACCESS
 # ==============================================================================
-# Creates a temporary SSH port with password auth for emergency recovery
-# Recommended: Keep enabled during initial deployment, remove after verification
+# Starts a second sshd on EMERGENCY_SSH_PORT that allows root login and
+# password authentication, as a fallback while SSH is being hardened.
+# Off by default. Turn it on only for the initial deployment, with the port
+# firewalled to ADMIN_IP, and remove it after verification.
 
-ENABLE_EMERGENCY_SSH=1       # Create emergency SSH on alternate port (1=on, 0=off)
+ENABLE_EMERGENCY_SSH=0       # Emergency sshd on alternate port (1=on, 0=off)
 EMERGENCY_SSH_PORT=2222      # Emergency SSH port number
 REMOVE_EMERGENCY_SSH=0       # Auto-remove after successful deployment (1=on, 0=off)
                              # Set to 1 for staging/test environments

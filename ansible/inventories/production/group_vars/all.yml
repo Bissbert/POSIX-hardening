@@ -57,7 +57,7 @@ ssh_allow_users: "admin"         # Users allowed to SSH (space-separated)
                                  # Default: "admin" user with sudo access
                                  # WARNING: Do not leave empty!
 ssh_allow_groups: ""             # Groups allowed to SSH (space-separated)
-ssh_test_port: 2222              # Port for connectivity testing
+ssh_test_port: 2223              # Test sshd port; must differ from emergency_ssh_port
 ssh_rollback_timeout: 60         # Seconds to wait before rollback
 
 # ==============================================================================

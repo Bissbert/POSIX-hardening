@@ -59,7 +59,7 @@ Host hardened-*
 2. **Verify .gitignore Blocks Private Keys:**
 
    ```bash
-   git status  # Should NOT show *_ed25519 files (only *.pub)
+   git status  # Should NOT show any key files
    ```
 
 3. **Distribute Team Key Securely:**
@@ -108,7 +108,6 @@ Host hardened-*
 
 - ✅ `generate_keys.sh` - Key generation script
 - ✅ `README.md` - This documentation
-- ✅ `*.pub` - Public keys (safe to share)
 - ✅ `.gitkeep` - Directory structure marker
 
 ### NEVER Commit to Git
@@ -117,8 +116,24 @@ Host hardened-*
 - ❌ `team_shared_ed25519` - Team private key
 - ❌ `*_rsa` - Any RSA private keys
 - ❌ `*.pem` - Any PEM private keys
+- ❌ `*.pub` - Public keys: each operator generates their own pair
 
 **Protection:** `.gitignore` is configured to block these files.
+
+### Keys shipped by older versions
+
+Older versions of this repository committed `ansible_ed25519.pub` and
+`team_shared_ed25519.pub`. Their private halves are not yours, so the
+playbooks no longer deploy them: run `./generate_keys.sh` to create your own
+pair first. If a host was hardened with an older version, remove these keys
+from its `authorized_keys` files:
+
+| File | Fingerprint |
+|---|---|
+| `ansible_ed25519.pub` | `SHA256:S7Z7K/80/EdFifFBu7xnq8s5SAY3H2NGnweT4TguV9s` |
+| `team_shared_ed25519.pub` | `SHA256:7yHffuV420KbdPbB4PAXodEqG0WY4/GEpm4BOXzPwBQ` |
+
+`ssh-keygen -lf ~/.ssh/authorized_keys` prints the fingerprint of each line.
 
 ## Verification
 

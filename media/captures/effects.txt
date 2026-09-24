@@ -15,17 +15,17 @@ yes
 --- backups written ---
 manifest
 snapshots
-sshd_config.20260924-085418.bak
-sysctl.backup.20260924-085426
-sysctl.conf.20260924-085426.bak
-sysctl.conf.20260924-085426.bak.meta
-sysctl.conf.20260924-085426.bak.sha256
+sshd_config.20260924-194627.bak
+sysctl.backup.20260924-194634
+sysctl.conf.20260924-194634.bak
+sysctl.conf.20260924-194634.bak.meta
+sysctl.conf.20260924-194634.bak.sha256
+transactions
 --- completion markers ---
 00-ssh-verification
 01-ssh-hardening
 05-file-permissions
 --- 03-kernel-params rolled back; is its block still in sysctl.conf? ---
-1
---- which sysctl key does sysctl -p reject here? ---
-sysctl: setting key "net.ipv4.tcp_congestion_control": No such file or directory
-sysctl -p exit: 1
+0
+--- does the restored sysctl.conf load cleanly? ---
+sysctl -p exit: 0

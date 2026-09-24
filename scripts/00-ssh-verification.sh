@@ -15,7 +15,9 @@ LIB_DIR="$TOOLKIT_ROOT/lib"
 CONFIG_FILE="$TOOLKIT_ROOT/config/defaults.conf"
 
 # Load configuration first (before libraries set readonly variables)
-[ -f "$CONFIG_FILE" ] && . "$CONFIG_FILE"
+# Environment values win over the file (see lib/config.sh)
+. "$LIB_DIR/config.sh"
+load_config "$CONFIG_FILE"
 
 # Source libraries
 . "$LIB_DIR/common.sh"
@@ -27,7 +29,7 @@ CONFIG_FILE="$TOOLKIT_ROOT/config/defaults.conf"
 SCRIPT_NAME="00-ssh-verification"
 
 # Configuration
-EMERGENCY_SSH_PORT="${EMERGENCY_SSH_PORT}"
+EMERGENCY_SSH_PORT="${EMERGENCY_SSH_PORT:-2222}"
 ROLLBACK_TIMEOUT=60
 
 # ============================================================================
@@ -248,6 +250,13 @@ reinstall_ssh_package() {
     fi
 
     log "INFO" "SSH config backed up to: $backup_file"
+
+    # The reinstall may replace sshd_config (a conffile). Rollback puts the
+    # file back and reloads sshd. The package files themselves stay at the
+    # packaged version: undoing that would restore the binaries this step
+    # found modified.
+    register_command_rollback "ssh_reload_config"
+    register_file_rollback /etc/ssh/sshd_config "$backup_file"
 
     # Setup automatic rollback
     log "INFO" "Setting up automatic rollback (${ROLLBACK_TIMEOUT}s timeout)"

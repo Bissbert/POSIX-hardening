@@ -11,7 +11,9 @@ TOOLKIT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 LIB_DIR="$TOOLKIT_ROOT/lib"
 CONFIG_FILE="$TOOLKIT_ROOT/config/defaults.conf"
 # Load configuration first (before libraries set readonly variables)
-[ -f "$CONFIG_FILE" ] && . "$CONFIG_FILE"
+# Environment values win over the file (see lib/config.sh)
+. "$LIB_DIR/config.sh"
+load_config "$CONFIG_FILE"
 . "$LIB_DIR/common.sh"
 . "$LIB_DIR/backup.sh"
 . "$LIB_DIR/rollback.sh"
@@ -24,6 +26,8 @@ configure_password_policy() {
     # Backup PAM files
     [ -f /etc/pam.d/common-password ] && backup_file /etc/pam.d/common-password
     [ -f /etc/login.defs ] && backup_file /etc/login.defs
+    track_file /etc/pam.d/common-password
+    track_file /etc/login.defs
 
     # Update login.defs
     if [ -f /etc/login.defs ]; then

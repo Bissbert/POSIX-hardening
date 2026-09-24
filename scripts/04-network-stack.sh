@@ -14,7 +14,9 @@ TOOLKIT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 LIB_DIR="$TOOLKIT_ROOT/lib"
 CONFIG_FILE="$TOOLKIT_ROOT/config/defaults.conf"
 # Load configuration first (before libraries set readonly variables)
-[ -f "$CONFIG_FILE" ] && . "$CONFIG_FILE"
+# Environment values win over the file (see lib/config.sh)
+. "$LIB_DIR/config.sh"
+load_config "$CONFIG_FILE"
 . "$LIB_DIR/common.sh"
 . "$LIB_DIR/backup.sh"
 . "$LIB_DIR/rollback.sh"
@@ -31,27 +33,39 @@ apply_network_hardening() {
         [ "$iface" = "all" ] || [ "$iface" = "default" ] || [ "$iface" = "lo" ] && continue
 
         # Disable source routing
+        track_sysctl /proc/sys/net/ipv4/conf/$iface/accept_source_route
         echo 0 > /proc/sys/net/ipv4/conf/$iface/accept_source_route 2>/dev/null
         # Disable redirects
+        track_sysctl /proc/sys/net/ipv4/conf/$iface/accept_redirects
         echo 0 > /proc/sys/net/ipv4/conf/$iface/accept_redirects 2>/dev/null
+        track_sysctl /proc/sys/net/ipv4/conf/$iface/send_redirects
         echo 0 > /proc/sys/net/ipv4/conf/$iface/send_redirects 2>/dev/null
         # Enable source address verification
+        track_sysctl /proc/sys/net/ipv4/conf/$iface/rp_filter
         echo 1 > /proc/sys/net/ipv4/conf/$iface/rp_filter 2>/dev/null
     done
 
     # TCP hardening
+    track_sysctl /proc/sys/net/ipv4/tcp_syncookies
     echo 1 > /proc/sys/net/ipv4/tcp_syncookies 2>/dev/null
+    track_sysctl /proc/sys/net/ipv4/tcp_timestamps
     echo 0 > /proc/sys/net/ipv4/tcp_timestamps 2>/dev/null
+    track_sysctl /proc/sys/net/ipv4/tcp_synack_retries
     echo 2 > /proc/sys/net/ipv4/tcp_synack_retries 2>/dev/null
 
     # ICMP hardening
+    track_sysctl /proc/sys/net/ipv4/icmp_echo_ignore_broadcasts
     echo 1 > /proc/sys/net/ipv4/icmp_echo_ignore_broadcasts 2>/dev/null
+    track_sysctl /proc/sys/net/ipv4/icmp_ignore_bogus_error_responses
     echo 1 > /proc/sys/net/ipv4/icmp_ignore_bogus_error_responses 2>/dev/null
 
     # IPv6 hardening if available
     if [ -d /proc/sys/net/ipv6 ]; then
+        track_sysctl /proc/sys/net/ipv6/conf/all/accept_ra
         echo 0 > /proc/sys/net/ipv6/conf/all/accept_ra 2>/dev/null
+        track_sysctl /proc/sys/net/ipv6/conf/default/accept_ra
         echo 0 > /proc/sys/net/ipv6/conf/default/accept_ra 2>/dev/null
+        track_sysctl /proc/sys/net/ipv6/conf/all/accept_redirects
         echo 0 > /proc/sys/net/ipv6/conf/all/accept_redirects 2>/dev/null
     fi
 

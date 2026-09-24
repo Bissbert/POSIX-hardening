@@ -11,8 +11,11 @@ TOOLKIT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 LIB_DIR="$TOOLKIT_ROOT/lib"
 CONFIG_FILE="$TOOLKIT_ROOT/config/defaults.conf"
 # Load configuration first (before libraries set readonly variables)
-[ -f "$CONFIG_FILE" ] && . "$CONFIG_FILE"
+# Environment values win over the file (see lib/config.sh)
+. "$LIB_DIR/config.sh"
+load_config "$CONFIG_FILE"
 . "$LIB_DIR/common.sh"
+. "$LIB_DIR/rollback.sh"
 
 SCRIPT_NAME="20-integrity-baseline"
 
@@ -20,6 +23,11 @@ create_baseline() {
     show_progress "Creating file integrity baseline"
 
     baseline_file="$STATE_DIR/integrity_baseline.$(date +%Y%m%d-%H%M%S)"
+
+    # Only toolkit state changes here; a failed run leaves no half baseline
+    track_file "$baseline_file"
+    track_file "$baseline_file.gz"
+    track_file "$STATE_DIR/integrity_baseline_latest.gz"
 
     # Create checksums for critical directories
     for dir in /etc /bin /sbin /usr/bin /usr/sbin; do
@@ -66,6 +74,7 @@ verify_integrity() {
 
 main() {
     init_hardening_environment "$SCRIPT_NAME"
+    begin_transaction "integrity_baseline"
 
     if [ "$DRY_RUN" != "1" ]; then
         create_baseline
@@ -74,6 +83,7 @@ main() {
     fi
 
     mark_completed "$SCRIPT_NAME"
+    commit_transaction
     exit 0
 }
 

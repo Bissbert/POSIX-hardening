@@ -15,7 +15,9 @@ LIB_DIR="$TOOLKIT_ROOT/lib"
 CONFIG_FILE="$TOOLKIT_ROOT/config/defaults.conf"
 
 # Load configuration first (before libraries set readonly variables)
-[ -f "$CONFIG_FILE" ] && . "$CONFIG_FILE"
+# Environment values win over the file (see lib/config.sh)
+. "$LIB_DIR/config.sh"
+load_config "$CONFIG_FILE"
 
 # Source libraries
 . "$LIB_DIR/common.sh"
@@ -39,6 +41,7 @@ apply_kernel_hardening() {
     if [ -f /etc/sysctl.conf ]; then
         backup_file /etc/sysctl.conf
     fi
+    track_file /etc/sysctl.conf
 
     # Remove old POSIX hardening section if it exists (for idempotency)
     if [ -f /etc/sysctl.conf ]; then
@@ -116,6 +119,9 @@ kernel.sysrq = 0
 
 # === End POSIX Hardening ===
 EOF
+
+    # Record the live values of every parameter the file sets
+    track_sysctl_file /etc/sysctl.conf
 
     # Apply settings and preserve the per-key diagnostics on failure.
     if ! _sysctl_output=$(sysctl -p /etc/sysctl.conf 2>&1); then

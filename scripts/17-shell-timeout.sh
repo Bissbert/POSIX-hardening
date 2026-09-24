@@ -11,8 +11,11 @@ TOOLKIT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 LIB_DIR="$TOOLKIT_ROOT/lib"
 CONFIG_FILE="$TOOLKIT_ROOT/config/defaults.conf"
 # Load configuration first (before libraries set readonly variables)
-[ -f "$CONFIG_FILE" ] && . "$CONFIG_FILE"
+# Environment values win over the file (see lib/config.sh)
+. "$LIB_DIR/config.sh"
+load_config "$CONFIG_FILE"
 . "$LIB_DIR/common.sh"
+. "$LIB_DIR/rollback.sh"
 
 SCRIPT_NAME="17-shell-timeout"
 
@@ -21,6 +24,7 @@ configure_timeout() {
 
     # Set timeout in profile (only if not already set)
     if ! grep -q "^TMOUT=" /etc/profile 2>/dev/null; then
+        track_file /etc/profile
         echo "" >> /etc/profile
         echo "# Shell timeout configured by POSIX hardening toolkit" >> /etc/profile
         echo "TMOUT=${SHELL_TIMEOUT}" >> /etc/profile
@@ -34,6 +38,7 @@ configure_timeout() {
     # Set in bash profile if exists (only if not already set)
     if [ -f /etc/bash.bashrc ]; then
         if ! grep -q "^TMOUT=" /etc/bash.bashrc 2>/dev/null; then
+            track_file /etc/bash.bashrc
             echo "" >> /etc/bash.bashrc
             echo "# Shell timeout configured by POSIX hardening toolkit" >> /etc/bash.bashrc
             echo "TMOUT=${SHELL_TIMEOUT}" >> /etc/bash.bashrc
@@ -50,12 +55,14 @@ configure_timeout() {
 
 main() {
     init_hardening_environment "$SCRIPT_NAME"
+    begin_transaction "shell_timeout"
 
     if [ "$DRY_RUN" != "1" ]; then
         configure_timeout
     fi
 
     mark_completed "$SCRIPT_NAME"
+    commit_transaction
     exit 0
 }
 
