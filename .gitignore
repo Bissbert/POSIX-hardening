@@ -84,11 +84,13 @@ ansible/roles/**/molecule/**/roles/  # Symlinks to test roles
 .vault_pass.txt
 
 # Ansible team keys - NEVER commit private keys!
+# Public keys stay out too: each operator generates their own pair with
+# generate_keys.sh, and a committed .pub would be deployed to every host.
 ansible/team_keys/*_ed25519
 ansible/team_keys/*_rsa
 ansible/team_keys/*.pem
 ansible/team_keys/*.key
-!ansible/team_keys/*.pub
+ansible/team_keys/*.pub
 !ansible/team_keys/README.md
 !ansible/team_keys/.gitkeep
 !ansible/team_keys/generate_keys.sh

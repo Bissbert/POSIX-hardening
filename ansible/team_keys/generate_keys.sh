@@ -46,9 +46,12 @@ print_error() {
 }
 
 # Check if key exists
+# Only the private half proves that this machine owns the pair. A public key
+# without it (for example one left over from an older clone, which used to
+# ship two) must not block generation.
 key_exists() {
     local key_name="$1"
-    if [ -f "$KEYS_DIR/$key_name" ] || [ -f "$KEYS_DIR/${key_name}.pub" ]; then
+    if [ -f "$KEYS_DIR/$key_name" ]; then
         return 0
     fi
     return 1
@@ -66,15 +69,30 @@ generate_key() {
     if key_exists "$key_name"; then
         print_warning "Key $key_name already exists, skipping generation"
         print_warning "To regenerate, delete: $key_path and ${key_path}.pub"
+        # Recreate a missing public half from the private key
+        if [ ! -f "${key_path}.pub" ]; then
+            ssh-keygen -y -f "$key_path" > "${key_path}.pub"
+            chmod 644 "${key_path}.pub"
+            print_info "Recreated ${key_name}.pub from the private key"
+        fi
         return 1
     fi
 
-    # Generate key
-    ssh-keygen -t "$KEY_TYPE" \
+    # A public key without its private half was not made here: replace it
+    if [ -f "${key_path}.pub" ]; then
+        print_warning "Replacing ${key_name}.pub: its private key is not on this machine"
+        rm -f "${key_path}.pub"
+    fi
+
+    # Generate key (callers run this inside "if", where set -e is off)
+    if ! ssh-keygen -t "$KEY_TYPE" \
         -f "$key_path" \
         -C "$key_comment" \
         -N "" \
-        -q
+        -q; then
+        print_error "ssh-keygen failed for $key_name"
+        return 1
+    fi
 
     # Set proper permissions
     chmod 600 "$key_path"
@@ -169,7 +187,7 @@ Host hardened-*
 
 2. **Verify .gitignore Blocks Private Keys:**
    ```bash
-   git status  # Should NOT show *_ed25519 files (only *.pub)
+   git status  # Should NOT show any key files
    ```
 
 3. **Distribute Team Key Securely:**
@@ -213,10 +231,10 @@ Host hardened-*
 ### Safe to Commit to Git:
 - ✅ `generate_keys.sh` - Key generation script
 - ✅ `README.md` - This documentation
-- ✅ `*.pub` - Public keys (safe to share)
 - ✅ `.gitkeep` - Directory structure marker
 
 ### NEVER Commit to Git:
+- ❌ `*.pub` - Public keys: each operator generates their own pair
 - ❌ `ansible_ed25519` - Ansible private key
 - ❌ `team_shared_ed25519` - Team private key
 - ❌ `*_rsa` - Any RSA private keys
@@ -376,7 +394,7 @@ main() {
     print_warning "SECURITY REMINDER:"
     print_warning "- Private keys (*_ed25519) must NEVER be committed to git"
     print_warning "- .gitignore is configured to block them"
-    print_warning "- Only public keys (*.pub) should be in version control"
+    print_warning "- Public keys (*.pub) stay local too; each operator makes their own"
     echo ""
 
     # Generate Ansible automation key
@@ -421,11 +439,9 @@ main() {
     echo "     cd ../.."
     echo "     git status  # Should NOT show *_ed25519 files"
     echo ""
-    echo "  ${YELLOW}2. Commit public keys to git:${NC}"
-    echo "     git add ansible/team_keys/*.pub"
-    echo "     git add ansible/team_keys/README.md"
-    echo "     git add ansible/team_keys/.gitkeep"
-    echo "     git commit -m 'feat: add SSH team keys for centralized access'"
+    echo "  ${YELLOW}2. Keep the keys out of git:${NC}"
+    echo "     # .gitignore blocks private and public keys in team_keys/;"
+    echo "     # the playbooks read them from this directory on the controller"
     echo ""
     echo "  ${YELLOW}3. Configure Ansible to use automation key:${NC}"
     echo "     # Add to ansible/ansible.cfg:"
@@ -445,14 +461,23 @@ main() {
     print_info "Documentation: $KEYS_DIR/README.md"
     echo ""
 
-    # Show what's safe to commit
+    # Show what is on disk
     print_header
-    echo "${GREEN}Safe to Commit (Public Keys):${NC}"
+    echo "${GREEN}Public Keys (deployed by the playbooks):${NC}"
     ls -lh "$KEYS_DIR"/*.pub 2>/dev/null || echo "  (No public keys found)"
     echo ""
-    echo "${RED}NEVER Commit (Private Keys):${NC}"
+    echo "${RED}Private Keys (NEVER commit):${NC}"
     ls -lh "$KEYS_DIR"/*_ed25519 2>/dev/null | grep -v ".pub" || echo "  (No private keys found)"
     echo ""
+
+    # Deploying a public key whose private half nobody holds locks everyone
+    # out once password login is disabled, so end with an error instead.
+    for _key in "$ANSIBLE_KEY" "$TEAM_KEY"; do
+        if [ ! -f "$KEYS_DIR/$_key" ] || [ ! -f "$KEYS_DIR/$_key.pub" ]; then
+            print_error "Key pair $_key is incomplete in $KEYS_DIR; do not deploy"
+            exit 1
+        fi
+    done
 
     # Prompt for local installation (optional)
     prompt_local_installation
@@ -598,7 +623,8 @@ prompt_local_installation() {
             echo "  chmod 600 ~/.ssh/$TEAM_KEY"
             echo "  ssh-add ~/.ssh/$TEAM_KEY"
             echo ""
-            return 1
+            # Declining is not a failure; main's exit status reports the keys
+            return 0
             ;;
     esac
 }
