@@ -3,25 +3,24 @@
 A set of POSIX `sh` scripts that harden a Debian server over SSH, plus an
 Ansible tree that does the same thing across a fleet. The design goal that
 shapes every part of it is not locking the operator out: SSH changes are
-validated against a throwaway daemon on port 2222, a watchdog reverts the
+validated against a throwaway daemon on port 2223, a watchdog reverts the
 configuration if the connection dies, and each script opens a transaction that
-is meant to undo its own changes on failure. This README documents what the
+undoes its own changes on failure. This README documents what the
 code on the default branch does, measured in a Debian 12 container.
 
 ## What a run does, and where it stops
 
 ```mermaid
 flowchart TD
-    START["sudo sh orchestrator.sh --all"] --> CFG{"config/defaults.conf<br/>present?"}
-    CFG -- "yes, as quick-start.sh<br/>creates it" --> RO["BACKUP_DIR: is read only<br/>exit 2, nothing done<br/>(BUG-7, open)"]
-    CFG -- no --> P1["priority 1<br/>SSH, firewall"]
+    START["sudo sh orchestrator.sh --all"] --> CFG["load_config<br/>flags, then environment,<br/>then config/defaults.conf"]
+    CFG --> P1["priority 1<br/>SSH, firewall"]
     P1 --> P2["priority 2<br/>kernel, network, files"]
     P2 --> P3["priority 3<br/>accounts, audit, cron"]
     P3 --> P4["priority 4<br/>banners, timeouts, integrity"]
     P4 --> SUM["summary:<br/>Completed: 13  Failed: 2"]
 
     style START fill:#8250df,color:#fff
-    style RO fill:#da3633,color:#fff
+    style CFG fill:#9e6a03,color:#fff
     style P1 fill:#1f6feb,color:#fff
     style P2 fill:#1f6feb,color:#fff
     style P3 fill:#1f6feb,color:#fff
@@ -29,19 +28,20 @@ flowchart TD
     style SUM fill:#238636,color:#fff
 ```
 
-Both branches were observed in a Debian 12 container, not inferred
+This was observed in a Debian 12 container, not inferred
 ([`media/captures/orchestrator.log`](media/captures/orchestrator.log)):
 
-- With `config/defaults.conf` present the orchestrator exits 2 on its first
-  line of real work, because the config file assigns variables that
-  `lib/common.sh` has already made read-only
-  ([BUG-7](docs/BUGS-FOUND.md#bug-7)). `--dry-run` fails the same way
-  ([BUG-8](docs/BUGS-FOUND.md#bug-8)).
-- Without it, `--all` runs in priority order. With the default `FAIL_FAST`
-  it stops at the first failure: `01` and `02` complete, `03-kernel-params`
-  fails, and the summary reports `Completed: 2  Failed: 1`. With
-  `FAIL_FAST=0` it carries on: 13 scripts complete, 2 fail and 5 are skipped
-  because a dependency did not complete.
+- Settings are resolved in one order everywhere: command-line flags, then the
+  environment, then `config/defaults.conf`, then the built-in defaults
+  (`lib/config.sh`). With the config file present, as `quick-start.sh`
+  creates it, `--status` and `--dry-run --all` exit 0
+  ([#13](https://github.com/Bissbert/POSIX-hardening/issues/13), [#14](https://github.com/Bissbert/POSIX-hardening/issues/14),
+  [#15](https://github.com/Bissbert/POSIX-hardening/issues/15)).
+- `--all` runs in priority order. With the default `FAIL_FAST` it stops at
+  the first failure: `01` and `02` complete, `03-kernel-params` fails, and
+  the summary reports `Completed: 2  Failed: 1`. With `FAIL_FAST=0` it
+  carries on: 13 scripts complete, 2 fail and 5 are skipped because a
+  dependency did not complete.
 
 The two failures are properties of the test container:
 
@@ -56,10 +56,9 @@ depend on `03-kernel-params`. The fifth, `10-sudo-restrictions`, is declared
 at priority 2 but depends on `09-account-lockdown` at priority 3, so `--all`
 reaches it before its dependency and skips it on every fresh run.
 
-All 24 defects found while documenting the toolkit are written up, with
-reproductions, in [`docs/BUGS-FOUND.md`](docs/BUGS-FOUND.md). Fifteen have
-been fixed on the default branch; the rest are listed under
-[Known limitations](#known-limitations).
+Defects are tracked as
+[GitHub issues](https://github.com/Bissbert/POSIX-hardening/issues), each with
+a reproduction and, once fixed, a regression test under `tests/regression/`.
 
 ## Quick start
 
@@ -108,16 +107,17 @@ sh tools/host-tools-env.sh capture-rollback-coverage.sh
 
 ### Harden an actual server
 
-The numbered scripts run on a clean clone:
-`sudo sh scripts/01-ssh-hardening.sh` and the others start, do their work
-and write a completion marker. The orchestrator is the awkward part, because
-of the open config-precedence decision
-([BUG-7](docs/BUGS-FOUND.md#bug-7)):
+`sudo sh quick-start.sh` writes `config/defaults.conf` and calls the
+orchestrator; `sudo sh orchestrator.sh --all` and the numbered scripts
+(`sudo sh scripts/01-ssh-hardening.sh`) run with or without that file.
+Automatic rollback is on unless `ROLLBACK_ENABLED=0` is set
+([#12](https://github.com/Bissbert/POSIX-hardening/issues/12)), and the emergency SSH daemon is off unless
+`ENABLE_EMERGENCY_SSH=1` is set ([#18](https://github.com/Bissbert/POSIX-hardening/issues/18)).
 
-- **With** `config/defaults.conf`, which `quick-start.sh` creates before it
-  calls the orchestrator, `orchestrator.sh` exits 2 before doing anything.
-- **Without** it, the orchestrator runs, but `ROLLBACK_ENABLED` is unset, so
-  automatic rollback is off ([BUG-4](docs/BUGS-FOUND.md#bug-4)).
+The repository ships no SSH keys. Generate your own with
+`sh ansible/team_keys/generate_keys.sh` before using
+`deploy_team_keys.yml`
+([#16](https://github.com/Bissbert/POSIX-hardening/issues/16)).
 
 The Ansible path copies the same `lib/` and `scripts/` to the managed host.
 [`docs/deployment-paths.md`](docs/deployment-paths.md) compares the three
@@ -138,8 +138,9 @@ flowchart TD
         S["00-ssh-verification … 20-integrity-baseline"]
     end
 
-    subgraph lib["lib/ — 5 libraries"]
-        COMMON["common.sh<br/>logging, config, markers"]
+    subgraph lib["lib/ — 6 libraries"]
+        CONF["config.sh<br/>setting precedence"]
+        COMMON["common.sh<br/>logging, markers"]
         RB["rollback.sh<br/>transactions, undo stack"]
         SSH["ssh_safety.sh<br/>test daemon, watchdog"]
         BK["backup.sh<br/>timestamped backups"]
@@ -158,6 +159,7 @@ flowchart TD
     SITE --> S
     MASTER --> ROLES["ansible/roles/posix_hardening_*"]
 
+    S --> CONF
     S --> COMMON
     S --> RB
     S --> SSH
@@ -177,6 +179,7 @@ flowchart TD
     style MASTER fill:#8250df,color:#fff
     style S fill:#238636,color:#fff
     style ROLES fill:#8250df,color:#fff
+    style CONF fill:#9e6a03,color:#fff
     style COMMON fill:#9e6a03,color:#fff
     style RB fill:#9e6a03,color:#fff
     style SSH fill:#9e6a03,color:#fff
@@ -201,17 +204,17 @@ Reproduce with `sh tools/analysis-env.sh`
 
 | Measurement | Value |
 |---|---|
-| Files in the CI syntax set | 29 |
+| Files in the CI syntax set | 30 |
 | `dash -n` / `bash -n` / `busybox sh -n` failures | 0 / 0 / 0 |
-| `checkbashisms` files with findings | 0 of 29 |
-| ShellCheck at the CI gate (`-S error -s sh`) | 0 findings over 31 files |
+| `checkbashisms` files with findings | 0 of 30 |
+| ShellCheck at the CI gate (`-S error -s sh`) | 0 findings over 32 files |
 | `SC3043` (`local` is undefined in POSIX `sh`) | 77, none under `lib/` |
 | `SC3012` (lexicographical `\>`) | 2 |
 | `ansible-lint`, six top-level playbooks | 1394 findings in 138 files; `min` profile passes, `production` does not |
-| Numbered scripts / libraries / Ansible roles | 21 / 5 / 23 |
+| Numbered scripts / libraries / Ansible roles | 21 / 6 / 23 |
 | Entries in `orchestrator.sh` `SCRIPT_ORDER` | 20 |
-| Files tracked by git | 326 |
-| Shell bytes (lib + scripts + root scripts) | 188,246 |
+| Files tracked by git | 336 |
+| Shell bytes (lib + scripts + root scripts) | 210,706 |
 
 The `local` findings matter for the "no bash required" claim: `dash`,
 `bash` and BusyBox `sh` all accept `local`, but it is not POSIX, so a strictly
@@ -224,7 +227,7 @@ POSIX `sh` would reject `orchestrator.sh` and ten of the scripts.
 | Script | Exit | Output lines |
 |---|---|---|
 | `scripts/01-ssh-hardening.sh` | 0 | 129 |
-| `scripts/03-kernel-params.sh` | 1 | 63 |
+| `scripts/03-kernel-params.sh` | 1 | 64 |
 | `scripts/05-file-permissions.sh` | 0 | 16 |
 
 The effects were read back with `sshd -T` rather than taken from the script's
@@ -233,15 +236,12 @@ still answering
 ([`media/captures/effects.txt`](media/captures/effects.txt)).
 `03-kernel-params.sh` prints each setting as `sysctl -p` applies it, including
 the one this kernel rejects (`net.ipv4.tcp_congestion_control = htcp`), and
-exits 1. Its transaction then reports `Rollback completed`, but its
-`/etc/sysctl.conf` block is still there afterwards, because the script
-registers no undo action ([BUG-24](docs/BUGS-FOUND.md#bug-24)).
+exits 1. Its rollback restores `/etc/sysctl.conf` and the kernel values, and
+afterwards the file loads cleanly with `sysctl -p`.
 
-A dry run no longer leaves a completion marker behind. With
-`config/defaults.conf` present, `DRY_RUN=1` in the environment is still
-overridden by the file's `DRY_RUN=0`
-([BUG-14](docs/BUGS-FOUND.md#bug-14),
-[`media/captures/dry-run.txt`](media/captures/dry-run.txt)).
+A dry run leaves no completion marker behind, and `DRY_RUN=1` in the
+environment wins over the file's `DRY_RUN=0`
+([`media/captures/dry-run.txt`](media/captures/dry-run.txt)).
 
 ### The SSH watchdog, recorded
 
@@ -257,10 +257,11 @@ SHA-256 before and after) and brings `sshd` back.
 [`docs/ssh-safety.md`](docs/ssh-safety.md) walks through the decision flow
 this exercises.
 
-The configuration test that runs before the reload has a gap: it passes
-whenever something already listens on port 2222, including the toolkit's own
-emergency daemon
-([BUG-20](docs/BUGS-FOUND.md#bug-20),
+The configuration test that runs before the reload starts its own daemon on
+port 2223 (`SSHD_TEST_PORT`), away from the emergency daemon's 2222. It
+fails instead of passing if the port is already taken or if its own daemon
+did not start
+([#17](https://github.com/Bissbert/POSIX-hardening/issues/17),
 [`media/captures/emergency-ssh.txt`](media/captures/emergency-ssh.txt)).
 
 ### A rollback, recorded
@@ -272,10 +273,14 @@ transaction is rolled back.](media/rollback-demo.gif)
 From [`media/captures/rollback-demo.log`](media/captures/rollback-demo.log).
 The demo does what a script would do: back up the file, register the backup
 with the transaction, change the file, roll back. The original content comes
-back. The catch is coverage: 11 of the 21 scripts open a transaction and only
-one, `02-firewall-setup.sh`, registers anything to undo
-([`media/captures/rollback-coverage.txt`](media/captures/rollback-coverage.txt)).
-[`docs/rollback.md`](docs/rollback.md) explains the state machine.
+back. All 21 scripts open a transaction and register an undo action before
+each change
+([`media/captures/rollback-coverage.txt`](media/captures/rollback-coverage.txt)),
+and `tests/regression/rollback-coverage.sh` checks that a failed run of each
+of scripts 01 to 20 leaves the system as it found it
+([#19](https://github.com/Bissbert/POSIX-hardening/issues/19)).
+[`docs/rollback.md`](docs/rollback.md) explains the state machine and the
+three changes a rollback deliberately leaves in place.
 
 Every number on this page, the command that produced it, and the list of what
 could not be measured are in
@@ -288,15 +293,16 @@ could not be measured are in
 ├── orchestrator.sh              # runs the numbered scripts in priority order
 ├── quick-start.sh               # interactive installer
 ├── emergency-rollback.sh        # manual restore, outside the toolkit
-├── lib/                         # 5 POSIX sh libraries
-│   ├── common.sh                # logging, config loading, completion markers
+├── lib/                         # 6 POSIX sh libraries
+│   ├── config.sh                # config loading: flags, environment, file
+│   ├── common.sh                # logging, completion markers
 │   ├── rollback.sh              # transactions and the undo stack
 │   ├── ssh_safety.sh            # test daemon, watchdog, emergency access
 │   ├── backup.sh                # timestamped backups with checksums
 │   └── posix_compat.sh          # portability helpers
 ├── scripts/                     # 21 numbered hardening scripts, 00 … 20
 ├── config/                      # defaults.conf.template, firewall.conf.example
-├── tests/                       # validation_suite.sh and friends
+├── tests/                       # docker.sh, regression/, validation_suite.sh
 ├── ansible/
 │   ├── site.yml                 # copies the toolkit out and runs the scripts
 │   ├── hardening_master.yml     # applies 21 roles instead
@@ -314,55 +320,34 @@ is the project's own.
 
 ## Known limitations
 
-Measured in a Debian 12 arm64 container on the default branch. Every item
-links to its full entry with a reproduction.
+Measured in a Debian 12 arm64 container.
 
-### Open, each needs a decision
-
-- `config/defaults.conf` is sourced after the environment and assigns
-  variables that are already read-only. With the file present the
-  orchestrator cannot start and `--dry-run` aborts, and in the scripts a
-  caller's `DRY_RUN=1` is overridden by the file. Closing this means committing
-  to a precedence contract between CLI flags, environment and config file
-  ([BUG-7](docs/BUGS-FOUND.md#bug-7), [BUG-8](docs/BUGS-FOUND.md#bug-8),
-  [BUG-14](docs/BUGS-FOUND.md#bug-14)).
-- Without `config/defaults.conf`, automatic rollback is silently disabled.
-  Picking a default changes the toolkit's behaviour on failure
-  ([BUG-4](docs/BUGS-FOUND.md#bug-4)).
-- Only one script registers an undo action, so for the others a rollback has
-  an empty stack and `Rollback completed` means nothing was undone.
-  Registering real undo actions requires deciding what each script guarantees
-  ([BUG-24](docs/BUGS-FOUND.md#bug-24)).
-- A fresh clone ships public keys nobody holds the private half of, and the
-  Ansible path deploys them. Removal, rotation or documented ownership is a
-  policy call ([BUG-18](docs/BUGS-FOUND.md#bug-18)).
-- The emergency options and the emergency SSH template use different names.
-  Renaming them activates an additional password-enabled SSH service, so a
-  provisional fix was written and then reverted
-  ([BUG-21](docs/BUGS-FOUND.md#bug-21)).
-
-### Unresolved
-
-- The live-daemon SSH config test passes whenever anything holds port 2222,
-  including the toolkit's own emergency daemon. Settling this needs an
-  isolated OpenSSH target ([BUG-20](docs/BUGS-FOUND.md#bug-20)).
-
-### Seen in the container re-run, not yet written up
+### Seen in the container runs
 
 - `SCRIPT_ORDER` puts `10-sudo-restrictions.sh` at priority 2 and its
   dependency `09-account-lockdown.sh` at priority 3, so `--all` skips it on
   every fresh run.
 - `15-cron-restrictions.sh` fails when `cron` is not installed, because it
   expects `/etc/crontab` to exist.
+- A rollback does not bring back old files that `12-tmp-hardening.sh`
+  deleted, SSH package files that `00-ssh-verification.sh` reinstalled, or
+  stop an emergency sshd started for the run
+  ([`docs/rollback.md`](docs/rollback.md#what-rollback-does-not-undo)).
 
-### Fixed on the default branch
+### Fixed
 
-BUG-1, BUG-2, BUG-3, BUG-5, BUG-6, BUG-9, BUG-11, BUG-12, BUG-13, BUG-15,
-BUG-16, BUG-17, BUG-19, BUG-22 and BUG-23. The status column in
-[`docs/BUGS-FOUND.md`](docs/BUGS-FOUND.md) links each to its commit.
-[BUG-10](docs/BUGS-FOUND.md#bug-10) was rejected on review: `00-ssh-verification.sh`
-is deliberately absent from `SCRIPT_ORDER`, because `01-ssh-hardening.sh`
-runs it.
+[#12](https://github.com/Bissbert/POSIX-hardening/issues/12) rollback on by default,
+[#13](https://github.com/Bissbert/POSIX-hardening/issues/13) and
+[#15](https://github.com/Bissbert/POSIX-hardening/issues/15) one precedence order for
+flags, environment and config file,
+[#14](https://github.com/Bissbert/POSIX-hardening/issues/14) `--dry-run` with a config file,
+[#16](https://github.com/Bissbert/POSIX-hardening/issues/16) no shipped SSH keys,
+[#17](https://github.com/Bissbert/POSIX-hardening/issues/17) the SSH config test fails closed when its
+port is taken,
+[#18](https://github.com/Bissbert/POSIX-hardening/issues/18) one name for the emergency SSH setting, off by default,
+and [#19](https://github.com/Bissbert/POSIX-hardening/issues/19) undo actions in every script. Each has a
+regression test under `tests/regression/`, run in a Debian 12 container with
+`sh tests/docker.sh`.
 
 ### Limits of this evidence
 
@@ -384,8 +369,7 @@ measurements behind them are
 [ssh-safety](docs/ssh-safety.md),
 [rollback](docs/rollback.md),
 [deployment-paths](docs/deployment-paths.md),
-[library-reference](docs/library-reference.md),
-[BUGS-FOUND](docs/BUGS-FOUND.md) and
+[library-reference](docs/library-reference.md) and
 [measurement](docs/measurement.md).
 
 ## License

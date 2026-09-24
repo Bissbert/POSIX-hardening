@@ -49,9 +49,9 @@ flowchart TD
 |---|---|---|
 | [execution-model.md](execution-model.md) | The phases of a hardening run, what the orchestrator does with `SCRIPT_ORDER`, and which of the 21 scripts a container run reached | [`media/captures/orchestrator.log`](../media/captures/orchestrator.log), [`dry-run.txt`](../media/captures/dry-run.txt) |
 | [ssh-safety.md](ssh-safety.md) | The lockout-avoidance chain as a decision flow: test daemon, watchdog, emergency access, `AllowUsers` | [`ssh-watchdog.log`](../media/captures/ssh-watchdog.log), [`emergency-ssh.txt`](../media/captures/emergency-ssh.txt), [`media/ssh-watchdog.gif`](../media/ssh-watchdog.gif) |
-| [rollback.md](rollback.md) | The transaction state machine, what the rollback stack holds, and how much of the toolkit is inside a transaction at all | [`rollback-demo.log`](../media/captures/rollback-demo.log), [`rollback-coverage.txt`](../media/captures/rollback-coverage.txt), [`media/rollback-demo.gif`](../media/rollback-demo.gif) |
+| [rollback.md](rollback.md) | The transaction state machine, what the rollback stack holds, and what each script registers for undo | [`rollback-demo.log`](../media/captures/rollback-demo.log), [`rollback-coverage.txt`](../media/captures/rollback-coverage.txt), [`media/rollback-demo.gif`](../media/rollback-demo.gif) |
 | [deployment-paths.md](deployment-paths.md) | The three entry points — `orchestrator.sh`, `ansible/site.yml`, `ansible/hardening_master.yml` — compared side by side | [`ansible.txt`](../media/captures/ansible.txt) |
-| [library-reference.md](library-reference.md) | The five files in `lib/`, their load order, and which helpers have callers | [`shell-semantics.txt`](../media/captures/shell-semantics.txt), [`summary.txt`](../media/captures/summary.txt) |
+| [library-reference.md](library-reference.md) | The six files in `lib/`, their load order, and which helpers have callers | [`shell-semantics.txt`](../media/captures/shell-semantics.txt), [`summary.txt`](../media/captures/summary.txt) |
 | [BUGS-FOUND.md](BUGS-FOUND.md) | 24 defects, each with its current status (15 fixed, 7 open, 1 rejected, 1 unresolved), a reproduction, and the fix proposed at the time | every capture in [`media/captures/`](../media/captures) |
 | [measurement.md](measurement.md) | Every published number, the command that produced it, and what could not be measured | the tools themselves |
 
@@ -68,10 +68,10 @@ correct.
 | [ROLE_EXECUTION_ORDER.md](ROLE_EXECUTION_ORDER.md) | 142 | Role dependencies, grouped into priorities 0-6 | Names roles by short name (`ssh`, `firewall`), not by the `posix_hardening_*` directory names `hardening_master.yml` uses |
 | [FUTURE_IMPROVEMENTS.md](FUTURE_IMPROVEMENTS.md) | 295 | Planned work, not current behaviour | Not audited |
 | [architecture/overview.md](architecture/overview.md) | 243 | Layer diagram and design intent | Describes intent; see [execution-model.md](execution-model.md) for measured behaviour |
-| [reference/configuration.md](reference/configuration.md) | 325 | Configuration variables and their precedence | `:17-23` puts environment variables above the config file; `config/defaults.conf.template:38` reverses that, so `DRY_RUN=1` in the environment is discarded ([BUG-14](BUGS-FOUND.md#bug-14)) |
+| [reference/configuration.md](reference/configuration.md) | 325 | Configuration variables and their precedence | `:17-23` puts environment variables above the config file, which is what `lib/config.sh` does ([#15](https://github.com/Bissbert/POSIX-hardening/issues/15)); `:57` gives `SSH_TEST_PORT` as 2223 |
 | [guides/HARDENING_REQUIREMENTS.md](guides/HARDENING_REQUIREMENTS.md) | 421 | Which standards the toolkit targets | Not audited |
 | [guides/IMPLEMENTATION_GUIDE.md](guides/IMPLEMENTATION_GUIDE.md) | 773 | Step-by-step deployment | Not audited |
-| [guides/QUICK_REFERENCE.md](guides/QUICK_REFERENCE.md) | 286 | Safety rules, emergency SSH recovery, and a staged deployment order | Invokes the scripts directly; it documents no `orchestrator.sh` flag, so the still-open [BUG-7](BUGS-FOUND.md#bug-7) and [BUG-8](BUGS-FOUND.md#bug-8) do not affect it |
+| [guides/QUICK_REFERENCE.md](guides/QUICK_REFERENCE.md) | 286 | Safety rules, emergency SSH recovery, and a staged deployment order | Invokes the scripts directly; it documents no `orchestrator.sh` flag |
 | [guides/TESTING_FRAMEWORK.md](guides/TESTING_FRAMEWORK.md) | 507 | The validation suite and testing approach | Not audited |
 | [development/CONTRIBUTING.md](development/CONTRIBUTING.md) | 251 | How to contribute | Not audited |
 | [development/AUTHORS.md](development/AUTHORS.md) | 19 | Contributors | Not audited |

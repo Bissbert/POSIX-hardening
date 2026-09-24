@@ -1,6 +1,6 @@
 === A. DRY_RUN=1 with config/defaults.conf present
 DRY_RUN=0                    # 0=apply changes, 1=simulation only
-    lines containing DRY-RUN: 0
+    lines containing DRY-RUN: 4
 
 === B. DRY_RUN=1 with config/defaults.conf removed
 ⚠ Running in DRY-RUN mode - no changes will be made
@@ -12,7 +12,7 @@ DRY_RUN=0                    # 0=apply changes, 1=simulation only
 
 === C. running the same script directly afterwards
     (a script invoked directly never consults the markers)
-[INFO] Committing transaction: 20260924-085426-1293-file_permissions
+[INFO] Committing transaction: 20260924-194635-1638-file_permissions
 ✓ File permissions hardening completed
 [INFO] SUCCESS: File permissions hardening completed
 

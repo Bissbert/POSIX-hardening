@@ -93,17 +93,17 @@ sequenceDiagram
 Two things follow from this shape:
 
 - **The shell scripts behave here as they do by hand.** They are copied
-  verbatim, so the open script-level defects apply unchanged, notably the
-  partial rollback coverage ([BUG-24](BUGS-FOUND.md#bug-24)). The one
-  difference is that `templates/defaults.conf.j2` sets
-  `ENABLE_EMERGENCY_ACCESS=1`, which `config/defaults.conf.template` does not,
-  so the emergency-SSH fallback is live here and dead on the manual path
-  ([BUG-21](BUGS-FOUND.md#bug-21)).
+  verbatim, so their rollback registrations
+  ([#19](https://github.com/Bissbert/POSIX-hardening/issues/19)) apply unchanged. The one difference is that
+  `templates/defaults.conf.j2` sets `ENABLE_EMERGENCY_ACCESS=1` while
+  `config/defaults.conf.template` sets `ENABLE_EMERGENCY_SSH=0`.
+  `01-ssh-hardening.sh` honours either name, so the emergency-SSH fallback is
+  on here and off by default on the manual path ([#18](https://github.com/Bissbert/POSIX-hardening/issues/18)).
 - **The orchestrator is bypassed.** `site.yml` calls the scripts directly,
-  one `shell:` task each, so neither its dependency checks nor its open
-  start-up defects ([BUG-7](BUGS-FOUND.md#bug-7),
-  [BUG-8](BUGS-FOUND.md#bug-8)) come into play. The orchestrator is copied to
-  the target and never executed.
+  one `shell:` task each, so its dependency checks, its flags and its config
+  loading ([#13](https://github.com/Bissbert/POSIX-hardening/issues/13),
+  [#14](https://github.com/Bissbert/POSIX-hardening/issues/14)) do not come into play. The orchestrator is copied to the
+  target and never executed.
 
 ## The `hardening_master.yml` path in detail
 

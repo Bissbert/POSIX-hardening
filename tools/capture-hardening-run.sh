@@ -74,14 +74,14 @@ docker exec "$CNAME" sh -c '
     cat /var/lib/hardening/completed 2>/dev/null
     echo "--- 03-kernel-params rolled back; is its block still in sysctl.conf? ---"
     grep -c "POSIX Hardening Toolkit - Kernel Parameters" /etc/sysctl.conf \
-        || echo 0
-    echo "--- which sysctl key does sysctl -p reject here? ---"
+        || true
+    echo "--- does the restored sysctl.conf load cleanly? ---"
     sysctl -p /etc/sysctl.conf 2>&1 >/dev/null | head -5
     sysctl -p /etc/sysctl.conf >/dev/null 2>&1
     echo "sysctl -p exit: $?"
 ' > "$OUT/effects.txt" 2>&1
 
-# DRY_RUN: does config/defaults.conf override the environment (BUG-14, open),
+# DRY_RUN: does config/defaults.conf override the environment (issue #15),
 # and does a dry run leave a completion marker behind?
 docker exec "$CNAME" sh -c '
     cd /opt/posix-hardening

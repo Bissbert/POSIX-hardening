@@ -1,17 +1,13 @@
 === 1. files git tracks under ansible/team_keys/
     ansible/team_keys/.gitkeep
     ansible/team_keys/README.md
-    ansible/team_keys/ansible_ed25519.pub
     ansible/team_keys/generate_keys.sh
     ansible/team_keys/install_team_key.sh
-    ansible/team_keys/team_shared_ed25519.pub
 
 === 2. the same directory in a fresh clone
     README.md
-    ansible_ed25519.pub
     generate_keys.sh
     install_team_key.sh
-    team_shared_ed25519.pub
 
 === 3. the key paths the users role deploys by default
     18:posix_hardening_ansible_key_path: "{{ playbook_dir }}/team_keys/ansible_ed25519.pub"
@@ -19,11 +15,10 @@
 
 === 4. generate_keys.sh run in that fresh clone
     [INFO] Generating ansible_ed25519...
-    [WARNING] Key ansible_ed25519 already exists, skipping generation
     [INFO] Generating team_shared_ed25519...
-    [WARNING] Key team_shared_ed25519 already exists, skipping generation
-      (No private keys found)
     exit status: 0
 
 === 5. private keys present in the clone afterwards
+    /tmp/tmp.UxLGnVeVWz/clone/ansible/team_keys/team_shared_ed25519
+    /tmp/tmp.UxLGnVeVWz/clone/ansible/team_keys/ansible_ed25519
     (nothing listed above means none)

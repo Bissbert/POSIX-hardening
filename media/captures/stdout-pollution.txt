@@ -1,18 +1,18 @@
 === VERBOSE=0
-[INFO] Backed up /etc/pollution-demo.conf to /var/backups/hardening/pollution-demo.conf.20260924-084201.bak
+[INFO] Backed up /etc/pollution-demo.conf to /var/backups/hardening/pollution-demo.conf.20260924-193503.bak
   safe_backup_file           lines=1  names an existing file: YES
-[INFO] Backed up: /etc/pollution-demo.conf -> /var/backups/hardening/pollution-demo.conf.20260924-084201.bak
+[INFO] Backed up: /etc/pollution-demo.conf -> /var/backups/hardening/pollution-demo.conf.20260924-193503.bak
   backup_file                lines=1  names an existing file: YES
   create_ssh_test_config     lines=1  names an existing file: YES
 
 === VERBOSE=1
-[INFO] Backed up /etc/pollution-demo.conf to /var/backups/hardening/pollution-demo.conf.20260924-084201.bak
+[INFO] Backed up /etc/pollution-demo.conf to /var/backups/hardening/pollution-demo.conf.20260924-193503.bak
   safe_backup_file           lines=1  names an existing file: YES
-[INFO] Backed up: /etc/pollution-demo.conf -> /var/backups/hardening/pollution-demo.conf.20260924-084201.bak
+[INFO] Backed up: /etc/pollution-demo.conf -> /var/backups/hardening/pollution-demo.conf.20260924-193503.bak
   backup_file                lines=1  names an existing file: YES
 [DEBUG] Created test SSH config: /tmp/sshd.test on port 2222
   create_ssh_test_config     lines=1  names an existing file: YES
 
 === what the caller receives from safe_backup_file, in full
-[INFO] Backed up /etc/pollution-demo.conf to /var/backups/hardening/pollution-demo.conf.20260924-084201.bak
-     1	/var/backups/hardening/pollution-demo.conf.20260924-084201.bak
+[INFO] Backed up /etc/pollution-demo.conf to /var/backups/hardening/pollution-demo.conf.20260924-193503.bak
+     1	/var/backups/hardening/pollution-demo.conf.20260924-193503.bak
