@@ -7,14 +7,16 @@
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 LIB_DIR="$SCRIPT_DIR/lib"
 
+# Load configuration first (before libraries set readonly variables)
+# Environment values win over the file (see lib/config.sh)
+CONFIG_FILE="$SCRIPT_DIR/config/defaults.conf"
+. "$LIB_DIR/config.sh"
+load_config "$CONFIG_FILE"
+
 # Source libraries
 . "$LIB_DIR/common.sh"
 . "$LIB_DIR/backup.sh"
 . "$LIB_DIR/rollback.sh"
-
-# Load configuration
-CONFIG_FILE="$SCRIPT_DIR/config/defaults.conf"
-[ -f "$CONFIG_FILE" ] && . "$CONFIG_FILE"
 
 # ============================================================================
 # Script Execution Order and Dependencies
