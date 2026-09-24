@@ -181,15 +181,17 @@ register_rollback() {
 }
 
 # Register file restore action
+# Its variable names are its own: callers such as update_ssh_config_safe keep
+# using their own $_backup_file afterwards.
 register_file_rollback() {
-    _original_file="$1"
-    _backup_file="$2"
+    _rfr_original="$1"
+    _rfr_backup="$2"
 
-    register_rollback "FILE_RESTORE" "${_backup_file}:${_original_file}"
-    _result=$?
+    register_rollback "FILE_RESTORE" "${_rfr_backup}:${_rfr_original}"
+    _rfr_result=$?
 
-    unset _original_file _backup_file
-    return $_result
+    unset _rfr_original _rfr_backup
+    return $_rfr_result
 }
 
 # Register command rollback action

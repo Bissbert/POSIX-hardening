@@ -164,6 +164,19 @@ check "00: reloads sshd on rollback" \
 check "00: loads ssh_reload_config" \
     grep -q 'LIB_DIR/ssh_safety.sh' scripts/00-ssh-verification.sh
 
+# Registering an undo action must not clear the caller's variables: the SSH
+# watchdog in update_ssh_config_safe copies back its own $_backup_file
+out=$(sh -c '
+    LIB_DIR=lib; export LIB_DIR
+    . lib/common.sh; . lib/rollback.sh
+    begin_transaction probe >/dev/null 2>&1
+    _backup_file=/var/backups/hardening/sshd_config.bak
+    register_file_rollback /etc/ssh/sshd_config "$_backup_file" >/dev/null 2>&1
+    echo "$_backup_file"
+    commit_transaction >/dev/null 2>&1' 2>&1)
+check_eq "register_file_rollback leaves the caller's \$_backup_file alone" \
+    /var/backups/hardening/sshd_config.bak "$out"
+
 check "12: deleting old temp files is declared irreversible" \
     grep -q 'rollback cannot undo' scripts/12-tmp-hardening.sh
 
