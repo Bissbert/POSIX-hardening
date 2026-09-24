@@ -15,6 +15,7 @@ CONFIG_FILE="$TOOLKIT_ROOT/config/defaults.conf"
 . "$LIB_DIR/config.sh"
 load_config "$CONFIG_FILE"
 . "$LIB_DIR/common.sh"
+. "$LIB_DIR/rollback.sh"
 
 SCRIPT_NAME="12-tmp-hardening"
 
@@ -22,16 +23,20 @@ harden_tmp() {
     show_progress "Hardening temporary directories"
 
     # Set secure permissions
+    track_mode /tmp
     chmod 1777 /tmp 2>/dev/null
+    track_mode /var/tmp
     chmod 1777 /var/tmp 2>/dev/null
 
     # Mount /tmp with noexec,nosuid,nodev if possible
     if mount | grep -q " /tmp "; then
+        track_mount /tmp
         mount -o remount,noexec,nosuid,nodev /tmp 2>/dev/null && \
             log "INFO" "Remounted /tmp with secure options"
     fi
 
-    # Clean old files
+    # Clean old files. This is the one change rollback cannot undo: deleted
+    # files are not copied first (see docs/rollback.md).
     find /tmp -type f -atime +7 -delete 2>/dev/null
     find /var/tmp -type f -atime +7 -delete 2>/dev/null
 
@@ -40,12 +45,14 @@ harden_tmp() {
 
 main() {
     init_hardening_environment "$SCRIPT_NAME"
+    begin_transaction "tmp_hardening"
 
     if [ "$DRY_RUN" != "1" ]; then
         harden_tmp
     fi
 
     mark_completed "$SCRIPT_NAME"
+    commit_transaction
     exit 0
 }
 

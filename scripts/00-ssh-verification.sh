@@ -251,6 +251,13 @@ reinstall_ssh_package() {
 
     log "INFO" "SSH config backed up to: $backup_file"
 
+    # The reinstall may replace sshd_config (a conffile). Rollback puts the
+    # file back and reloads sshd. The package files themselves stay at the
+    # packaged version: undoing that would restore the binaries this step
+    # found modified.
+    register_command_rollback "ssh_reload_config"
+    register_file_rollback /etc/ssh/sshd_config "$backup_file"
+
     # Setup automatic rollback
     log "INFO" "Setting up automatic rollback (${ROLLBACK_TIMEOUT}s timeout)"
     (

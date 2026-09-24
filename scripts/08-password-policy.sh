@@ -26,6 +26,8 @@ configure_password_policy() {
     # Backup PAM files
     [ -f /etc/pam.d/common-password ] && backup_file /etc/pam.d/common-password
     [ -f /etc/login.defs ] && backup_file /etc/login.defs
+    track_file /etc/pam.d/common-password
+    track_file /etc/login.defs
 
     # Update login.defs
     if [ -f /etc/login.defs ]; then

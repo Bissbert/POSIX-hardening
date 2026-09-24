@@ -24,6 +24,7 @@ apply_sysctl_hardening() {
     show_progress "Applying additional sysctl hardening"
 
     backup_file /etc/sysctl.conf
+    track_file /etc/sysctl.conf
 
     # Remove old additional hardening section if it exists (for idempotency)
     if [ -f /etc/sysctl.conf ]; then
@@ -53,6 +54,7 @@ kernel.panic = 60
 kernel.panic_on_oops = 1
 EOF
 
+    track_sysctl_file /etc/sysctl.conf
     sysctl -p /etc/sysctl.conf >/dev/null 2>&1
     show_success "Sysctl hardening applied"
 }

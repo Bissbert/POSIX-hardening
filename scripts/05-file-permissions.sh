@@ -23,30 +23,41 @@ load_config "$CONFIG_FILE"
 
 SCRIPT_NAME="05-file-permissions"
 
+# set_mode MODE PATH: chmod an existing PATH, recording its mode for rollback
+set_mode() {
+    [ -e "$2" ] || return 0
+    track_mode "$2"
+    chmod "$1" "$2"
+}
+
 secure_system_files() {
     show_progress "Securing system file permissions"
 
     # Secure sensitive files
-    [ -f /etc/passwd ] && chmod 644 /etc/passwd
-    [ -f /etc/shadow ] && chmod 640 /etc/shadow
-    [ -f /etc/group ] && chmod 644 /etc/group
-    [ -f /etc/gshadow ] && chmod 640 /etc/gshadow
-    [ -f /etc/ssh/sshd_config ] && chmod 600 /etc/ssh/sshd_config
+    set_mode 644 /etc/passwd
+    set_mode 640 /etc/shadow
+    set_mode 644 /etc/group
+    set_mode 640 /etc/gshadow
+    set_mode 600 /etc/ssh/sshd_config
 
     # Secure cron files
-    [ -f /etc/crontab ] && chmod 600 /etc/crontab
-    [ -d /etc/cron.d ] && chmod 700 /etc/cron.d
-    [ -d /etc/cron.daily ] && chmod 700 /etc/cron.daily
-    [ -d /etc/cron.hourly ] && chmod 700 /etc/cron.hourly
-    [ -d /etc/cron.monthly ] && chmod 700 /etc/cron.monthly
-    [ -d /etc/cron.weekly ] && chmod 700 /etc/cron.weekly
+    set_mode 600 /etc/crontab
+    set_mode 700 /etc/cron.d
+    set_mode 700 /etc/cron.daily
+    set_mode 700 /etc/cron.hourly
+    set_mode 700 /etc/cron.monthly
+    set_mode 700 /etc/cron.weekly
 
     # Secure log files
-    [ -d /var/log ] && chmod 755 /var/log
-    find /var/log -type f -exec chmod 640 {} \; 2>/dev/null
+    set_mode 755 /var/log
+    find /var/log -type f 2>/dev/null | while IFS= read -r f; do
+        set_mode 640 "$f"
+    done
 
     # Remove world-writable permissions
-    find / -xdev -type f -perm -002 -exec chmod o-w {} \; 2>/dev/null
+    find / -xdev -type f -perm -002 2>/dev/null | while IFS= read -r f; do
+        set_mode o-w "$f"
+    done
 
     show_success "File permissions secured"
 }

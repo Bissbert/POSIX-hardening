@@ -225,6 +225,13 @@ update_ssh_config_safe() {
 
     log "INFO" "SSH config backed up to: $_backup_file"
 
+    # Undo for the caller's transaction: put the file back, then make sshd
+    # read it (actions run in reverse order)
+    if [ "$DRY_RUN" != "1" ] && [ -n "$CURRENT_TRANSACTION" ]; then
+        register_command_rollback "ssh_reload_config"
+        register_file_rollback "$SSHD_CONFIG" "$_backup_file"
+    fi
+
     # Create working copy
     _work_config="${SSHD_CONFIG}.work"
     cp "$SSHD_CONFIG" "$_work_config"
@@ -393,6 +400,15 @@ update_ssh_setting() {
 # SSH Key Management
 # ============================================================================
 
+# Make the running sshd read sshd_config again (used as an undo action)
+ssh_reload_config() {
+    if [ -f /var/run/sshd.pid ]; then
+        kill -HUP "$(cat /var/run/sshd.pid)"
+    else
+        safe_service_reload "ssh" || safe_service_reload "sshd"
+    fi
+}
+
 # Ensure SSH keys have correct permissions
 fix_ssh_key_permissions() {
     _ssh_dir="${1:-/root/.ssh}"
@@ -405,11 +421,13 @@ fix_ssh_key_permissions() {
     fi
 
     # Fix directory permissions
+    track_mode "$_ssh_dir"
     chmod 700 "$_ssh_dir"
     chown "$_user:$_user" "$_ssh_dir"
 
     # Fix authorized_keys if it exists
     if [ -f "$_ssh_dir/authorized_keys" ]; then
+        track_mode "$_ssh_dir/authorized_keys"
         chmod 600 "$_ssh_dir/authorized_keys"
         chown "$_user:$_user" "$_ssh_dir/authorized_keys"
         log "INFO" "Fixed permissions for $_ssh_dir/authorized_keys"
@@ -418,6 +436,7 @@ fix_ssh_key_permissions() {
     # Fix private keys
     for _key in "$_ssh_dir"/id_*; do
         if [ -f "$_key" ] && [ "${_key%.pub}" = "$_key" ]; then
+            track_mode "$_key"
             chmod 600 "$_key"
             chown "$_user:$_user" "$_key"
             log "INFO" "Fixed permissions for private key: $_key"
@@ -427,6 +446,7 @@ fix_ssh_key_permissions() {
     # Fix public keys
     for _key in "$_ssh_dir"/*.pub; do
         if [ -f "$_key" ]; then
+            track_mode "$_key"
             chmod 644 "$_key"
             chown "$_user:$_user" "$_key"
             log "INFO" "Fixed permissions for public key: $_key"

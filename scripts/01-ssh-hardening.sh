@@ -221,6 +221,10 @@ fix_ssh_permissions() {
 
     # Fix SSH daemon files
     if [ -d /etc/ssh ]; then
+        for _f in /etc/ssh /etc/ssh/*.pub /etc/ssh/ssh_host_*_key \
+                  /etc/ssh/ssh_config /etc/ssh/sshd_config; do
+            track_mode "$_f"
+        done
         chmod 755 /etc/ssh
         chmod 644 /etc/ssh/*.pub 2>/dev/null || true
         chmod 600 /etc/ssh/ssh_host_*_key 2>/dev/null || true
@@ -259,6 +263,7 @@ configure_ssh_banner() {
     show_progress "Configuring SSH banner"
 
     # Create warning banner
+    track_file "$banner_file"
     cat > "$banner_file" <<'EOF'
 ###############################################################
 #                      SECURITY WARNING                      #

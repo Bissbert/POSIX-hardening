@@ -53,6 +53,7 @@ disable_services() {
                     log "DRY_RUN" "Would stop and disable service: $service"
                     disabled_count=$((disabled_count + 1))
                 else
+                    track_service "$service"
                     # Stop the service
                     if systemctl stop "$service" 2>/dev/null; then
                         log "INFO" "Stopped service: $service"
@@ -81,6 +82,7 @@ disable_services() {
                     log "DRY_RUN" "Would stop and disable service: $service"
                     disabled_count=$((disabled_count + 1))
                 else
+                    track_service "$service"
                     service "$service" stop 2>/dev/null
                     if command -v update-rc.d >/dev/null 2>&1; then
                         update-rc.d "$service" disable 2>/dev/null

@@ -11,6 +11,10 @@
 readonly ROLLBACK_STACK="$STATE_DIR/rollback_stack"
 readonly ROLLBACK_LOG="$LOG_DIR/rollback.log"
 readonly TRANSACTION_ID_FILE="$STATE_DIR/current_transaction"
+# What the track_* helpers already registered in this transaction
+readonly ROLLBACK_TRACKED="$STATE_DIR/rollback_tracked"
+# Copies of tracked files, one directory per transaction
+readonly ROLLBACK_COPY_DIR="$BACKUP_DIR/transactions"
 
 # Global rollback state
 # On unless switched off explicitly with ROLLBACK_ENABLED=0
@@ -29,6 +33,7 @@ begin_transaction() {
 
     # Clear previous rollback stack
     > "$ROLLBACK_STACK"
+    > "$ROLLBACK_TRACKED"
 
     # Record transaction start
     echo "$CURRENT_TRANSACTION" > "$TRANSACTION_ID_FILE"
@@ -55,6 +60,7 @@ commit_transaction() {
 
     # Clear rollback stack
     > "$ROLLBACK_STACK"
+    > "$ROLLBACK_TRACKED"
 
     # Clear transaction ID
     > "$TRANSACTION_ID_FILE"
@@ -114,6 +120,7 @@ rollback_transaction() {
                 log "ERROR" "Could not preserve failed rollback actions"
             fi
             > "$TRANSACTION_ID_FILE"
+            > "$ROLLBACK_TRACKED"
             CURRENT_TRANSACTION=""
             log "ERROR" "Rollback completed with failures; failed actions were retained"
             unset _reason _temp_stack _reversed_stack _failed_stack _rollback_failed
@@ -126,6 +133,7 @@ rollback_transaction() {
 
     # Clear transaction state
     > "$ROLLBACK_STACK"
+    > "$ROLLBACK_TRACKED"
     > "$TRANSACTION_ID_FILE"
     CURRENT_TRANSACTION=""
 
@@ -231,6 +239,179 @@ register_sysctl_rollback() {
 }
 
 # ============================================================================
+# Change Tracking
+# ============================================================================
+#
+# Every script calls one of these before it changes something, inside a
+# transaction. Each records the current state and registers the action that
+# puts it back. Only the first call for an object in a transaction registers
+# anything, so a rollback returns to the state before the script started.
+# In dry-run mode nothing changes, so nothing is recorded.
+
+# _track_first KIND OBJECT: true the first time OBJECT is tracked as KIND
+_track_first() {
+    if [ "$DRY_RUN" = "1" ]; then
+        return 1
+    fi
+    if [ -z "$CURRENT_TRANSACTION" ]; then
+        log "DEBUG" "No transaction; not tracking $1 $2"
+        return 1
+    fi
+    if [ -f "$ROLLBACK_TRACKED" ] && grep -qxF "$1 $2" "$ROLLBACK_TRACKED"; then
+        return 1
+    fi
+    printf '%s %s\n' "$1" "$2" >> "$ROLLBACK_TRACKED"
+    return 0
+}
+
+# track_file PATH
+# Before PATH's contents are replaced, edited or deleted: an existing file is
+# copied and restored from the copy (with its mode and owner); a path that
+# does not exist yet is removed again. A symlink is put back as a symlink.
+track_file() {
+    _tf_path="$1"
+    _track_first FILE "$_tf_path" || { unset _tf_path; return 0; }
+
+    if [ -L "$_tf_path" ]; then
+        register_rollback "LINK" "${_tf_path}:$(readlink "$_tf_path")" || return 1
+        # Writing to a symlink changes its target, so keep that as well
+        _tf_target=$(readlink -f "$_tf_path")
+        [ -f "$_tf_target" ] && track_file "$_tf_target"
+        unset _tf_path _tf_target
+        return 0
+    fi
+
+    if [ -e "$_tf_path" ]; then
+        _tf_copy="$ROLLBACK_COPY_DIR/$CURRENT_TRANSACTION$_tf_path"
+        mkdir -p "$(dirname "$_tf_copy")" || return 1
+        if ! cp -p "$_tf_path" "$_tf_copy"; then
+            log "ERROR" "Could not copy $_tf_path for rollback"
+            unset _tf_path _tf_copy
+            return 1
+        fi
+        register_file_rollback "$_tf_path" "$_tf_copy"
+    else
+        register_rollback "FILE_REMOVE" "$_tf_path"
+    fi
+    _tf_rc=$?
+    unset _tf_path _tf_copy
+    return $_tf_rc
+}
+
+# track_dir PATH
+# Before creating directory PATH: removes it again if it did not exist and is
+# empty by then (files tracked inside it are removed first).
+track_dir() {
+    _track_first DIR "$1" || return 0
+    [ -d "$1" ] && return 0
+    register_rollback "DIR_REMOVE" "$1"
+}
+
+# track_mode PATH
+# Before chmod or chown on PATH: restores the mode, owner and group.
+track_mode() {
+    [ -e "$1" ] || return 0
+    _track_first MODE "$1" || return 0
+    _tm_state=$(stat -c '%a:%u:%g' "$1") || return 1
+    register_rollback "MODE" "${_tm_state}:$1"
+    _tm_rc=$?
+    unset _tm_state
+    return $_tm_rc
+}
+
+# track_sysctl NAME
+# Before changing a live kernel parameter, given as a dotted sysctl name or
+# a /proc/sys path: restores the current value. Unknown names are skipped,
+# since writing them fails too.
+track_sysctl() {
+    case "$1" in
+        /*) [ -f "$1" ] || return 0
+            _ts_value=$(cat "$1" 2>/dev/null) || return 0 ;;
+        *)  _ts_value=$(sysctl -n "$1" 2>/dev/null) || return 0 ;;
+    esac
+    _track_first SYSCTL "$1" || { unset _ts_value; return 0; }
+    register_sysctl_rollback "$1" "$_ts_value"
+    _ts_rc=$?
+    unset _ts_value
+    return $_ts_rc
+}
+
+# track_sysctl_file FILE
+# Before "sysctl -p FILE": tracks every parameter FILE sets.
+track_sysctl_file() {
+    [ -f "$1" ] || return 0
+    for _tsf_name in $(sed -n 's/^[[:space:]]*\([A-Za-z0-9_.\/-]*\)[[:space:]]*=.*/\1/p' "$1"); do
+        track_sysctl "$_tsf_name" || return 1
+    done
+    unset _tsf_name
+    return 0
+}
+
+# track_service NAME
+# Before stopping or disabling a service: enables and starts it again if it
+# was enabled or running.
+track_service() {
+    _track_first SERVICE "$1" || return 0
+    if command -v systemctl >/dev/null 2>&1; then
+        _tsv_enabled=$(systemctl is-enabled "$1" 2>/dev/null || true)
+        _tsv_active=$(systemctl is-active "$1" 2>/dev/null || true)
+    else
+        _tsv_enabled=disabled
+        ls /etc/rc[2-5].d/S*"$1" >/dev/null 2>&1 && _tsv_enabled=enabled
+        _tsv_active=inactive
+        service "$1" status >/dev/null 2>&1 && _tsv_active=active
+    fi
+    register_rollback "SERVICE_STATE" "${1}:${_tsv_enabled}:${_tsv_active}"
+    _tsv_rc=$?
+    unset _tsv_enabled _tsv_active
+    return $_tsv_rc
+}
+
+# track_mount MOUNTPOINT
+# Before "mount -o remount": remounts with the current options. Flags that
+# are off now (exec, suid, dev, no hidepid) are named explicitly, because a
+# remount keeps any option it is not given.
+track_mount() {
+    _tmt_line=$(awk -v m="$1" '$2 == m { l = $3 " " $4 } END { print l }' /proc/mounts)
+    [ -n "$_tmt_line" ] || { unset _tmt_line; return 0; }
+    _track_first MOUNT "$1" || { unset _tmt_line; return 0; }
+    _tmt_type=${_tmt_line%% *}
+    _tmt_opts=${_tmt_line#* }
+    for _tmt_flag in exec suid dev; do
+        case ",$_tmt_opts," in
+            *",no$_tmt_flag,"*) ;;
+            *) _tmt_opts="$_tmt_opts,$_tmt_flag" ;;
+        esac
+    done
+    if [ "$_tmt_type" = "proc" ]; then
+        case ",$_tmt_opts," in
+            *,hidepid=*) ;;
+            *) _tmt_opts="$_tmt_opts,hidepid=0" ;;
+        esac
+    fi
+    register_rollback "MOUNT" "${1}:${_tmt_opts}"
+    _tmt_rc=$?
+    unset _tmt_line _tmt_type _tmt_opts _tmt_flag
+    return $_tmt_rc
+}
+
+# track_account USER
+# Before usermod -L or -s: restores the login shell, the password field and
+# the date of the last password change exactly as they were, so a lock is
+# undone without guessing and without restarting password ageing.
+track_account() {
+    id "$1" >/dev/null 2>&1 || return 0
+    _track_first ACCOUNT "$1" || return 0
+    _tac_shell=$(awk -F: -v u="$1" '$1 == u { print $7 }' /etc/passwd)
+    _tac_hash=$(awk -F: -v u="$1" '$1 == u { print $2 }' /etc/shadow)
+    _tac_changed=$(awk -F: -v u="$1" '$1 == u { print $3 }' /etc/shadow)
+    register_rollback "ACCOUNT" "${1}:${_tac_shell}:${_tac_changed}:${_tac_hash}"
+    _tac_rc=$?
+    unset _tac_shell _tac_hash _tac_changed
+    return $_tac_rc
+}
+
+# ============================================================================
 # Rollback Action Execution
 # ============================================================================
 
@@ -261,6 +442,97 @@ execute_rollback_action() {
                 return 1
             fi
             unset _backup_file _original_file
+            ;;
+
+        FILE_REMOVE)
+            # The file did not exist before the transaction
+            if ! rm -f "$_action_data"; then
+                log "ERROR" "Failed to remove: $_action_data"
+                unset _action_type _action_data
+                return 1
+            fi
+            log "INFO" "Removed file created by the transaction: $_action_data"
+            ;;
+
+        DIR_REMOVE)
+            if [ -d "$_action_data" ] && ! rmdir "$_action_data"; then
+                log "ERROR" "Failed to remove directory: $_action_data"
+                unset _action_type _action_data
+                return 1
+            fi
+            ;;
+
+        LINK)
+            _link_path="${_action_data%%:*}"
+            _link_target="${_action_data#*:}"
+            if ! ln -sfn "$_link_target" "$_link_path"; then
+                log "ERROR" "Failed to restore symlink: $_link_path"
+                unset _link_path _link_target _action_type _action_data
+                return 1
+            fi
+            unset _link_path _link_target
+            ;;
+
+        MODE)
+            _mode="${_action_data%%:*}"; _rest="${_action_data#*:}"
+            _uid="${_rest%%:*}"; _rest="${_rest#*:}"
+            _gid="${_rest%%:*}"; _path="${_rest#*:}"
+            if ! chmod "$_mode" "$_path" || ! chown "$_uid:$_gid" "$_path"; then
+                log "ERROR" "Failed to restore mode of $_path"
+                unset _mode _rest _uid _gid _path _action_type _action_data
+                return 1
+            fi
+            unset _mode _rest _uid _gid _path
+            ;;
+
+        SERVICE_STATE)
+            _service_name="${_action_data%%:*}"; _rest="${_action_data#*:}"
+            _enabled="${_rest%%:*}"; _active="${_rest#*:}"
+            _svc_failed=0
+            if [ "$_enabled" = "enabled" ]; then
+                if command -v systemctl >/dev/null 2>&1; then
+                    systemctl enable "$_service_name" >/dev/null 2>&1 || _svc_failed=1
+                elif command -v update-rc.d >/dev/null 2>&1; then
+                    update-rc.d "$_service_name" enable >/dev/null 2>&1 || _svc_failed=1
+                elif command -v chkconfig >/dev/null 2>&1; then
+                    chkconfig "$_service_name" on >/dev/null 2>&1 || _svc_failed=1
+                fi
+            fi
+            if [ "$_active" = "active" ]; then
+                systemctl start "$_service_name" >/dev/null 2>&1 || \
+                    service "$_service_name" start >/dev/null 2>&1 || _svc_failed=1
+            fi
+            if [ "$_svc_failed" -ne 0 ]; then
+                log "ERROR" "Failed to restore service $_service_name ($_enabled, $_active)"
+                unset _service_name _rest _enabled _active _svc_failed _action_type _action_data
+                return 1
+            fi
+            unset _service_name _rest _enabled _active _svc_failed
+            ;;
+
+        MOUNT)
+            _mount_point="${_action_data%%:*}"
+            _mount_opts="${_action_data#*:}"
+            if ! mount -o "remount,$_mount_opts" "$_mount_point"; then
+                log "ERROR" "Failed to remount $_mount_point with $_mount_opts"
+                unset _mount_point _mount_opts _action_type _action_data
+                return 1
+            fi
+            unset _mount_point _mount_opts
+            ;;
+
+        ACCOUNT)
+            _user="${_action_data%%:*}"; _rest="${_action_data#*:}"
+            _shell="${_rest%%:*}"; _rest="${_rest#*:}"
+            _changed="${_rest%%:*}"; _hash="${_rest#*:}"
+            # usermod -p resets the last-change date, so put it back after
+            if ! usermod -s "$_shell" -p "$_hash" "$_user" ||
+                { [ -n "$_changed" ] && ! chage -d "$_changed" "$_user"; }; then
+                log "ERROR" "Failed to restore account: $_user"
+                unset _user _rest _shell _hash _changed _action_type _action_data
+                return 1
+            fi
+            unset _user _rest _shell _hash _changed
             ;;
 
         COMMAND)
@@ -310,10 +582,18 @@ execute_rollback_action() {
 
         SYSCTL)
             # Restore sysctl parameter
-            _parameter="${_action_data%:*}"
+            _parameter="${_action_data%%:*}"
             _value="${_action_data#*:}"
 
-            if ! sysctl -w "$_parameter=$_value" >/dev/null 2>&1; then
+            # A /proc/sys path is written directly (interface names may
+            # contain dots, which a sysctl name cannot express)
+            case "$_parameter" in
+                /*) _sysctl_ok=0
+                    printf '%s\n' "$_value" > "$_parameter" 2>/dev/null && _sysctl_ok=1 ;;
+                *)  _sysctl_ok=0
+                    sysctl -w "$_parameter=$_value" >/dev/null 2>&1 && _sysctl_ok=1 ;;
+            esac
+            if [ "$_sysctl_ok" -ne 1 ]; then
                 log "ERROR" "Failed to restore sysctl: $_parameter=$_value"
                 unset _parameter _value _action_type _action_data
                 return 1

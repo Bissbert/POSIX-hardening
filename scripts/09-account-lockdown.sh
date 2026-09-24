@@ -15,6 +15,7 @@ CONFIG_FILE="$TOOLKIT_ROOT/config/defaults.conf"
 . "$LIB_DIR/config.sh"
 load_config "$CONFIG_FILE"
 . "$LIB_DIR/common.sh"
+. "$LIB_DIR/rollback.sh"
 
 SCRIPT_NAME="09-account-lockdown"
 
@@ -24,6 +25,7 @@ lockdown_accounts() {
     # Lock unnecessary system accounts
     for user in games news uucp proxy www-data list irc gnats nobody; do
         if id "$user" >/dev/null 2>&1; then
+            track_account "$user"
             usermod -L "$user" 2>/dev/null
             usermod -s /usr/sbin/nologin "$user" 2>/dev/null
             log "INFO" "Locked account: $user"
@@ -38,6 +40,7 @@ lockdown_accounts() {
     # Remove empty password accounts
     awk -F: '($2 == "" || $2 == "!" || $2 == "*") {print $1}' /etc/shadow | while read -r user; do
         if [ "$user" != "root" ]; then
+            track_account "$user"
             usermod -L "$user" 2>/dev/null
         fi
     done
@@ -47,12 +50,14 @@ lockdown_accounts() {
 
 main() {
     init_hardening_environment "$SCRIPT_NAME"
+    begin_transaction "account_lockdown"
 
     if [ "$DRY_RUN" != "1" ]; then
         lockdown_accounts
     fi
 
     mark_completed "$SCRIPT_NAME"
+    commit_transaction
     exit 0
 }
 

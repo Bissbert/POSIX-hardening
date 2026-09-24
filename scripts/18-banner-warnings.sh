@@ -15,11 +15,16 @@ CONFIG_FILE="$TOOLKIT_ROOT/config/defaults.conf"
 . "$LIB_DIR/config.sh"
 load_config "$CONFIG_FILE"
 . "$LIB_DIR/common.sh"
+. "$LIB_DIR/rollback.sh"
 
 SCRIPT_NAME="18-banner-warnings"
 
 create_banners() {
     show_progress "Creating warning banners"
+
+    track_file /etc/issue
+    track_file /etc/issue.net
+    track_file /etc/motd
 
     # Create issue banner
     cat > /etc/issue <<'EOF'
@@ -46,12 +51,14 @@ EOF
 
 main() {
     init_hardening_environment "$SCRIPT_NAME"
+    begin_transaction "banner_warnings"
 
     if [ "$DRY_RUN" != "1" ]; then
         create_banners
     fi
 
     mark_completed "$SCRIPT_NAME"
+    commit_transaction
     exit 0
 }
 

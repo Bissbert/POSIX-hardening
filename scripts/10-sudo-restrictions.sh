@@ -26,12 +26,14 @@ configure_sudo() {
     [ -f /etc/sudoers ] && backup_file /etc/sudoers
 
     # Create sudoers.d directory if needed
+    track_dir /etc/sudoers.d
     [ ! -d /etc/sudoers.d ] && mkdir -p /etc/sudoers.d
 
     # Detect current user (typically the Ansible remote user)
     local current_user="${SUDO_USER:-${USER}}"
 
     # Add hardening rules
+    track_file /etc/sudoers.d/hardening
     cat > /etc/sudoers.d/hardening <<EOF
 # POSIX Hardening Sudo Configuration
 # Note: requiretty is disabled for automation tools like Ansible

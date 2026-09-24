@@ -93,7 +93,17 @@ save_current_rules() {
     iptables-save > "$backup_file" 2>/dev/null
     ip6tables-save > "${backup_file}.v6" 2>/dev/null
 
+    # Rollback runs in reverse: first open the filter tables, which covers a
+    # host that had no rules (an empty save restores nothing), then restore
+    # whatever was saved.
     register_command_rollback "iptables-restore < $backup_file"
+    if [ -s "${backup_file}.v6" ]; then
+        register_command_rollback "ip6tables-restore < ${backup_file}.v6"
+    fi
+    for _ipt in iptables ip6tables; do
+        command -v "$_ipt" >/dev/null 2>&1 || continue
+        register_command_rollback "$_ipt -P INPUT ACCEPT; $_ipt -P FORWARD ACCEPT; $_ipt -P OUTPUT ACCEPT; $_ipt -F; $_ipt -X"
+    done
 
     log "INFO" "Current firewall rules backed up to: $backup_file"
 }
@@ -105,6 +115,7 @@ setup_safety_timeout() {
     log "INFO" "Setting up firewall safety timeout ($timeout seconds)"
 
     # Create reset script
+    track_file /tmp/firewall_reset.sh
     cat > /tmp/firewall_reset.sh <<'EOF'
 #!/bin/sh
 sleep TIMEOUT_VALUE
@@ -400,6 +411,17 @@ verify_connectivity() {
 # Save rules persistently
 save_firewall_rules() {
     show_progress "Saving firewall rules"
+
+    track_dir /etc/iptables
+    track_file /etc/iptables/rules.v4
+    track_file /etc/iptables/rules.v6
+    if [ -d /etc/sysconfig ]; then
+        track_file /etc/sysconfig/iptables
+        track_file /etc/sysconfig/ip6tables
+    fi
+    if [ -d /etc/network/if-pre-up.d ]; then
+        track_file /etc/network/if-pre-up.d/iptables
+    fi
 
     # Debian/Ubuntu method - create directory if needed
     if [ ! -d /etc/iptables ]; then

@@ -24,6 +24,7 @@ apply_limits() {
     show_progress "Configuring process limits"
 
     backup_file /etc/security/limits.conf
+    track_file /etc/security/limits.conf
 
     # Remove old POSIX hardening section if it exists (for idempotency)
     if [ -f /etc/security/limits.conf ]; then
