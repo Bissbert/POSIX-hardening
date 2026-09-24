@@ -1,7 +1,8 @@
 #!/bin/sh
 # capture-rollback-coverage.sh - which scripts actually use the rollback API.
 #
-# Host-only, read-only: this greps the repository and runs nothing.
+# Read-only: this greps the repository and runs nothing. Run it through
+# tools/host-tools-env.sh so it executes in a Linux container.
 #
 # lib/rollback.sh offers five register_* functions that push undo actions onto
 # the transaction stack. A transaction that is opened but never registers

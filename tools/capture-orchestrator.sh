@@ -1,7 +1,8 @@
 #!/bin/sh
 # capture-orchestrator.sh - record how orchestrator.sh behaves in a throwaway
 # container: with a config file present, without one, with --dry-run, with
-# --script whose declared dependency has not run, and with --priority.
+# --script whose declared dependency has not run, with --priority, and --all
+# with FAIL_FAST on and off.
 #
 # WARNING: container only. See tools/capture-lib.sh.
 #
@@ -57,11 +58,6 @@ docker exec "$CNAME" sh -c '
     grep "^2:" orchestrator.sh | sed "s/^/      /"
     echo "    no completion markers exist, so all of them are due to run:"
     run "tail -4" sh orchestrator.sh --priority 2
-    echo "    the argument get_scripts_by_priority was actually called with,"
-    echo "    from sh -x:"
-    sh -x orchestrator.sh --priority 2 2>&1 \
-        | grep -m1 "get_scripts_by_priority" \
-        | sed "s/^[+ ]*/      /"
 
     echo
     echo "=== 6. --all, and what it actually ran"
@@ -69,7 +65,7 @@ docker exec "$CNAME" sh -c '
     sh orchestrator.sh --all </dev/null >/tmp/all.txt 2>&1
     echo "exit=$?"
     sed -i "s/\x1b\[[0-9;]*m//g" /tmp/all.txt
-    echo "    the moment FAIL_FAST is supposed to stop the run:"
+    echo "    where FAIL_FAST stops the run:"
     grep -A2 "Stopping execution due to failure" /tmp/all.txt \
         | sed "s/^/      /"
     echo "    scripts in SCRIPT_ORDER that were never executed:"
@@ -80,11 +76,25 @@ docker exec "$CNAME" sh -c '
     comm -23 /tmp/declared.txt /tmp/ran.txt | sed "s/^/      /"
     echo "    declared / executed:"
     echo "      $(wc -l </tmp/declared.txt | tr -d " ") / $(wc -l </tmp/ran.txt | tr -d " ")"
-    echo "    a dependency reported unmet immediately after it succeeded:"
-    grep -E "Completed: 01-ssh-hardening|Dependency not met: 01-ssh-hardening" \
-        /tmp/all.txt | head -3 | sed "s/^/      /"
-    echo "    completion markers written (note: no \".sh\" suffix):"
+    echo "    unmet-dependency warnings during the run:"
+    grep -c "Dependency not met" /tmp/all.txt | sed "s/^/      /"
+    echo "    completion markers written:"
     head -2 /var/lib/hardening/completed | sed "s/^/      /"
+    echo "    final summary:"
+    tail -7 /tmp/all.txt | sed "s/^/      /"
+
+    echo
+    echo "=== 7. --all with FAIL_FAST=0, so one failure does not end the run"
+    rm -rf /var/lib/hardening /var/log/hardening /var/backups/hardening
+    FAIL_FAST=0 sh orchestrator.sh --all </dev/null >/tmp/all.txt 2>&1
+    echo "exit=$?"
+    sed -i "s/\x1b\[[0-9;]*m//g" /tmp/all.txt
+    echo "    per-script result, in execution order:"
+    grep -E "^(✓ Completed|✗ Failed): |^\[WARN\] Skipping " /tmp/all.txt \
+        | sed "s/^/      /"
+    echo "    the errors behind the two failures:"
+    grep -E "^sysctl: setting key|^chmod: cannot access" /tmp/all.txt \
+        | sed "s/^/      /"
     echo "    final summary:"
     tail -7 /tmp/all.txt | sed "s/^/      /"
 ' > "$OUT" 2>&1 || true

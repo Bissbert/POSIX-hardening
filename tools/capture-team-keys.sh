@@ -3,8 +3,9 @@
 # clone of this repository, and what generate_keys.sh does when it finds the
 # committed public keys already in place.
 #
-# Runs entirely on the host, in a throwaway clone under a temporary directory.
-# It creates no keys and touches nothing outside that clone.
+# Works in a throwaway clone under a temporary directory, creates no keys and
+# touches nothing outside that clone. Run it through tools/host-tools-env.sh
+# so it executes in a Linux container.
 #
 # Usage: sh tools/capture-team-keys.sh [outfile]
 # Default outfile: media/captures/team-keys.txt

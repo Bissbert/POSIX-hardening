@@ -6,20 +6,20 @@ Every other hardening step can be undone from a console. SSH cannot: the
 machine you are hardening is usually the machine you are hardening it *from*.
 `lib/ssh_safety.sh` is the part of the toolkit that exists for that single
 problem, and this page draws its promise as a decision flow so the guarantee
-can be read rather than inferred — including the point where, as the code
-stands today, the guarantee does not hold.
+can be read rather than inferred, including the two places where it is still
+weaker than it looks.
 
 ## The five defences, and whether each one works
 
 | Defence | Where | State as measured |
 |---|---|---|
-| Refuse to start unless SSH is verifiably alive | `verify_ssh_connection`, `lib/ssh_safety.sh:22` | Works |
-| Syntax-check the new config before it is installed | `test_ssh_config`, `lib/ssh_safety.sh:101` | Works |
-| Boot a throwaway sshd on port 2222 with the new config | `test_ssh_config`, `lib/ssh_safety.sh:126` | Reports success without starting one ([BUG-20](BUGS-FOUND.md#bug-20)) |
-| Background watchdog that restores the backup after 60 s of silence | `update_ssh_config_safe`, `lib/ssh_safety.sh:227` | Fires, then fails to restore ([BUG-3](BUGS-FOUND.md#bug-3)) |
-| Emergency sshd on a second port, opened before hardening starts | `create_emergency_ssh_access`, `lib/ssh_safety.sh:484` | Works when called; never armed on the manual path ([BUG-21](BUGS-FOUND.md#bug-21)) |
+| Refuse to start unless SSH is verifiably alive | `verify_ssh_connection`, `lib/ssh_safety.sh:21` | Works |
+| Syntax-check the new config before it is installed | `test_ssh_config`, `lib/ssh_safety.sh:109` | Works |
+| Boot a throwaway sshd on port 2222 with the new config | `test_ssh_config`, `lib/ssh_safety.sh:128` | Passes whenever anything answers on port 2222 ([BUG-20](BUGS-FOUND.md#bug-20), unresolved) |
+| Background watchdog that restores the backup after 60 s of silence | `update_ssh_config_safe`, `lib/ssh_safety.sh:234` | Works: fired and restored `sshd_config` in the container capture |
+| Emergency sshd on a second port, opened before hardening starts | `create_emergency_ssh_access`, `lib/ssh_safety.sh:523` | Works when called; never armed on the manual path ([BUG-21](BUGS-FOUND.md#bug-21), open) |
 
-Two of the five hold unconditionally. The rest are examined below.
+Three of the five hold. The other two are examined below.
 
 ## The decision flow
 
@@ -43,11 +43,11 @@ flowchart TD
     DRY -->|"no"| GUARD["fork watchdog:<br/>sleep 60 then probe port 22"]
     GUARD --> INSTALL["mv work copy over sshd_config"]
     INSTALL --> HUP["kill -HUP sshd, then sleep 3"]
-    HUP --> PROBE{"nc -z localhost 22"}
+    HUP --> PROBE{"check_port_listening<br/>localhost 22"}
     PROBE -->|"answers"| KILL["kill the watchdog<br/>success, return 0"]
     PROBE -->|"silent"| WAIT["return 1 and leave the<br/>watchdog armed"]
     WAIT --> FIRE["watchdog wakes at 60 s,<br/>port 22 still silent"]
-    FIRE --> RESTORE["cp backup over sshd_config<br/>kill -HUP sshd, else start sshd"]
+    FIRE --> RESTORE["cp backup over sshd_config<br/>kill -HUP sshd, else start sshd<br/>then probe port 22 again"]
 
     style VER fill:#1f6feb,color:#fff
     style DIE fill:#9e6a03,color:#fff
@@ -56,7 +56,7 @@ flowchart TD
     style KILL fill:#238636,color:#fff
     style DAEMON fill:#8250df,color:#fff
     style GUARD fill:#8250df,color:#fff
-    style RESTORE fill:#da3633,color:#fff
+    style RESTORE fill:#238636,color:#fff
 ```
 
 Read the green boxes as the safe exits. Two of the four failure modes — no
@@ -66,64 +66,55 @@ structural: the live file is still the file that was working a moment ago.
 
 The purple box is weaker than it looks. `test_ssh_config` starts `sshd`
 without `-D`, so the parent forks and exits 0 before the child has tried to
-bind, and the `nc -z localhost 2222` that follows is answered by whatever holds
+bind, and the port probe on 2222 that follows is answered by whatever holds
 the port rather than by the daemon that was just asked for. Since the
 toolkit's own emergency daemon defaults to that same port 2222, the check can
 be satisfied entirely by a daemon running a different configuration
-([BUG-20](BUGS-FOUND.md#bug-20)).
+([BUG-20](BUGS-FOUND.md#bug-20)). In the container re-run, with the emergency
+daemon on 2222, `test_ssh_config` returned 0 while the only listener on the
+port was still the emergency daemon's pid and no test pid file was ever
+written (section 4 of
+[`emergency-ssh.txt`](../media/captures/emergency-ssh.txt)). The entry stays
+unresolved until it is confirmed on an isolated OpenSSH target.
 
-The red box is the last case, where the new config parses, satisfies the port
-probe, and still leaves you unable to log in. That is the case the watchdog
-exists for, and it is the case that does not work.
+The last case is a new config that parses, satisfies the port probe, and still
+leaves sshd silent after the reload. That is the case the watchdog exists
+for.
 
-## Where the guarantee breaks
+## The watchdog, captured
 
-The watchdog closes over `$_backup_file`, which is set at
-`lib/ssh_safety.sh:187`:
+The watchdog closes over `$_backup_file`, set at `lib/ssh_safety.sh:194` from
+`safe_backup_file`, which returns the backup path alone on stdout. When it
+fires it copies that backup over `sshd_config`, reloads or restarts `sshd`, and
+probes port 22 again before it logs success. Every probe goes through
+`check_port_listening`, which falls back from `nc` to `ss`, `netstat` and
+`telnet`, and treats "no probe tool installed" as a failure to verify rather
+than as an outage.
 
-```sh
-_backup_file=$(safe_backup_file "$SSHD_CONFIG")
-```
-
-`safe_backup_file` logs to stdout and then echoes the path, so the command
-substitution captures two lines: a log line and the path. Every later use of
-`$_backup_file` is therefore a two-line string starting with `[INFO]`.
-See [BUG-3](BUGS-FOUND.md#bug-3) for the mechanism and the one-line fix.
-
-The consequence is not theoretical. A container run with the timeout lowered
-to 15 s, sshd deliberately killed after the reload, recorded in
-`media/captures/ssh-watchdog.log`:
+A container run with the timeout lowered to 15 s and sshd deliberately killed
+after the reload, recorded in
+[`media/captures/ssh-watchdog.log`](../media/captures/ssh-watchdog.log):
 
 ```text
-[INFO] SSH config backed up to: [INFO] Backed up /etc/ssh/sshd_config to /var/backups/hardening/sshd_config.20260921-195655.bak
-[INFO] Setting up automatic rollback (15s timeout)
-[INFO] Reloading SSH daemon
-[ERROR] SSH not responding after reload
-[ERROR] SSH not responding - executing rollback
-cp: cannot stat '[INFO] Backed up /etc/ssh/sshd_config to /var/backups/hardening/sshd_config.20260921-195655.bak'$'\n''/var/backups/hardening/sshd_config.20260921-195655.bak': No such file or directory
-RESULT: sshd_config was NOT restored
-sshd back up: no
+sshd_config sha256 before : f7fdf0268371acf5d7277b652179c23ef53ca60d95e934451517f20113463e8e
+sshd_config sha256 after  : f7fdf0268371acf5d7277b652179c23ef53ca60d95e934451517f20113463e8e
+RESULT: sshd_config was restored
+sshd back up: yes
+
+== the lines that matter, from the run ==
+79:[INFO] SSH config backed up to: /var/backups/hardening/sshd_config.20260924-084123.bak
+87:[INFO] Setting up automatic rollback (15s timeout)
+88:[INFO] Reloading SSH daemon
+89:[ERROR] SSH not responding after reload
+97:[ERROR] SSH not responding - executing rollback
+98:[INFO] SSH configuration rolled back and connectivity restored
 ```
 
-![The SSH watchdog firing and failing to restore the backup](../media/ssh-watchdog.gif)
+![The SSH watchdog firing and restoring the backup in a Linux container](../media/ssh-watchdog.gif)
 
-The watchdog detected the outage correctly and fired on time. The `cp` it
-then ran was given a filename with a log line glued to the front of it, so the
-backup was never copied back. The config file's SHA-256 before and after the
-rollback differ; `sshd` did not come back. On a remote machine that is a
-lockout.
-
-Two smaller defects sit in the same subshell and would matter once BUG-3 is
-fixed:
-
-| Line | Problem | Effect |
-|---|---|---|
-| `lib/ssh_safety.sh:229` | The probe calls `nc` with no `command -v` guard, unlike `check_port_listening` in `lib/common.sh:488` | On a host without `nc` the probe always fails, so the watchdog fires on every run — including successful ones |
-| `lib/ssh_safety.sh:234` | `SSH configuration rolled back` is logged whether or not the `cp` succeeded | The log says the machine was rescued when it was not; this is what the capture above shows |
-
-Both are [BUG-19](BUGS-FOUND.md#bug-19). The `nc`-absent path was not
-reproduced — the analysis container has `nc` — and is marked as inferred
-there.
+The watchdog detected the outage, fired on time, put the original file back
+(the SHA-256 before and after match) and brought `sshd` up again. The success
+line is logged only after a second probe of port 22 answers.
 
 ## What is still standing when the watchdog fails
 
@@ -157,7 +148,7 @@ mechanism behind [BUG-20](BUGS-FOUND.md#bug-20).
 
 The emergency daemon is a deliberate hole: its generated config sets
 `PermitRootLogin yes` and `PasswordAuthentication yes`
-(`lib/ssh_safety.sh:494-495`). It is a way back in, not a hardened service,
+(`lib/ssh_safety.sh:533-534`). It is a way back in, not a hardened service,
 and `kill_emergency_ssh` is what closes it again. Nothing in the toolkit
 closes it automatically at the end of a run.
 
@@ -264,15 +255,17 @@ carries on to disable password authentication:
 ```
 
 That is a defensible default for an automated run, but it means the manual
-path's lockout protection is exactly the watchdog described above — which is
-the one that does not work. Put a key in place yourself before running it.
+path's lockout protection is exactly the watchdog described above. The watchdog
+restores a config that sshd will not serve; it cannot help if the restored
+config itself refuses your login. Put a key in place yourself before running
+it.
 
 ## Known limitations of this page
 
 - The watchdog capture used `SSH_ROLLBACK_TIMEOUT=15` rather than the default
   60 s, to keep the run short. Nothing else was altered.
-- The container had `nc` installed, so the missing-`nc` failure mode above was
-  not exercised.
+- The container had `nc` installed, so the `ss`/`netstat`/`telnet` fallbacks
+  and the no-probe-tool path were not exercised.
 - `create_emergency_ssh_access` was called directly and observed to work. The
   gated call site in `scripts/01-ssh-hardening.sh` was not reached, because
   `docker exec` is not an SSH session and `$SSH_CONNECTION` is empty there.

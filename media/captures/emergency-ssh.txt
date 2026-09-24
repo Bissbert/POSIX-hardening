@@ -21,14 +21,14 @@
 
 === 4. what test_ssh_config does while the emergency daemon holds 2222
     listeners before the test:
-      LISTEN 0      128          0.0.0.0:2222      0.0.0.0:*    users:(("sshd",pid=166,fd=3))
-      LISTEN 0      128             [::]:2222         [::]:*    users:(("sshd",pid=166,fd=4))
+      LISTEN 0      128          0.0.0.0:2222      0.0.0.0:*    users:(("sshd",pid=46,fd=3))
+      LISTEN 0      128             [::]:2222         [::]:*    users:(("sshd",pid=46,fd=4))
     [INFO] Testing SSH configuration: /tmp/candidate
     [INFO] Test SSH daemon is accepting connections
         test_ssh_config returned: 0
     listeners after the test:
-      LISTEN 0      128          0.0.0.0:2222      0.0.0.0:*    users:(("sshd",pid=166,fd=3))
-      LISTEN 0      128             [::]:2222         [::]:*    users:(("sshd",pid=166,fd=4))
+      LISTEN 0      128          0.0.0.0:2222      0.0.0.0:*    users:(("sshd",pid=46,fd=3))
+      LISTEN 0      128             [::]:2222         [::]:*    users:(("sshd",pid=46,fd=4))
     /var/run/sshd_test.pid:
       ls: cannot access '/var/run/sshd_test.pid': No such file or directory
 
@@ -38,8 +38,8 @@
       PidFile /var/run/sshd_test.pid
     /usr/sbin/sshd -f exit status: 0
     listeners on 2222 afterwards:
-      LISTEN 0      128          0.0.0.0:2222      0.0.0.0:*    users:(("sshd",pid=166,fd=3))
-      LISTEN 0      128             [::]:2222         [::]:*    users:(("sshd",pid=166,fd=4))
+      LISTEN 0      128          0.0.0.0:2222      0.0.0.0:*    users:(("sshd",pid=46,fd=3))
+      LISTEN 0      128             [::]:2222         [::]:*    users:(("sshd",pid=46,fd=4))
     /var/run/sshd_test.pid:
       ls: cannot access '/var/run/sshd_test.pid': No such file or directory
 

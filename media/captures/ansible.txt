@@ -1,6 +1,6 @@
 === 1. tool versions
     ansible-playbook [core 2.19.3]
-    ansible-lint 25.9.2 using ansible-core:2.19.3 ansible-compat:25.8.2 ruamel-yaml:0.18.16 ruamel-yaml-clib:0.2.14
+    ansible-lint 25.9.2 using ansible-core:2.19.3 ansible-compat:26.9.0 ruamel-yaml:0.19.1 ruamel-yaml-clib:0.2.15
 
 === 2. which playbooks exist, and where
     tracked playbooks at the ansible/ root and under ansible/playbooks/:
@@ -21,7 +21,7 @@
       ansible/validate_config.yml
 
 === 3. duplicated playbooks: root copy vs playbooks/ copy
-    site.yml               differ: 3 changed hunks
+    site.yml               differ: 12 changed hunks
     preflight.yml          differ: 4 changed hunks
     rollback.yml           differ: 14 changed hunks
     deploy_team_keys.yml   identical
@@ -32,8 +32,8 @@
       ---
       >         - name: Check critical services
       >           ansible.builtin.systemd_service:
-      206d205
-      <             state: started
+      208d207
+      <           changed_when: false
 
 === 4. how each entry point applies the hardening
     site.yml                 0 role references, 9 scripts named, 12 more in loops
@@ -63,19 +63,24 @@
       39:Edit `inventory.ini` to add your target servers:
       410:├── inventory.ini         # Server inventory
 
-=== 6b. do the relative src: paths in playbooks/site.yml resolve
+=== 6b. do the relative src: paths in both copies of site.yml resolve
     ansible resolves copy: src: against the playbook directory.
-    what playbooks/site.yml asks for, and whether it is there:
-      ../lib/                          -> ansible/playbooks/../lib/                    MISSING
-      ../scripts/                      -> ansible/playbooks/../scripts/                MISSING
-      ../tests/                        -> ansible/playbooks/../tests/                  MISSING
-      ../orchestrator.sh               -> ansible/playbooks/../orchestrator.sh         MISSING
-      ../emergency-rollback.sh         -> ansible/playbooks/../emergency-rollback.sh   MISSING
-      templates/defaults.conf.j2       -> ansible/playbooks/templates/defaults.conf.j2 MISSING
-    the same paths as the root copy resolves them:
+    site.yml:
       ../lib/                          -> ansible/../lib/                              present
       ../scripts/                      -> ansible/../scripts/                          present
+      ../tests/                        -> ansible/../tests/                            present
+      ../orchestrator.sh               -> ansible/../orchestrator.sh                   present
+      ../emergency-rollback.sh         -> ansible/../emergency-rollback.sh             present
       templates/defaults.conf.j2       -> ansible/templates/defaults.conf.j2           present
+      templates/firewall.conf.j2       -> ansible/templates/firewall.conf.j2           present
+    playbooks/site.yml:
+      ../../lib/                       -> ansible/playbooks/../../lib/                 present
+      ../../scripts/                   -> ansible/playbooks/../../scripts/             present
+      ../../tests/                     -> ansible/playbooks/../../tests/               present
+      ../../orchestrator.sh            -> ansible/playbooks/../../orchestrator.sh      present
+      ../../emergency-rollback.sh      -> ansible/playbooks/../../emergency-rollback.sh present
+      ../templates/defaults.conf.j2    -> ansible/playbooks/../templates/defaults.conf.j2 present
+      ../templates/firewall.conf.j2    -> ansible/playbooks/../templates/firewall.conf.j2 present
     controlled reproduction of the resolution rule, so the
     search path is visible rather than asserted:
         /ansible/playbooks/../lib/

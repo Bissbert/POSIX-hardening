@@ -2,25 +2,25 @@
 
 [← back to the documentation index](README.md)
 
-This file was written during a documentation pass. Nothing in the toolkit's
-source was changed at the time: every defect below is recorded rather than
-fixed, and the diff that would fix it is given so a maintainer can apply it
-deliberately.
+This file was written during a documentation pass, before any of it was
+fixed. Each entry records the defect as it was found, with the reproduction
+and the diff proposed at the time.
 
-> **Since this pass:** an independent adjudication confirmed 22 of these 24
-> entries, rejected BUG-10 and left BUG-20 unresolved for want of an isolated
-> OpenSSH target. A subsequent fix pass applied 15 of them to the default
-> branch: BUG-1, BUG-2, BUG-3, BUG-5, BUG-6, BUG-9, BUG-11, BUG-12, BUG-13,
-> BUG-15, BUG-16, BUG-17, BUG-19, BUG-22 and BUG-23. BUG-4, BUG-7, BUG-8,
-> BUG-14, BUG-18, BUG-21 and BUG-24 were deferred because each needs a design
-> decision, not a patch. The reproductions and diffs below are kept as
-> recorded; read them as the state at the time of the pass, not as the
-> current state of the default branch.
+**Status.** An independent adjudication confirmed 22 of the 24 entries,
+rejected BUG-10 and left BUG-20 unresolved for want of an isolated OpenSSH
+target. A fix pass then fixed 15 of them on the default branch. The other
+seven were deferred because each needs a design decision, not a patch. The
+status column below and the status line under each heading give the current
+state. For a fixed entry, the "Verified" transcript shows the behaviour
+before the fix, and the committed fix may differ from the diff proposed here.
+The captures in [`media/captures/`](../media/captures) have since been
+re-recorded against the default branch.
 
 Each entry says what was **verified** by running it and what was **inferred**
-by reading the code. Most reproductions ran in a throwaway Debian 12 container
-built from `ansible/testing/Dockerfile`; the ones that inspect the repository
-itself or run `ansible-playbook` ran on the host, read-only, and say so. The
+by reading the code. Every reproduction runs in a throwaway Debian 12 container:
+the hardening runs in one built from `ansible/testing/Dockerfile`, and the
+read-only checks of the repository and the Ansible tree in the analysis and
+host-tools containers. The
 tools that reproduce every entry are in [`tools/`](../tools) and their raw
 output is in [`media/captures/`](../media/captures).
 
@@ -33,36 +33,38 @@ checked without reading any of the toolkit's code; its output is
 
 The severity column is this pass's own judgement, not the project's.
 
-| ID | File | Severity | One line |
-|---|---|---|---|
-| [BUG-1](#bug-1) | `lib/rollback.sh:8`, `lib/ssh_safety.sh:8` | Blocking | Every documented entry point aborts before doing any work |
-| [BUG-2](#bug-2) | `emergency-rollback.sh:14` | Blocking | The emergency tool aborts on its second statement |
-| [BUG-3](#bug-3) | `lib/common.sh:73`, `:222`, `lib/backup.sh:61`, `lib/ssh_safety.sh:95` | Critical | Backup paths are captured with a log line glued to the front, so rollback restores nothing |
-| [BUG-4](#bug-4) | `lib/rollback.sh:18` | High | Without `config/defaults.conf`, automatic rollback is silently disabled |
-| [BUG-5](#bug-5) | `lib/rollback.sh:102` | Medium | `rollback_transaction` reports success after every action in it failed |
-| [BUG-6](#bug-6) | `scripts/03-kernel-params.sh:121` | Medium | One unsupported sysctl key aborts the script with no indication which |
-| [BUG-7](#bug-7) | `orchestrator.sh:11-17` | Blocking | With a `config/defaults.conf` present, the orchestrator cannot start at all |
-| [BUG-8](#bug-8) | `orchestrator.sh:342` | Blocking | `--dry-run` aborts on a read-only variable |
-| [BUG-9](#bug-9) | `orchestrator.sh:56-64`, `:187`, `:139` | High | Dependency checks never block and never match, `--script` always reports "not found", the summary always counts zero |
-| [BUG-10](#bug-10) | `orchestrator.sh` | Low | `00-ssh-verification.sh` is absent from `SCRIPT_ORDER` |
-| [BUG-11](#bug-11) | `quick-start.sh` | Low | Takes no arguments; `--help` starts the interactive installer |
-| [BUG-12](#bug-12) | `README.md`, `docs/README.md`, `lib/common.sh:10` | Low | Broken links, disagreeing script counts, disagreeing version |
-| [BUG-13](#bug-13) | `lib/common.sh:314`, all 21 scripts | High | A dry run writes a completion marker, so the real run is skipped |
-| [BUG-14](#bug-14) | `config/defaults.conf.template:38` | High | The config file overrides the environment, so `DRY_RUN=1` does nothing |
-| [BUG-15](#bug-15) | `orchestrator.sh:165`, `lib/common.sh:56` | Blocking | `--priority N` runs nothing and exits 0 |
-| [BUG-16](#bug-16) | `orchestrator.sh:141` | High | `FAIL_FAST` skips the rest of one priority level and continues |
-| [BUG-17](#bug-17) | `lib/rollback.sh:382-394` | Low | The checkpoint API has no callers and its action loop never executes |
-| [BUG-18](#bug-18) | `ansible/team_keys/generate_keys.sh:50`, `.gitignore:91` | High | A fresh clone ships public keys nobody holds the private half of, and the Ansible path deploys them |
-| [BUG-19](#bug-19) | `lib/ssh_safety.sh:130`, `:229`, `:255` | Medium | The SSH watchdog probes with an unguarded `nc` and logs its rollback as successful either way |
-| [BUG-20](#bug-20) | `lib/ssh_safety.sh:126-130`, `config/defaults.conf.template:64` | High | The live-daemon config test passes whenever anything holds port 2222, and the toolkit's own emergency daemon holds it |
-| [BUG-21](#bug-21) | `scripts/01-ssh-hardening.sh:108` | Medium | `ENABLE_EMERGENCY_ACCESS` is set only by Ansible, so the manual path's emergency fallback is dead code |
-| [BUG-22](#bug-22) | `ansible/playbooks/site.yml:115-163` | Medium | A second, drifted copy of four playbooks; the `playbooks/` copy of `site.yml` cannot resolve any file it deploys |
-| [BUG-23](#bug-23) | `ansible/preflight.yml:203-206` | Medium | The pre-flight check starts `ssh`/`sshd` instead of reporting on them |
-| [BUG-24](#bug-24) | `scripts/*.sh` | Critical | 20 of 21 scripts open transactions but register no undo actions, so rollback has an empty stack |
+| ID | File | Severity | Status | One line |
+|---|---|---|---|---|
+| [BUG-1](#bug-1) | `lib/rollback.sh:8`, `lib/ssh_safety.sh:8` | Blocking | Fixed in [`77b3632`](https://github.com/Bissbert/POSIX-hardening/commit/77b3632) | Every documented entry point aborts before doing any work |
+| [BUG-2](#bug-2) | `emergency-rollback.sh:14` | Blocking | Fixed in [`a25ce32`](https://github.com/Bissbert/POSIX-hardening/commit/a25ce32) | The emergency tool aborts on its second statement |
+| [BUG-3](#bug-3) | `lib/common.sh:73`, `:222`, `lib/backup.sh:61`, `lib/ssh_safety.sh:95` | Critical | Fixed in [`50f241d`](https://github.com/Bissbert/POSIX-hardening/commit/50f241d) | Backup paths are captured with a log line glued to the front, so rollback restores nothing |
+| [BUG-4](#bug-4) | `lib/rollback.sh:18` | High | Open, needs a decision | Without `config/defaults.conf`, automatic rollback is silently disabled |
+| [BUG-5](#bug-5) | `lib/rollback.sh:102` | Medium | Fixed in [`7726958`](https://github.com/Bissbert/POSIX-hardening/commit/7726958) | `rollback_transaction` reports success after every action in it failed |
+| [BUG-6](#bug-6) | `scripts/03-kernel-params.sh:121` | Medium | Fixed in [`4b7a0b4`](https://github.com/Bissbert/POSIX-hardening/commit/4b7a0b4) | One unsupported sysctl key aborts the script with no indication which |
+| [BUG-7](#bug-7) | `orchestrator.sh:11-17` | Blocking | Open, needs a decision | With a `config/defaults.conf` present, the orchestrator cannot start at all |
+| [BUG-8](#bug-8) | `orchestrator.sh:342` | Blocking | Open, needs a decision | `--dry-run` aborts on a read-only variable |
+| [BUG-9](#bug-9) | `orchestrator.sh:56-64`, `:187`, `:139` | High | Fixed in [`0b3eeb2`](https://github.com/Bissbert/POSIX-hardening/commit/0b3eeb2) | Dependency checks never block and never match, `--script` always reports "not found", the summary always counts zero |
+| [BUG-10](#bug-10) | `orchestrator.sh` | Low | Rejected on review | `00-ssh-verification.sh` is absent from `SCRIPT_ORDER` |
+| [BUG-11](#bug-11) | `quick-start.sh` | Low | Fixed in [`52d6e09`](https://github.com/Bissbert/POSIX-hardening/commit/52d6e09) | Takes no arguments; `--help` starts the interactive installer |
+| [BUG-12](#bug-12) | `README.md`, `docs/README.md`, `lib/common.sh:10` | Low | Fixed in [`40a0a2c`](https://github.com/Bissbert/POSIX-hardening/commit/40a0a2c) | Broken links, disagreeing script counts, disagreeing version |
+| [BUG-13](#bug-13) | `lib/common.sh:314`, all 21 scripts | High | Fixed in [`41b9617`](https://github.com/Bissbert/POSIX-hardening/commit/41b9617) | A dry run writes a completion marker, so the real run is skipped |
+| [BUG-14](#bug-14) | `config/defaults.conf.template:38` | High | Open, needs a decision | The config file overrides the environment, so `DRY_RUN=1` does nothing |
+| [BUG-15](#bug-15) | `orchestrator.sh:165`, `lib/common.sh:56` | Blocking | Fixed in [`fe8d65e`](https://github.com/Bissbert/POSIX-hardening/commit/fe8d65e) | `--priority N` runs nothing and exits 0 |
+| [BUG-16](#bug-16) | `orchestrator.sh:141` | High | Fixed in [`aa547e8`](https://github.com/Bissbert/POSIX-hardening/commit/aa547e8) | `FAIL_FAST` skips the rest of one priority level and continues |
+| [BUG-17](#bug-17) | `lib/rollback.sh:382-394` | Low | Fixed in [`6921928`](https://github.com/Bissbert/POSIX-hardening/commit/6921928) | The checkpoint API has no callers and its action loop never executes |
+| [BUG-18](#bug-18) | `ansible/team_keys/generate_keys.sh:50`, `.gitignore:91` | High | Open, needs a decision | A fresh clone ships public keys nobody holds the private half of, and the Ansible path deploys them |
+| [BUG-19](#bug-19) | `lib/ssh_safety.sh:130`, `:229`, `:255` | Medium | Fixed in [`42ef7be`](https://github.com/Bissbert/POSIX-hardening/commit/42ef7be) | The SSH watchdog probes with an unguarded `nc` and logs its rollback as successful either way |
+| [BUG-20](#bug-20) | `lib/ssh_safety.sh:126-130`, `config/defaults.conf.template:64` | High | Unresolved | The live-daemon config test passes whenever anything holds port 2222, and the toolkit's own emergency daemon holds it |
+| [BUG-21](#bug-21) | `scripts/01-ssh-hardening.sh:108` | Medium | Open, needs a decision | `ENABLE_EMERGENCY_ACCESS` is set only by Ansible, so the manual path's emergency fallback is dead code |
+| [BUG-22](#bug-22) | `ansible/playbooks/site.yml:115-163` | Medium | Fixed in [`82b3581`](https://github.com/Bissbert/POSIX-hardening/commit/82b3581) | A second, drifted copy of four playbooks; the `playbooks/` copy of `site.yml` cannot resolve any file it deploys |
+| [BUG-23](#bug-23) | `ansible/preflight.yml:203-206` | Medium | Fixed in [`5d377a3`](https://github.com/Bissbert/POSIX-hardening/commit/5d377a3) | The pre-flight check starts `ssh`/`sshd` instead of reporting on them |
+| [BUG-24](#bug-24) | `scripts/*.sh` | Critical | Open, needs a decision | 20 of 21 scripts register no undo actions, so their rollbacks have an empty stack |
 
 ---
 
 ## BUG-1
+
+**Status: Fixed in [`77b3632`](https://github.com/Bissbert/POSIX-hardening/commit/77b3632).**
 
 **Sourcing a library rewrites `SCRIPT_DIR` to the caller's directory, so the
 library cannot find its own sibling.** <a id="bug-1"></a>
@@ -110,7 +112,7 @@ sh tools/capture-hardening-run.sh
 cat media/captures/pristine.txt
 ```
 
-### Fix that was not applied
+### Fix proposed at the time
 
 Every caller already sets `LIB_DIR` before sourcing, so the libraries can use
 it and fall back to the current behaviour when it is unset.
@@ -156,6 +158,8 @@ Only the entry points listed above were run.
 
 ## BUG-2
 
+**Status: Fixed in [`a25ce32`](https://github.com/Bissbert/POSIX-hardening/commit/a25ce32).**
+
 **`emergency-rollback.sh` exports two variables that `lib/common.sh` has
 already made read-only.** <a id="bug-2"></a>
 
@@ -188,7 +192,7 @@ emergency-rollback.sh --help       exit=1   emergency-rollback.sh: line 14: SAFE
 **Reproduction:** `sh tools/capture-hardening-run.sh`, then read
 `media/captures/pristine.txt`.
 
-### Fix that was not applied
+### Fix proposed at the time
 
 ```diff
 --- a/emergency-rollback.sh
@@ -220,6 +224,8 @@ read-only, so exporting first produces the intended value.
 ---
 
 ## BUG-3
+
+**Status: Fixed in [`50f241d`](https://github.com/Bissbert/POSIX-hardening/commit/50f241d).**
 
 **`log INFO` writes to stdout, so every `$(safe_backup_file …)` captures a log
 line as well as the path.** <a id="bug-3"></a>
@@ -357,7 +363,7 @@ sh tools/capture-rollback-demo.sh    # the transaction path
 sh tools/capture-ssh-watchdog.sh     # the SSH lockout watchdog
 ```
 
-### Fix that was not applied
+### Fix proposed at the time
 
 Send diagnostics to stderr and leave stdout for values. This is the smallest
 change that fixes all four observed symptoms at once:
@@ -435,6 +441,8 @@ Whichever fix is chosen, a regression test belongs with it — asserting that
 
 ## BUG-4
 
+**Status: Open, needs a decision.** Deferred by the fix pass: whether an omitted `ROLLBACK_ENABLED` should mean rollback on or off is a deployment-policy choice.
+
 **`ROLLBACK_ENABLED` has no default, so a run without `config/defaults.conf`
 silently has automatic rollback switched off.** <a id="bug-4"></a>
 
@@ -499,6 +507,8 @@ nothing.
 
 ## BUG-5
 
+**Status: Fixed in [`7726958`](https://github.com/Bissbert/POSIX-hardening/commit/7726958).**
+
 **`rollback_transaction` returns 0 and logs "Rollback completed" even when
 every action in it failed.** <a id="bug-5"></a>
 
@@ -523,7 +533,7 @@ Both captures above end that way.
 **Verified** as a consequence of the BUG-3 captures: in both, every action
 failed and the function still reported completion and exited 0.
 
-### Fix that was not applied
+### Fix proposed at the time
 
 ```diff
 --- a/lib/rollback.sh
@@ -555,6 +565,8 @@ This sketch has **not** been run. It is the shape of a fix, not a tested patch.
 ---
 
 ## BUG-6
+
+**Status: Fixed in [`4b7a0b4`](https://github.com/Bissbert/POSIX-hardening/commit/4b7a0b4).**
 
 **One unsupported sysctl key aborts `03-kernel-params.sh`, and the output that
 would say which key is discarded.** <a id="bug-6"></a>
@@ -598,7 +610,7 @@ unsupported key is fatal and unidentifiable.
 `media/captures/03-kernel-params.log` and the last lines of
 `media/captures/effects.txt`.
 
-### Fix that was not applied
+### Fix proposed at the time
 
 ```diff
 --- a/scripts/03-kernel-params.sh
@@ -622,6 +634,8 @@ either. What is not reasonable is discarding the message.
 ---
 
 ## BUG-7
+
+**Status: Open, needs a decision.** Deferred by the fix pass: fixing it means defining the precedence of config file, environment and CLI flags, together with BUG-8 and BUG-14.
 
 **`orchestrator.sh` sources its libraries before its configuration, so a
 `config/defaults.conf` makes it impossible to start.** <a id="bug-7"></a>
@@ -712,6 +726,8 @@ This matches what every script in `scripts/` already does.
 
 ## BUG-8
 
+**Status: Open, needs a decision.** Deferred by the fix pass: decided together with BUG-7 and BUG-14.
+
 **`orchestrator.sh --dry-run` exports a read-only variable and dies.**
 <a id="bug-8"></a>
 
@@ -775,6 +791,8 @@ a wider behaviour change and squarely a maintainer's call.
 ---
 
 ## BUG-9
+
+**Status: Fixed in [`0b3eeb2`](https://github.com/Bissbert/POSIX-hardening/commit/0b3eeb2).**
 
 **Three `while` loops that need to change state run in pipelines, so their
 state changes are lost in a subshell — and the dependency check compares the
@@ -888,7 +906,7 @@ and always returns success.
 be destroyed mid-way. It follows from the same subshell rule as the two
 confirmed cases and from reading `:106-161`, but it has not been seen.
 
-### Fix that was not applied
+### Fix proposed at the time
 
 The general shape is to stop piping into the `while`, using a here-document or
 a temporary file so the loop body runs in the current shell:
@@ -960,7 +978,7 @@ orchestrator: every script would be skipped for unmet dependencies. They have
 to be fixed together, which is the main reason this pass documents rather than
 patches them.
 
-**Fix that was not applied:**
+**Fix proposed at the time:**
 
 ```diff
 --- a/orchestrator.sh
@@ -973,6 +991,10 @@ patches them.
 ---
 
 ## BUG-10
+
+**Status: Rejected on review.** `01-ssh-hardening.sh` runs `00` as its
+pre-flight step, and an internal step does not have to be independently
+schedulable. Nothing was changed.
 
 **`00-ssh-verification.sh` exists but is not in the orchestrator's
 `SCRIPT_ORDER`.** <a id="bug-10"></a>
@@ -999,7 +1021,7 @@ disagreement in the documentation (BUG-12).
 **Verified** by reading `SCRIPT_ORDER` and by the completion markers in
 `media/captures/effects.txt`.
 
-**Fix that was not applied:** either add a `SCRIPT_ORDER` entry for it, or
+**Suggested at the time, not taken:** either add a `SCRIPT_ORDER` entry for it, or
 document it as an internal pre-flight step that is deliberately not
 independently schedulable. This pass documents the current behaviour and takes
 no position on which is right.
@@ -1007,6 +1029,8 @@ no position on which is right.
 ---
 
 ## BUG-11
+
+**Status: Fixed in [`52d6e09`](https://github.com/Bissbert/POSIX-hardening/commit/52d6e09).**
 
 **`quick-start.sh` parses no arguments.** <a id="bug-11"></a>
 
@@ -1032,12 +1056,14 @@ Overwrite existing configuration? (y/N):
 With stdin not attached to a terminal, the read fails and the script exits 1.
 Interactively it would proceed.
 
-**Fix that was not applied:** add an argument parser that handles `-h|--help`
+**Fix proposed at the time:** add an argument parser that handles `-h|--help`
 before any prompt or system check.
 
 ---
 
 ## BUG-12
+
+**Status: Fixed in [`40a0a2c`](https://github.com/Bissbert/POSIX-hardening/commit/40a0a2c).**
 
 **Documentation facts that disagree with the repository.** <a id="bug-12"></a>
 
@@ -1068,6 +1094,8 @@ were both rewritten in this pass and no longer carry the wrong numbers, but
 ---
 
 ## BUG-13
+
+**Status: Fixed in [`41b9617`](https://github.com/Bissbert/POSIX-hardening/commit/41b9617).**
 
 **A dry run writes a completion marker, so the real run is skipped.**
 <a id="bug-13"></a>
@@ -1112,7 +1140,7 @@ line. **Inferred by reading** for the other 20 scripts: in each of them the
 single `mark_completed` call is the statement after the `fi` that closes the
 `DRY_RUN` branch, so the same sequence applies.
 
-**Fix that was not applied:**
+**Fix proposed at the time:**
 
 ```diff
 --- a/scripts/05-file-permissions.sh
@@ -1148,6 +1176,8 @@ have chosen.
 ---
 
 ## BUG-14
+
+**Status: Open, needs a decision.** Deferred by the fix pass: decided together with BUG-7 and BUG-8: do CLI and environment override the file, and for which settings.
 
 **`config/defaults.conf` silently overrides the environment.**
 <a id="bug-14"></a>
@@ -1210,6 +1240,8 @@ with no behavioural effect when the variable is not already exported.
 
 ## BUG-15
 
+**Status: Fixed in [`fe8d65e`](https://github.com/Bissbert/POSIX-hardening/commit/fe8d65e).**
+
 **`orchestrator.sh --priority N` runs nothing, and exits 0.**
 <a id="bug-15"></a>
 
@@ -1258,7 +1290,7 @@ exit=0
 
 **Verified**, including the `sh -x` line that names the clobbered value.
 
-**Fix that was not applied:** rename the caller's variable, since the library
+**Fix proposed at the time:** rename the caller's variable, since the library
 function is the one with the wider blast radius but the smaller diff is here.
 
 ```diff
@@ -1290,6 +1322,8 @@ nothing clobbers `script_name` between the assignment and its last use.
 ---
 
 ## BUG-16
+
+**Status: Fixed in [`aa547e8`](https://github.com/Bissbert/POSIX-hardening/commit/aa547e8).**
 
 **`FAIL_FAST` does not stop the run: it skips the rest of one priority level
 and carries on.** <a id="bug-16"></a>
@@ -1363,7 +1397,7 @@ zero failures (BUG-9c).
 
 **Verified.**
 
-**Fix that was not applied:** the subshell has to go, which is the same
+**Fix proposed at the time:** the subshell has to go, which is the same
 underlying change BUG-5 and BUG-9 need. Feeding the loop from a here-document
 instead of a pipeline keeps it in the current shell, and then `break 2` means
 what it says:
@@ -1394,6 +1428,8 @@ it fixes BUG-9c at the same time.
 ---
 
 ## BUG-17
+
+**Status: Fixed in [`6921928`](https://github.com/Bissbert/POSIX-hardening/commit/6921928).**
 
 **The checkpoint API is never called, and would not work if it were.**
 <a id="bug-17"></a>
@@ -1455,7 +1491,7 @@ A|1
 **Inferred by reading:** the `comm` sorting problem. No script creates a
 checkpoint, so there was no stack to reproduce it against.
 
-**Fix that was not applied:**
+**Fix proposed at the time:**
 
 ```diff
 --- a/lib/rollback.sh
@@ -1482,6 +1518,8 @@ state it sets, so that is survivable here — unlike in
 ---
 
 ## BUG-18
+
+**Status: Open, needs a decision.** Deferred by the fix pass: needs a decision on who owns the shipped keys, how they are rotated and revoked, and whether example keys may be enabled by default.
 
 **A fresh clone ships two public keys whose private halves nobody has, and
 the Ansible path deploys them.**
@@ -1611,6 +1649,8 @@ Anyone who has already run the Ansible path against a host should check
 
 ## BUG-19
 
+**Status: Fixed in [`42ef7be`](https://github.com/Bissbert/POSIX-hardening/commit/42ef7be).**
+
 **The SSH rollback watchdog probes with `nc` and does not check that `nc`
 exists.**
 <a id="bug-19"></a>
@@ -1669,7 +1709,7 @@ captured watchdog run shows the unconditional logging in practice.
 analysis container had `nc` installed, so the `nc`-absent path was not
 exercised.
 
-**Fix that was not applied:**
+**Fix proposed at the time:**
 
 ```diff
 --- a/lib/ssh_safety.sh
@@ -1701,6 +1741,10 @@ The same substitution applies at `:42`, `:130` and `:255`.
 
 ## BUG-20
 
+**Status: Unresolved.** Confirming it needs an isolated OpenSSH target; the
+behaviour below still reproduces in
+[`media/captures/emergency-ssh.txt`](../media/captures/emergency-ssh.txt).
+
 **The "boot a real sshd with the new config" check passes whenever anything
 is listening on port 2222 — including the toolkit's own emergency daemon.**
 <a id="bug-20"></a>
@@ -1729,14 +1773,9 @@ itself. Three defaults collide:
 
 | Setting | Default | Where |
 |---|---|---|
-| `SSHD_TEST_PORT` | 2222 | `lib/ssh_safety.sh:13` |
+| `SSHD_TEST_PORT` | 2222 | `lib/ssh_safety.sh:12` |
 | `EMERGENCY_SSH_PORT` | 2222 | `config/defaults.conf.template:64` |
 | `ssh_test_port` / `emergency_ssh_port` | 2222 / 2222 | `ansible/group_vars/all.yml:60`, `:70` |
-
-(Line numbers in the capture's first section are one lower than the ones
-above: the captures run against a container copy with
-`tools/bug-workarounds.patch` applied, which removes a line from
-`lib/ssh_safety.sh`.)
 
 `create_emergency_ssh_access` is called from `scripts/00-ssh-verification.sh:214`
 and `scripts/01-ssh-hardening.sh:109`. Once it has run, every subsequent
@@ -1817,6 +1856,8 @@ with the matching change to `emergency_ssh_port` in
 
 ## BUG-21
 
+**Status: Open, needs a decision.** Deferred by the fix pass: a provisional rename was reverted in [`689897e`](https://github.com/Bissbert/POSIX-hardening/commit/689897e) because it enabled an extra password-enabled SSH service; the name, the default and the port collision in BUG-20 need deciding together.
+
 **`ENABLE_EMERGENCY_ACCESS` is never set outside Ansible, so the manual path's
 emergency SSH fallback never runs.**
 <a id="bug-21"></a>
@@ -1893,6 +1934,8 @@ and, so the gate cannot silently fail again if the config is absent:
 
 ## BUG-22
 
+**Status: Fixed in [`82b3581`](https://github.com/Bissbert/POSIX-hardening/commit/82b3581).**
+
 **`ansible/playbooks/` holds a second, drifted copy of three playbooks, and the
 copy under `playbooks/` cannot deploy the toolkit at all.**
 <a id="bug-22"></a>
@@ -1959,7 +2002,7 @@ first `copy:` task. The reproduction shows the same task shape failing in an
 isolated tree; the repository's own playbook was not run, because doing so
 needs a managed host.
 
-**Fix that was not applied:** delete the stale copies, keeping the root ones
+**Fix proposed at the time:** delete the stale copies, keeping the root ones
 that `ansible/README.md` documents.
 
 ```diff
@@ -1973,6 +2016,8 @@ If the `playbooks/` layout is the intended one instead, the four files have to
 move rather than be copied, and every relative `src:` needs one fewer `../`.
 
 ## BUG-23
+
+**Status: Fixed in [`5d377a3`](https://github.com/Bissbert/POSIX-hardening/commit/5d377a3).**
 
 **`ansible/preflight.yml` starts services while claiming to inspect them.**
 <a id="bug-23"></a>
@@ -2014,7 +2059,7 @@ read-only pre-flight step.
 was not executed: `preflight.yml` needs a managed host, and the one throwaway
 container used for the other captures has no systemd.
 
-**Fix that was not applied:**
+**Fix proposed at the time:**
 
 ```diff
 --- a/ansible/preflight.yml
@@ -2029,6 +2074,8 @@ container used for the other captures has no systemd.
 ```
 
 ## BUG-24
+
+**Status: Open, needs a decision.** Deferred by the fix pass: each kind of change (files, live kernel state, firewall, services, accounts) needs its own undo guarantee, or an explicit statement that it is not reversible.
 
 **Twenty of the twenty-one hardening scripts register nothing for rollback, so
 their transactions roll back to nothing.**

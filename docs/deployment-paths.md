@@ -92,17 +92,17 @@ sequenceDiagram
 
 Two things follow from this shape:
 
-- **Every defect in the shell scripts reaches this path too.** The scripts are
-  copied verbatim, so `BUG-1` through `BUG-6` and `BUG-13` apply unchanged. The
-  one difference is that `templates/defaults.conf.j2` sets
+- **The shell scripts behave here as they do by hand.** They are copied
+  verbatim, so the open script-level defects apply unchanged, notably the
+  partial rollback coverage ([BUG-24](BUGS-FOUND.md#bug-24)). The one
+  difference is that `templates/defaults.conf.j2` sets
   `ENABLE_EMERGENCY_ACCESS=1`, which `config/defaults.conf.template` does not,
   so the emergency-SSH fallback is live here and dead on the manual path
   ([BUG-21](BUGS-FOUND.md#bug-21)).
-- **The orchestrator's own bugs do not.** `site.yml` calls the scripts
-  directly, one `shell:` task each, so `orchestrator.sh`'s dependency handling,
-  `FAIL_FAST` behaviour and `--priority` parsing
-  ([BUG-9](BUGS-FOUND.md#bug-9), [BUG-15](BUGS-FOUND.md#bug-15),
-  [BUG-16](BUGS-FOUND.md#bug-16)) are bypassed. The orchestrator is copied to
+- **The orchestrator is bypassed.** `site.yml` calls the scripts directly,
+  one `shell:` task each, so neither its dependency checks nor its open
+  start-up defects ([BUG-7](BUGS-FOUND.md#bug-7),
+  [BUG-8](BUGS-FOUND.md#bug-8)) come into play. The orchestrator is copied to
   the target and never executed.
 
 ## The `hardening_master.yml` path in detail
@@ -184,31 +184,25 @@ Four playbooks exist twice — once at the `ansible/` root, once under
 
 ```text
 === 3. duplicated playbooks: root copy vs playbooks/ copy
-    site.yml               differ: 3 changed hunks
+    site.yml               differ: 12 changed hunks
     preflight.yml          differ: 4 changed hunks
     rollback.yml           differ: 14 changed hunks
     deploy_team_keys.yml   identical
 ```
 
-The `playbooks/` copy of `site.yml` cannot deploy anything: Ansible resolves a
-`copy:` module's `src:` against the playbook's own directory, so `../lib/`
-means `ansible/playbooks/../lib/`, which does not exist
-([BUG-22](BUGS-FOUND.md#bug-22)). The root copy resolves correctly.
+Most of the `site.yml` difference is path depth. Ansible resolves a `copy:`
+module's `src:` against the playbook's own directory, so the `playbooks/` copy
+has to say `../../lib/` where the root copy says `../lib/`. Both copies now
+resolve every source they deploy; section 6b of
+[`ansible.txt`](../media/captures/ansible.txt) checks each `src:` value and
+finds all of them present.
 
-The `preflight.yml` pair differs in behaviour rather than in naming: the root
-copy — the documented one — starts `ssh` and `sshd` rather than reporting on
-them ([BUG-23](BUGS-FOUND.md#bug-23)).
+The `preflight.yml` pair differs in module rather than in behaviour: the root
+copy uses `ansible.builtin.systemd`, the `playbooks/` copy
+`ansible.builtin.systemd_service`. Both query `ssh` and `sshd` without
+changing their state.
 
-```mermaid
-flowchart LR
-    R["ansible/site.yml<br/>documented in ansible/README.md"] -->|"../lib/"| OK["repo lib/<br/>present"]
-    P["ansible/playbooks/site.yml<br/>documented nowhere"] -->|"../lib/"| NO["ansible/lib/<br/>does not exist"]
-
-    style R fill:#238636,color:#fff
-    style OK fill:#238636,color:#fff
-    style P fill:#da3633,color:#fff
-    style NO fill:#da3633,color:#fff
-```
+Keeping two copies in step is still manual; nothing checks that they agree.
 
 ## Static checks that were run
 
@@ -228,8 +222,8 @@ All ten playbooks parse:
     playbooks/validate.yml       exit=0
 ```
 
-`--syntax-check` parses; it does not resolve `src:` paths, which is why it
-passes on the playbook that cannot find any of its files.
+`--syntax-check` parses; it does not resolve `src:` paths. Those were checked
+separately, in section 6b of the same capture.
 
 `ansible-lint` 25.9.2, run over the six top-level playbooks and every role they
 pull in, reports 1394 findings across 138 files:
@@ -267,9 +261,10 @@ against `config/defaults.conf.template`), and nothing reconciles the two.
 
 ## Known limitations of this page
 
-- **No Ansible run against a host was performed.** Everything above is static:
-  file contents, `--syntax-check`, `ansible-lint`, and one isolated
-  reproduction of Ansible's `src:` search path. Driving either playbook needs a
+- **No Ansible run against a host was performed.** Everything above is static
+  and ran in the host-tools container (`tools/host-tools-env.sh`): file
+  contents, `--syntax-check`, `ansible-lint`, and a check that every `src:`
+  path resolves. Driving either playbook needs a
   managed host with systemd and a reachable SSH account; the throwaway
   containers used elsewhere in this documentation run `sshd` directly and have
   no systemd, so `preflight.yml`, the `service`/`systemd` tasks and every

@@ -7,10 +7,10 @@
     ansible/team_keys/team_shared_ed25519.pub
 
 === 2. the same directory in a fresh clone
+    README.md
     ansible_ed25519.pub
     generate_keys.sh
     install_team_key.sh
-    README.md
     team_shared_ed25519.pub
 
 === 3. the key paths the users role deploys by default
