@@ -55,7 +55,7 @@ ADMIN_IP=""                  # YOUR MANAGEMENT IP - REQUIRED! Example: "203.0.11
 SSH_ALLOW_USERS="admin"      # Users allowed to SSH (space-separated)
                              # WARNING: Do not leave empty!
 SSH_ALLOW_GROUPS=""          # Groups allowed to SSH (space-separated)
-SSH_TEST_PORT=2222           # Port for connectivity testing
+SSH_TEST_PORT=2223           # Port for the pre-flight test sshd; not EMERGENCY_SSH_PORT
 SSH_ROLLBACK_TIMEOUT=60      # Seconds to wait before auto-rollback
 
 # ==============================================================================

@@ -9,7 +9,10 @@
 
 # SSH-specific configuration
 readonly SSHD_CONFIG="${SSHD_CONFIG:-/etc/ssh/sshd_config}"
-readonly SSHD_TEST_PORT="${SSHD_TEST_PORT:-2222}"
+# The test port must differ from the emergency SSH port (2222 by default):
+# test_ssh_config refuses to run when its port is already taken.
+# SSH_TEST_PORT is the name config/defaults.conf.template uses.
+readonly SSHD_TEST_PORT="${SSHD_TEST_PORT:-${SSH_TEST_PORT:-2223}}"
 readonly SSH_ROLLBACK_TIMEOUT="${SSH_ROLLBACK_TIMEOUT:-60}"
 readonly SSH_TEST_TIMEOUT="${SSH_TEST_TIMEOUT:-10}"
 
@@ -64,19 +67,22 @@ verify_ssh_connection() {
 }
 
 # Create a safe test copy of SSH configuration
+# Usage: create_ssh_test_config [test-file] [port] [source-config]
+# source-config defaults to the live $SSHD_CONFIG.
 create_ssh_test_config() {
     _test_config="${1:-${SSHD_CONFIG}.test}"
     _test_port="${2:-$SSHD_TEST_PORT}"
+    _test_source="${3:-$SSHD_CONFIG}"
 
-    if [ ! -f "$SSHD_CONFIG" ]; then
-        log "ERROR" "SSH config file not found: $SSHD_CONFIG"
-        unset _test_config _test_port
+    if [ ! -f "$_test_source" ]; then
+        log "ERROR" "SSH config file not found: $_test_source"
+        unset _test_config _test_port _test_source
         return 1
     fi
 
     # Create test configuration
-    if ! cp "$SSHD_CONFIG" "$_test_config"; then
-        unset _test_config _test_port
+    if ! cp "$_test_source" "$_test_config"; then
+        unset _test_config _test_port _test_source
         return 1
     fi
 
@@ -96,7 +102,7 @@ create_ssh_test_config() {
 
     log "DEBUG" "Created test SSH config: $_test_config on port $_test_port" >&2
     echo "$_test_config"
-    unset _test_port
+    unset _test_port _test_source
 }
 
 # Test SSH configuration before applying
@@ -116,29 +122,49 @@ test_ssh_config() {
 
     # If not in dry run, test with actual daemon (skip if SKIP_SSH_DAEMON_TEST=1)
     if [ "$DRY_RUN" != "1" ] && [ "$SKIP_SSH_DAEMON_TEST" != "1" ]; then
-        _test_config_result=$(create_ssh_test_config "$_config_file.test" "$SSHD_TEST_PORT")
+        # Boot the candidate itself, not the live config
+        _test_config_result=$(create_ssh_test_config "$_config_file.test" "$SSHD_TEST_PORT" "$_config_file")
 
         if [ -z "$_test_config_result" ]; then
             unset _config_file _test_config_result
             return 1
         fi
 
+        # Fail closed if something already holds the test port. The probe
+        # below would be answered by that process, not by the test daemon.
+        if check_port_listening localhost "$SSHD_TEST_PORT" 2 >/dev/null 2>&1; then
+            log "ERROR" "Test port $SSHD_TEST_PORT is already in use; set SSHD_TEST_PORT to a free port"
+            rm -f "$_test_config_result"
+            unset _config_file _test_config_result
+            return 1
+        fi
+
         # Start test SSH daemon
         log "DEBUG" "Starting test SSH daemon on port $SSHD_TEST_PORT"
+        rm -f /var/run/sshd_test.pid
         if /usr/sbin/sshd -f "$_test_config_result"; then
             sleep 2
+
+            # sshd forks, so its exit status does not show that the daemon
+            # came up. It writes the pid file once it is listening.
+            _test_pid=$(cat /var/run/sshd_test.pid 2>/dev/null || true)
+            if [ -z "$_test_pid" ] || ! kill -0 "$_test_pid" 2>/dev/null; then
+                log "ERROR" "Test SSH daemon did not start (no live process in /var/run/sshd_test.pid)"
+                rm -f "$_test_config_result" /var/run/sshd_test.pid
+                unset _config_file _test_config_result _test_pid
+                return 1
+            fi
 
             # Test connection to test instance
             if check_port_listening localhost "$SSHD_TEST_PORT" "$SSH_TEST_TIMEOUT"; then
                 log "INFO" "Test SSH daemon is accepting connections"
 
                 # Kill test daemon
-                if [ -f /var/run/sshd_test.pid ]; then
-                    kill "$(cat /var/run/sshd_test.pid)" 2>/dev/null
-                fi
+                kill "$_test_pid" 2>/dev/null
+                rm -f /var/run/sshd_test.pid
 
                 rm -f "$_test_config_result"
-                unset _config_file _test_config_result
+                unset _config_file _test_config_result _test_pid
                 return 0
             else
                 _port_check_status=$?
@@ -149,12 +175,11 @@ test_ssh_config() {
                 fi
 
                 # Kill test daemon
-                if [ -f /var/run/sshd_test.pid ]; then
-                    kill "$(cat /var/run/sshd_test.pid)" 2>/dev/null
-                fi
+                kill "$_test_pid" 2>/dev/null
+                rm -f /var/run/sshd_test.pid
 
                 rm -f "$_test_config_result"
-                unset _config_file _test_config_result _port_check_status
+                unset _config_file _test_config_result _port_check_status _test_pid
                 return 1
             fi
         else
