@@ -10,6 +10,10 @@
 # Or let Ansible generate it from group_vars/all.yml:
 #   ansible-playbook site.yml --tags deploy
 #
+# Precedence, first wins: command-line flag, environment, this file, built-in
+# default. So DRY_RUN=1 sh scripts/05-file-permissions.sh simulates even though
+# this file says DRY_RUN=0. An empty environment variable does not override.
+#
 # ==============================================================================
 
 # ==============================================================================
