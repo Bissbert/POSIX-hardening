@@ -11,9 +11,9 @@ are defined but never reached.
 
 | File | Lines | Functions | What it owns |
 |---|---|---|---|
-| `lib/common.sh` | 545 | 25 | Configuration, logging, the environment check, completion markers, progress output |
-| `lib/ssh_safety.sh` | 546 | 12 | The SSH lockout-avoidance path: test daemon, watchdog, emergency access |
-| `lib/rollback.sh` | 533 | 19 | Transactions, the undo stack, traps, checkpoints |
+| `lib/common.sh` | 565 | 25 | Configuration, logging, the environment check, completion markers, progress output |
+| `lib/ssh_safety.sh` | 585 | 12 | The SSH lockout-avoidance path: test daemon, watchdog, emergency access |
+| `lib/rollback.sh` | 628 | 19 | Transactions, the undo stack, traps, checkpoints |
 | `lib/backup.sh` | 448 | 9 | File and directory backups, system snapshots, restore |
 | `lib/posix_compat.sh` | 271 | 7 | Portable replacements for `tac`, `mktemp`, `sed -i`, `realpath`, `timeout` |
 
@@ -32,14 +32,14 @@ flowchart TD
 
     C2 -.->|"marks readonly:<br/>SAFETY_MODE DRY_RUN<br/>FAIL_FAST SSH_PORT<br/>BACKUP_DIR LOG_DIR STATE_DIR"| LOCK["those names can<br/>never be assigned again"]
 
-    C3 -.->|"sources"| PC["lib/posix_compat.sh<br/>via SCRIPT_DIR"]
+    C3 -.->|"sources"| PC["lib/posix_compat.sh<br/>via LIB_DIR"]
     C5 -.->|"sources"| PC
 
     style S fill:#8250df,color:#fff
     style C1 fill:#9e6a03,color:#fff
     style C2 fill:#1f6feb,color:#fff
     style LOCK fill:#da3633,color:#fff
-    style PC fill:#da3633,color:#fff
+    style PC fill:#1f6feb,color:#fff
 ```
 
 `lib/common.sh:15-26` marks twelve configuration variables `readonly` with a
@@ -49,26 +49,19 @@ is when `common.sh` is sourced becomes permanent for the rest of the process.
 Two consequences follow, and both are load-bearing:
 
 - **Configuration must be sourced first.** Every script in `scripts/` sources
-  `config/defaults.conf` at line 18 and `lib/common.sh` at line 21, with a
-  comment saying why. `orchestrator.sh` does it the other way round and cannot
-  start when the config file exists ([BUG-7](BUGS-FOUND.md#bug-7)).
-- **Nothing may assign those names later.** `emergency-rollback.sh:14` tries to
-  `export SAFETY_MODE=0` after the fact and dies on the spot
-  ([BUG-2](BUGS-FOUND.md#bug-2)); `orchestrator.sh:342` does the same to
-  `DRY_RUN` ([BUG-8](BUGS-FOUND.md#bug-8)).
+  `config/defaults.conf` before `lib/common.sh`, with a comment saying why.
+  `orchestrator.sh` does it the other way round and cannot start when the
+  config file exists ([BUG-7](BUGS-FOUND.md#bug-7), open).
+- **Nothing may assign those names later.** `emergency-rollback.sh` sets
+  `SAFETY_MODE=0` and `DRY_RUN=0` before it sources `common.sh`, which is the
+  correct order. `orchestrator.sh` still assigns `DRY_RUN` after the fact when
+  given `--dry-run`, and exits 2 ([BUG-8](BUGS-FOUND.md#bug-8), open).
 
-The dotted red edges are the other structural defect. `lib/rollback.sh:8` and
-`lib/ssh_safety.sh:8` both compute their own location as
-
-```sh
-SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-```
-
-In a sourced file `$0` is the *calling* script, not the sourced one, so
-`SCRIPT_DIR` resolves to `scripts/` and the `. "${SCRIPT_DIR}/posix_compat.sh"`
-on the next line looks for `scripts/posix_compat.sh`, which does not exist
-([BUG-1](BUGS-FOUND.md#bug-1)). This is why every capture in this documentation
-runs against a container copy with `tools/bug-workarounds.patch` applied.
+The dotted edges are how the two consumers of `lib/posix_compat.sh` find it.
+They cannot compute their own location, because in a sourced file `$0` is the
+*calling* script. Instead, every entry point sets `LIB_DIR` before sourcing
+anything, and `lib/rollback.sh:8` and `lib/ssh_safety.sh:8` source
+`"${LIB_DIR}/posix_compat.sh"`. A new entry point has to do the same.
 
 ## `lib/common.sh`
 
@@ -90,9 +83,10 @@ of those six is called from anywhere else; they exist to be composed here.
 
 `check_requirements` checks for `awk sed grep cp mv mkdir chmod chown cat` and
 nothing else. `nc`, `ss`, `netstat`, `iptables` and `sshd` are all used later
-without being required here; `check_port_listening` guards each of its three
-probes with `command -v`, but `lib/ssh_safety.sh` does not
-([BUG-19](BUGS-FOUND.md#bug-19)).
+without being required here. Port probes go through `check_port_listening`,
+which tries `nc`, `ss`, `netstat` and `telnet` in turn, each behind a
+`command -v` check, and logs an error when none is installed; every probe in
+`lib/ssh_safety.sh` uses it.
 
 ## `lib/backup.sh` and how a backup is meant to reach rollback
 
@@ -108,25 +102,23 @@ sequenceDiagram
     C->>B: "backup_file"
     B->>FS: "cp -p, write .meta and .sha256"
     B-->>C: "the backup path"
-    C->>C: "log INFO Backed up ... (to stdout)"
-    C-->>S: "log line AND path, two lines"
-    Note over S: "the caller captured both"
+    C->>C: "log INFO Backed up ... (to stderr)"
+    C-->>S: "the path, alone on stdout"
     S->>R: "register_file_rollback /etc/thing $path"
     R->>R: "push FILE:/etc/thing:$path onto the stack"
 ```
 
-The `Note over S` is [BUG-3](BUGS-FOUND.md#bug-3): `log` writes to stdout, the
-caller uses command substitution, and the two lines come back glued together,
-so the registered path names no file.
+Callers capture the return value with command substitution, so the helpers
+that return a path write their log lines to stderr and only the path to
+stdout. [`rollback-demo.log`](../media/captures/rollback-demo.log) shows the
+captured value is one line naming an existing file.
 
-The backups themselves are written correctly — `cp -p`, a `.meta` sidecar and a
-`.sha256` sidecar, listed in a `manifest`. Restoring by hand from
-`/var/backups/hardening/` works. It is only the path handed onward that is
-malformed.
+The backups are `cp -p` copies with a `.meta` and a `.sha256` sidecar, listed
+in a `manifest` under `/var/backups/hardening/`.
 
-The bottom half of that diagram is also mostly hypothetical:
-`register_file_rollback` is called from nowhere in `scripts/`
-([BUG-24](BUGS-FOUND.md#bug-24)).
+The bottom half of that diagram is mostly unused, though: only
+`scripts/02-firewall-setup.sh` registers an undo action at all
+([BUG-24](BUGS-FOUND.md#bug-24), open).
 
 ## `lib/posix_compat.sh`
 
@@ -135,8 +127,8 @@ Seven helpers that exist because the toolkit targets POSIX `sh` rather than
 
 | Function | Replaces | Callers found in `lib/` |
 |---|---|---|
-| `posix_sed_inplace` | `sed -i` | `ssh_safety.sh:83`, `:90` (`create_ssh_test_config`), `:317` (`update_ssh_setting`) |
-| `posix_reverse` | `tac` | `rollback.sh:89`, in `rollback_transaction` |
+| `posix_sed_inplace` | `sed -i` | `ssh_safety.sh:85`, `:92` (`create_ssh_test_config`), `:356` (`update_ssh_setting`) |
+| `posix_reverse` | `tac` | `rollback.sh:95` (`rollback_transaction`), `:474` (`rollback_to_checkpoint`) |
 | `posix_mktemp` | `mktemp` without a template | none |
 | `posix_realpath` | `realpath` | none |
 | `posix_timeout` | `timeout` | none |
@@ -145,15 +137,9 @@ Seven helpers that exist because the toolkit targets POSIX `sh` rather than
 
 Two of the seven are used. The other five have no caller anywhere in the
 repository, and the code that would need them calls the external command
-directly instead: `timeout` appears unwrapped at `lib/common.sh:168`, `:501`,
-`:525` and `lib/ssh_safety.sh:42`, `:130`, `:229`, `:255` — the same sites that
-make the unguarded `nc` probes in [BUG-19](BUGS-FOUND.md#bug-19).
-`posix_reverse` was read closely because `rollback_transaction` depends on it,
-and it is a correct POSIX reversal.
-
-The irony of this file is that it is the one that cannot be loaded. Both of its
-consumers reach it through the broken `SCRIPT_DIR`
-([BUG-1](BUGS-FOUND.md#bug-1)).
+directly instead: `timeout` appears unwrapped at `lib/common.sh:170`, `:510`
+and `:538`. `posix_reverse` was read closely because both rollback paths depend
+on it, and it is a correct POSIX reversal.
 
 ## What is defined but never reached
 
@@ -161,8 +147,8 @@ Measured by grepping for callers outside `lib/`:
 
 | Area | Functions with no caller outside `lib/` | Status |
 |---|---|---|
-| Checkpoints | `create_checkpoint`, `rollback_to_checkpoint` | No callers anywhere; the action loop would not execute ([BUG-17](BUGS-FOUND.md#bug-17)) |
-| Undo registration | all five `register_*_rollback` except one call site | One call in 21 scripts ([BUG-24](BUGS-FOUND.md#bug-24)) |
+| Checkpoints | `create_checkpoint`, `rollback_to_checkpoint` | No callers; the API works but nothing uses it |
+| Undo registration | all five `register_*_rollback` except one call site | One call in 21 scripts ([BUG-24](BUGS-FOUND.md#bug-24), open) |
 | Backup browsing | `list_backups`, `list_snapshots`, `cleanup_old_backups`, `backup_directory`, `generate_backup_name` | Defined, no caller |
 | SSH config testing | `create_ssh_test_config`, `test_ssh_config`, `manage_ssh_access` | Called only from within `lib/ssh_safety.sh` |
 | Atomic helpers | `atomic_operation`, `atomic_file_update`, `safe_file_operation`, `safe_service_operation` | No callers |
@@ -177,12 +163,12 @@ reached by any documented workflow.
 - **The caller counts are grep counts.** A function referenced inside a string,
   or invoked through a variable, would not be found. Nothing in this codebase
   does either as far as was read, but that was not proved.
-- **Line and function counts are structural, not semantic.** `545 lines` counts
+- **Line and function counts are structural, not semantic.** `565 lines` counts
   comments and blank lines; `25 functions` counts top-level `name() {`
   definitions and would miss a function defined conditionally.
 - **No library function was unit-tested in isolation.** What was exercised is
   what the captured runs in [measurement.md](measurement.md) exercised, plus
   the targeted probes in `tools/capture-*.sh`. `lib/backup.sh`'s snapshot and
   restore functions, in particular, were never run.
-- **`lib/posix_compat.sh` was read, not executed.** Its consumers cannot load
-  it without the workaround patch, and no capture calls its functions directly.
+- **`lib/posix_compat.sh` is exercised only indirectly.** It is loaded by every
+  captured run, but no capture calls its functions directly.

@@ -8,8 +8,8 @@
 # Default outdir: media/captures
 #
 # Writes, per script: <name>.log (stdout+stderr, unedited) and <name>.exit.
-# Plus summary.txt, effects.txt and pristine.txt (the same entry points run
-# WITHOUT the bug workarounds, which is how the repository behaves as shipped).
+# Plus summary.txt, effects.txt, dry-run.txt and pristine.txt (the documented
+# entry points started once each on a clean clone, with no config file).
 
 set -eu
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -21,7 +21,7 @@ mkdir -p "$OUT"
 trap 'capture_stop "$CNAME"' EXIT INT TERM
 
 # ---------------------------------------------------------------------------
-# 1. The repository exactly as shipped, before any workaround.
+# 1. The documented entry points on a clean clone.
 # ---------------------------------------------------------------------------
 capture_ensure_image "$ROOT"
 docker run -d --name "$CNAME" --privileged --entrypoint /bin/sh \
@@ -32,7 +32,7 @@ docker cp "$ROOT/." "$CNAME:/opt/posix-hardening" >/dev/null
 docker exec "$CNAME" sh -c '
     cd /opt/posix-hardening
     cp config/defaults.conf.template config/defaults.conf
-    echo "# Repository as shipped, no workarounds. /bin/sh is dash."
+    echo "# Clean clone, config/defaults.conf from the template. /bin/sh is dash."
     for e in "scripts/01-ssh-hardening.sh" "scripts/03-kernel-params.sh" \
              "scripts/05-file-permissions.sh" "orchestrator.sh --status" \
              "orchestrator.sh --dry-run --all" "emergency-rollback.sh --help"; do
@@ -40,19 +40,11 @@ docker exec "$CNAME" sh -c '
         printf "%-34s exit=%-3s %s\n" "$e" "$rc" \
             "$(printf "%s" "$out" | head -n1)"
     done
-    echo
-    echo "# Same entry points under bash, which names the failing library."
-    for e in "scripts/01-ssh-hardening.sh" "orchestrator.sh --status" \
-             "emergency-rollback.sh --help"; do
-        out=$(bash $e 2>&1); rc=$?
-        printf "%-34s exit=%-3s %s\n" "$e" "$rc" \
-            "$(printf "%s" "$out" | head -n1)"
-    done
 ' > "$OUT/pristine.txt" 2>&1
 capture_stop "$CNAME"
 
 # ---------------------------------------------------------------------------
-# 2. With the workarounds applied, so there is something to capture.
+# 2. Three hardening scripts, run one after another in a fresh container.
 # ---------------------------------------------------------------------------
 capture_start "$ROOT" "$CNAME"
 
@@ -89,8 +81,8 @@ docker exec "$CNAME" sh -c '
     echo "sysctl -p exit: $?"
 ' > "$OUT/effects.txt" 2>&1
 
-# Two questions about DRY_RUN: does config/defaults.conf override the
-# environment, and does a dry run leave a completion marker behind?
+# DRY_RUN: does config/defaults.conf override the environment (BUG-14, open),
+# and does a dry run leave a completion marker behind?
 docker exec "$CNAME" sh -c '
     cd /opt/posix-hardening
     rm -rf /var/lib/hardening /var/log/hardening /var/backups/hardening
@@ -115,11 +107,7 @@ docker exec "$CNAME" sh -c '
     sh scripts/05-file-permissions.sh 2>&1 | tail -3
 
     echo
-    echo "=== D. what the orchestrator does with a marker a dry run wrote"
-    echo "    A dry run of 05-file-permissions is not enough to show this:"
-    echo "    FAIL_FAST abandons the rest of priority 2 before reaching it"
-    echo "    (BUG-16). Seed the marker for the first script instead, which"
-    echo "    a dry run of 01-ssh-hardening would have written the same way."
+    echo "=== D. what the orchestrator does with an existing marker"
     rm -rf /var/lib/hardening /var/log/hardening /var/backups/hardening
     mkdir -p /var/lib/hardening
     echo "01-ssh-hardening" > /var/lib/hardening/completed
@@ -130,8 +118,6 @@ docker exec "$CNAME" sh -c '
         | sed "s/\x1b\[[0-9;]*m//g" \
         | grep -i "01-ssh-hardening" \
         | sed "s/^/      /"
-    echo "    note the marker has no \".sh\" suffix and the dependency"
-    echo "    lines do, which is why they read as unmet (BUG-9d)"
     mv /tmp/defaults.conf config/defaults.conf
 ' > "$OUT/dry-run.txt" 2>&1
 

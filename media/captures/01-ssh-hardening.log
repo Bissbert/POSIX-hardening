@@ -1,14 +1,14 @@
 
 ==> Starting SSH hardening script
 [INFO] Starting SSH hardening script
-[INFO] Started transaction: 20260922-004755-145-ssh_hardening (ssh_hardening)
+[INFO] Started transaction: 20260924-085413-25-ssh_hardening (ssh_hardening)
 
 ==> Running pre-flight checks for SSH hardening
 [INFO] Running pre-flight checks for SSH hardening
 [INFO] =
-[INFO] Starting: 01-ssh-hardening (v1.0.0)
-[INFO] Timestamp: Tue Sep 22 00:47:55 UTC 2026
-[INFO] Hostname: 3ca4f967acfd
+[INFO] Starting: 01-ssh-hardening (v1.1.0)
+[INFO] Timestamp: Thu Sep 24 08:54:13 UTC 2026
+[INFO] Hostname: ae99f384736c
 [INFO] User: root
 [INFO] =
 [INFO] Running SSH package verification first...
@@ -16,12 +16,12 @@
 ==> Starting SSH package verification
 [INFO] Starting SSH package verification
 [INFO] =
-[INFO] Starting: 00-ssh-verification (v1.0.0)
-[INFO] Timestamp: Tue Sep 22 00:47:55 UTC 2026
-[INFO] Hostname: 3ca4f967acfd
+[INFO] Starting: 00-ssh-verification (v1.1.0)
+[INFO] Timestamp: Thu Sep 24 08:54:13 UTC 2026
+[INFO] Hostname: ae99f384736c
 [INFO] User: root
 [INFO] =
-[INFO] Started transaction: 20260922-004755-175-ssh_verification (ssh_verification)
+[INFO] Started transaction: 20260924-085413-55-ssh_verification (ssh_verification)
 
 ==> Gathering SSH package information
 [INFO] Gathering SSH package information
@@ -58,7 +58,7 @@
 [INFO] Package source: verified
 [INFO] Binary integrity: verified
 [INFO] Marked as completed: 00-ssh-verification
-[INFO] Committing transaction: 20260922-004755-175-ssh_verification
+[INFO] Committing transaction: 20260924-085413-55-ssh_verification
 [INFO] =================================
 [INFO] SSH Package Verification Summary
 [INFO] =================================
@@ -75,8 +75,8 @@
 ✓ Pre-flight checks completed
 [INFO] SUCCESS: Pre-flight checks completed
 [INFO] Created snapshot: pre_ssh_hardening
-[INFO] SSH config backed up to: [INFO] Backed up /etc/ssh/sshd_config to /var/backups/hardening/sshd_config.20260922-004759.bak
-/var/backups/hardening/sshd_config.20260922-004759.bak
+[INFO] Backed up /etc/ssh/sshd_config to /var/backups/hardening/sshd_config.20260924-085418.bak
+[INFO] SSH config backed up to: /var/backups/hardening/sshd_config.20260924-085418.bak
 [INFO] Applying SSH configuration changes
 
 ==> Applying SSH hardening to: /etc/ssh/sshd_config.work
@@ -111,7 +111,7 @@
 ✓ SSH hardening settings verified
 [INFO] SUCCESS: SSH hardening settings verified
 [INFO] Marked as completed: 01-ssh-hardening
-[INFO] Committing transaction: 20260922-004755-145-ssh_hardening
+[INFO] Committing transaction: 20260924-085413-25-ssh_hardening
 ✓ SSH hardening completed successfully
 [INFO] SUCCESS: SSH hardening completed successfully
 [INFO] =

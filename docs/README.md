@@ -3,15 +3,15 @@
 This directory holds two kinds of page.
 
 The first group was written during a documentation pass that ran the toolkit
-in throwaway containers and recorded what it did. Those pages carry diagrams
-and captured output, and every number in them comes from a command in
+in throwaway Linux containers and recorded what it did. Those pages carry
+diagrams and captured output, and every number in them comes from a command in
 [`tools/`](../tools) whose raw output is in
-[`media/captures/`](../media/captures). They describe the code as it behaves
-today, including where it does not work.
+[`media/captures/`](../media/captures). The captures were re-recorded against
+the default branch after the fix pass, so the pages describe the code as it
+behaves today, including the defects that are still open.
 
 The second group is the project's own earlier documentation. It is kept
-unchanged. Where it disagrees with a measurement, the measured page wins and
-the disagreement is recorded in [BUGS-FOUND.md](BUGS-FOUND.md#bug-12).
+unchanged. Where it disagrees with a measurement, the measured page wins.
 
 ```mermaid
 flowchart TD
@@ -19,7 +19,7 @@ flowchart TD
 
     START --> Q1["Want to run it?"]
     START --> Q2["Want to know<br/>how it works?"]
-    START --> Q3["Want to know<br/>what is broken?"]
+    START --> Q3["Want to know<br/>what is still open?"]
 
     Q1 --> GS["GETTING_STARTED.md<br/>pre-existing"]
     Q1 --> DP["deployment-paths.md<br/>manual vs Ansible"]
@@ -29,7 +29,7 @@ flowchart TD
     Q2 --> RB["rollback.md<br/>transactions and undo"]
     Q2 --> LR["library-reference.md<br/>what lib/ provides"]
 
-    Q3 --> BF["BUGS-FOUND.md<br/>24 entries with diffs"]
+    Q3 --> BF["BUGS-FOUND.md<br/>24 entries, 7 still open"]
     Q3 --> MS["measurement.md<br/>how each number was made"]
 
     style START fill:#8250df,color:#fff
@@ -47,12 +47,12 @@ flowchart TD
 
 | Page | What it covers | Evidence behind it |
 |---|---|---|
-| [execution-model.md](execution-model.md) | The phases of a hardening run, what the orchestrator does with `SCRIPT_ORDER`, and which of the 21 scripts a real run reached | [`media/captures/orchestrator.log`](../media/captures/orchestrator.log), [`dry-run.txt`](../media/captures/dry-run.txt) |
+| [execution-model.md](execution-model.md) | The phases of a hardening run, what the orchestrator does with `SCRIPT_ORDER`, and which of the 21 scripts a container run reached | [`media/captures/orchestrator.log`](../media/captures/orchestrator.log), [`dry-run.txt`](../media/captures/dry-run.txt) |
 | [ssh-safety.md](ssh-safety.md) | The lockout-avoidance chain as a decision flow: test daemon, watchdog, emergency access, `AllowUsers` | [`ssh-watchdog.log`](../media/captures/ssh-watchdog.log), [`emergency-ssh.txt`](../media/captures/emergency-ssh.txt), [`media/ssh-watchdog.gif`](../media/ssh-watchdog.gif) |
 | [rollback.md](rollback.md) | The transaction state machine, what the rollback stack holds, and how much of the toolkit is inside a transaction at all | [`rollback-demo.log`](../media/captures/rollback-demo.log), [`rollback-coverage.txt`](../media/captures/rollback-coverage.txt), [`media/rollback-demo.gif`](../media/rollback-demo.gif) |
 | [deployment-paths.md](deployment-paths.md) | The three entry points — `orchestrator.sh`, `ansible/site.yml`, `ansible/hardening_master.yml` — compared side by side | [`ansible.txt`](../media/captures/ansible.txt) |
 | [library-reference.md](library-reference.md) | The five files in `lib/`, their load order, and which helpers have callers | [`shell-semantics.txt`](../media/captures/shell-semantics.txt), [`summary.txt`](../media/captures/summary.txt) |
-| [BUGS-FOUND.md](BUGS-FOUND.md) | 24 defects, each with a reproduction, what was verified versus inferred, and the diff that would fix it | every capture in [`media/captures/`](../media/captures) |
+| [BUGS-FOUND.md](BUGS-FOUND.md) | 24 defects, each with its current status (15 fixed, 7 open, 1 rejected, 1 unresolved), a reproduction, and the fix proposed at the time | every capture in [`media/captures/`](../media/captures) |
 | [measurement.md](measurement.md) | Every published number, the command that produced it, and what could not be measured | the tools themselves |
 
 ## The project's earlier documentation
@@ -71,11 +71,11 @@ correct.
 | [reference/configuration.md](reference/configuration.md) | 325 | Configuration variables and their precedence | `:17-23` puts environment variables above the config file; `config/defaults.conf.template:38` reverses that, so `DRY_RUN=1` in the environment is discarded ([BUG-14](BUGS-FOUND.md#bug-14)) |
 | [guides/HARDENING_REQUIREMENTS.md](guides/HARDENING_REQUIREMENTS.md) | 421 | Which standards the toolkit targets | Not audited |
 | [guides/IMPLEMENTATION_GUIDE.md](guides/IMPLEMENTATION_GUIDE.md) | 773 | Step-by-step deployment | Not audited |
-| [guides/QUICK_REFERENCE.md](guides/QUICK_REFERENCE.md) | 286 | Safety rules, emergency SSH recovery, and a staged deployment order | Invokes the scripts directly; it documents no `orchestrator.sh` flag, so it sidesteps [BUG-8](BUGS-FOUND.md#bug-8) and [BUG-15](BUGS-FOUND.md#bug-15) |
+| [guides/QUICK_REFERENCE.md](guides/QUICK_REFERENCE.md) | 286 | Safety rules, emergency SSH recovery, and a staged deployment order | Invokes the scripts directly; it documents no `orchestrator.sh` flag, so the still-open [BUG-7](BUGS-FOUND.md#bug-7) and [BUG-8](BUGS-FOUND.md#bug-8) do not affect it |
 | [guides/TESTING_FRAMEWORK.md](guides/TESTING_FRAMEWORK.md) | 507 | The validation suite and testing approach | Not audited |
 | [development/CONTRIBUTING.md](development/CONTRIBUTING.md) | 251 | How to contribute | Not audited |
 | [development/AUTHORS.md](development/AUTHORS.md) | 19 | Contributors | Not audited |
-| [releases/CHANGELOG.md](releases/CHANGELOG.md) | 67 | Version history | Newest released entry is 1.0.0, matching `lib/common.sh:10`; the `VERSION` file says 1.1.0, which no entry covers ([BUG-12](BUGS-FOUND.md#bug-12)) |
+| [releases/CHANGELOG.md](releases/CHANGELOG.md) | 67 | Version history | Newest released entry is 1.0.0; `VERSION` and `lib/common.sh` both say 1.1.0, for which there is no released entry yet |
 
 Outside this directory: [`../ansible/README.md`](../ansible/README.md) and
 [`../ansible/QUICK_START_ROLES.md`](../ansible/QUICK_START_ROLES.md) document
@@ -86,16 +86,14 @@ they diverge from what `ansible.cfg` actually loads.
 
 | If you are | Read, in order |
 |---|---|
-| Deciding whether to run this on a server | [BUGS-FOUND.md](BUGS-FOUND.md) severity table, then [execution-model.md](execution-model.md) |
+| Deciding whether to run this on a server | [BUGS-FOUND.md](BUGS-FOUND.md) status column, then [execution-model.md](execution-model.md) |
 | Running it on one server by hand | [execution-model.md](execution-model.md), [ssh-safety.md](ssh-safety.md), [rollback.md](rollback.md) |
 | Running it on a fleet | [deployment-paths.md](deployment-paths.md), then [`../ansible/README.md`](../ansible/README.md) |
-| Fixing the code | [BUGS-FOUND.md](BUGS-FOUND.md) — each entry ends with the diff — then [library-reference.md](library-reference.md) |
+| Fixing the code | The open entries in [BUGS-FOUND.md](BUGS-FOUND.md) — each says why it was deferred — then [library-reference.md](library-reference.md) |
 | Checking this documentation | [measurement.md](measurement.md), then run anything in [`../tools`](../tools) |
 
 ## Known limitations of this index
 
-- `docs/user-guide/` exists and is empty. `../README.md` links into it; that
-  link is broken ([BUG-12](BUGS-FOUND.md#bug-12)).
 - The "Accuracy as checked" column is not a full audit of the pre-existing
   pages. Only the claims that collided with something this pass measured were
   checked.

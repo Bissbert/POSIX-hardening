@@ -5,8 +5,8 @@
 `lib/rollback.sh` is the safety story of this toolkit. Every hardening script
 opens a transaction, registers an undo action before each change, and relies on
 an `EXIT` trap to replay those actions in reverse if anything fails. This page
-describes that machinery and then shows, from a captured run, that the file
-restore at the end of it does not currently work.
+describes that machinery, shows a captured file restore, and then measures how
+little of the toolkit actually registers anything to restore.
 
 ## The state machine
 
@@ -25,9 +25,11 @@ stateDiagram-v2
     Rolling --> Replaying: stack is non-empty<br/>reversed with posix_reverse
     Rolling --> Cleared: stack is empty
 
-    Replaying --> Cleared: every action attempted<br/>failures only logged
+    Replaying --> Cleared: every action succeeded
+    Replaying --> Retained: an action failed<br/>failed actions kept on the stack
 
-    Cleared --> Idle: logs Rollback completed<br/>returns 0 unconditionally
+    Cleared --> Idle: logs Rollback completed<br/>returns 0
+    Retained --> Idle: logs Rollback completed with failures<br/>returns 1
     Committed --> Idle: stack cleared, trap removed
     Abandoned --> Idle: trap fires, nothing happens
 
@@ -40,14 +42,12 @@ stateDiagram-v2
     }
 ```
 
-Three transitions in that diagram are where the risk lives, and each is a
-separate defect:
-
-| Transition | What is wrong |
-|---|---|
-| `Open --> Abandoned` | `ROLLBACK_ENABLED` has no default, so without `config/defaults.conf` the trap runs and does nothing ([BUG-4](BUGS-FOUND.md#bug-4)) |
-| inside `Replaying` | `FILE_RESTORE` is handed a backup path with a log line glued to the front, so it restores nothing ([BUG-3](BUGS-FOUND.md#bug-3)) |
-| `Cleared --> Idle` | `rollback_transaction` logs `Rollback completed` and returns 0 whether or not any action succeeded ([BUG-5](BUGS-FOUND.md#bug-5)) |
+One transition in that diagram is still a risk:
+`Open --> Abandoned`. `ROLLBACK_ENABLED` has no default, so without
+`config/defaults.conf` the trap runs and does nothing
+([BUG-4](BUGS-FOUND.md#bug-4), open). The fix is not a one-liner, because the
+same missing file is what lets the orchestrator start at all
+([BUG-7](BUGS-FOUND.md#bug-7)); see the README for how the two interact.
 
 ## What a rollback action looks like
 
@@ -63,79 +63,74 @@ action per line, `TYPE|DATA`:
 | `FIREWALL` | a shell command | `eval`, if `iptables` exists |
 
 `rollback_transaction` moves the stack aside, reverses it with `posix_reverse`,
-and calls `execute_rollback_action` for each line. Failures are logged and
-ignored; there is no second attempt and no error propagation.
+and calls `execute_rollback_action` for each line. Any action that fails is
+written back to the stack, and the function logs
+`Rollback completed with failures` and returns 1, so a caller can tell a
+partial rollback from a complete one.
 
-## The registration path, and where it breaks
+## The registration path
 
 ```mermaid
 flowchart TD
     S["a hardening script"] --> SB["safe_backup_file /etc/thing"]
-    SB --> LOG["log INFO 'Backed up …'<br/>written to STDOUT"]
-    SB --> ECHO["echo the backup path<br/>written to STDOUT"]
-    LOG --> CAP["_backup=$(safe_backup_file …)<br/>captures BOTH lines"]
-    ECHO --> CAP
+    SB --> LOG["log INFO 'Backed up …'<br/>written to stderr"]
+    SB --> ECHO["echo the backup path<br/>written to stdout"]
+    ECHO --> CAP["_backup=$(safe_backup_file …)<br/>captures the path only"]
     CAP --> REG["register_file_rollback /etc/thing $_backup"]
-    REG --> STACK["line 1: FILE_RESTORE then the log line<br/>line 2: the path, then :/etc/thing"]
-    STACK --> RB["rollback reads the stack<br/>one line at a time"]
-    RB --> L1["line 1: type FILE_RESTORE,<br/>data is the log text"]
-    RB --> L2["line 2: type is the backup path,<br/>matches no case arm"]
-    L1 --> E1["ERROR Backup file not found"]
-    L2 --> E2["ERROR Unknown rollback action type"]
-    E1 --> DONE["INFO Rollback completed<br/>return 0"]
-    E2 --> DONE
+    REG --> STACK["one line:<br/>FILE_RESTORE|backup:/etc/thing"]
+    STACK --> RB["rollback replays it"]
+    RB --> DONE["cp -p backup /etc/thing<br/>INFO Restored file"]
 
     style SB fill:#1f6feb,color:#fff
     style LOG fill:#9e6a03,color:#fff
-    style CAP fill:#da3633,color:#fff
-    style E1 fill:#da3633,color:#fff
-    style E2 fill:#da3633,color:#fff
+    style CAP fill:#238636,color:#fff
     style DONE fill:#238636,color:#fff
 ```
 
-The green box at the bottom is the point. The run reports success.
-
 ## A rollback, captured
 
-`tools/capture-rollback-demo.sh` builds a throwaway container, creates
+`tools/capture-rollback-demo.sh` starts a throwaway Debian container, creates
 `/etc/demo.conf`, backs it up through the toolkit's own functions, modifies it,
 and rolls the transaction back. Full output:
 [`media/captures/rollback-demo.log`](../media/captures/rollback-demo.log).
 
-![A recorded rollback in a container: the backup path is captured with a log
-line in front of it, the rollback stack is split across two lines, both
-rollback actions fail, and the hardened content survives.](../media/rollback-demo.gif)
+![A recorded rollback in a Linux container: the backup path is captured on its
+own, the rollback stack holds one FILE_RESTORE action, and the original content
+comes back.](../media/rollback-demo.gif)
 
-The two lines that explain everything:
+The captured return value and the stack:
 
 ```text
 == what safe_backup_file actually returns ==
-     1	[INFO] Backed up /etc/demo.conf to /var/backups/hardening/demo.conf.20260921-195638.bak
-     2	/var/backups/hardening/demo.conf.20260921-195638.bak
-lines captured: 2
-names an existing file: NO
+[INFO] Backed up /etc/demo.conf to /var/backups/hardening/demo.conf.20260924-084115.bak
+     1	/var/backups/hardening/demo.conf.20260924-084115.bak
+lines captured: 1
+names an existing file: yes
+
+== rollback stack contents ==
+     1	FILE_RESTORE|/var/backups/hardening/demo.conf.20260924-084115.bak:/etc/demo.conf
 ```
 
-and the result:
+The `[INFO]` line is on stderr, so it appears in the terminal but not in the
+captured value. The result:
 
 ```text
 == after rollback ==
-HARDENED - this must not survive the rollback
+ORIGINAL - this must come back after rollback
 
-RESULT: file was NOT restored - the hardened content survived
+RESULT: file was restored
 ```
 
-This is not specific to the demo file. The same sequence appears in the
-captured `03-kernel-params.sh` run
-([`media/captures/03-kernel-params.log`](../media/captures/03-kernel-params.log)),
-where the stray path is visible on its own line and the hardening block was
-still in `/etc/sysctl.conf` after `Rollback completed`.
+The demo registers its own undo action. None of the scripts that edit
+`/etc/sysctl.conf` do, so in the captured `03-kernel-params.sh` run
+([`media/captures/03-kernel-params.log`](../media/captures/03-kernel-params.log))
+the hardening block was still in the file after `Rollback completed`. The next
+section is why.
 
 ## How much of the toolkit is actually inside a transaction
 
-The section above is about a registration that arrives corrupted. There is a
-larger question underneath it: how often does a hardening script register
-anything at all?
+The demo above shows that a registered file comes back. The larger question is
+how often a hardening script registers anything at all.
 
 Once. `tools/capture-rollback-coverage.sh` counts both sides of the API across
 `scripts/`:
@@ -196,52 +191,42 @@ nothing on any of them. Each of those four calls reaches
 the state machine at the top of this page, logs `Rollback completed` and
 returns 0.
 
-This is [BUG-24](BUGS-FOUND.md#bug-24), and it matters more than
-[BUG-3](BUGS-FOUND.md#bug-3): fixing the corrupted backup path would make
-rollback work for the one script that registers something. The other twenty
-would still roll back to nothing, because there is nothing on their stacks to
-correct.
+This is [BUG-24](BUGS-FOUND.md#bug-24), and it is still open: it needs a
+decision about which undo action each script should register, not a one-line
+patch. Until then, the restore path works for exactly the one script that uses
+it.
 
-## What still works
-
-The transaction bookkeeping around the broken part is sound, and worth keeping
-in mind when reading the fix:
+## What the rest of the machinery guarantees
 
 - The `EXIT INT TERM` trap is installed by `begin_transaction` and removed by
-  `commit_transaction`, so an interrupted script does attempt a rollback.
+  `commit_transaction`, so an interrupted script does attempt a rollback, as
+  long as `ROLLBACK_ENABLED` is set ([BUG-4](BUGS-FOUND.md#bug-4)).
 - The stack is cleared at the start of every transaction, so a stale stack from
   a previous run is not replayed.
-- `SYSCTL`, `COMMAND`, `SERVICE` and `FIREWALL` actions are not affected by
-  [BUG-3](BUGS-FOUND.md#bug-3); their `DATA` does not come from a command
-  substitution around a logging function. They were not exercised by any
-  capture in this pass, so this page says only that the defect does not reach
-  them, not that they work.
+- `SYSCTL`, `COMMAND`, `SERVICE` and `FIREWALL` actions were not exercised by
+  any capture. Only `FILE_RESTORE` has been seen to work.
 - `posix_reverse` in `lib/posix_compat.sh` is a correct POSIX reversal and is
-  used by `rollback_transaction`.
+  used by both `rollback_transaction` and `rollback_to_checkpoint`.
 
 ## The manual escape hatch
 
-`emergency-rollback.sh` exists to restore backups without the rest of the
-toolkit. It aborts on its second statement, because it tries to `export
-SAFETY_MODE=0` after `lib/common.sh` has already made `SAFETY_MODE` read-only
-([BUG-2](BUGS-FOUND.md#bug-2)):
-
-```text
-emergency-rollback.sh: 14: export: SAFETY_MODE: is read only
-```
-
-Until that is fixed, restoring a file by hand from `/var/backups/hardening/`
-with `cp -p` is the reliable path. The backups themselves are written
-correctly, with `.meta` and `.sha256` sidecars; it is only the path handed to
-the rollback machinery that is malformed.
+`emergency-rollback.sh` restores backups without the rest of the toolkit. It
+sets `SAFETY_MODE=0` and `DRY_RUN=0` before it loads `lib/common.sh`, so it
+now gets past its start-up and reaches its interactive menu. The only argument
+it recognises is `--force`/`-f`, a full reset without prompting; anything
+else, `--help` included, opens the menu. In the capture, with no terminal on
+stdin, that run exits 1
+([`pristine.txt`](../media/captures/pristine.txt)). Restoring a file by hand from
+`/var/backups/hardening/` with `cp -p` works as well; each backup has `.meta`
+and `.sha256` sidecars.
 
 ## Checkpoints
 
 `create_checkpoint` and `rollback_to_checkpoint` are defined in
-`lib/rollback.sh` and called from nowhere. They are not part of any documented
-workflow and, as written, would not replay their actions
-([BUG-17](BUGS-FOUND.md#bug-17)). Treat the checkpoint API as unimplemented.
+`lib/rollback.sh` and called from nowhere. `rollback_to_checkpoint` replays the
+actions added since the checkpoint in reverse order and keeps the stack intact
+if one fails. No capture exercises it.
 
 See [measurement.md](measurement.md) for how the captures on this page were
-produced, and [BUGS-FOUND.md](BUGS-FOUND.md) for the diffs that would fix what
-it shows.
+produced, and [BUGS-FOUND.md](BUGS-FOUND.md) for the entries that are still
+open.

@@ -58,4 +58,4 @@
       scripts/02-firewall-setup.sh:94:    register_command_rollback "iptables-restore < $backup_file"
 
 === 5. what lib/ssh_safety.sh registers on its own account
-      187:    _backup_file=$(safe_backup_file "$SSHD_CONFIG")
+      194:    _backup_file=$(safe_backup_file "$SSHD_CONFIG")

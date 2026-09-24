@@ -10,7 +10,7 @@ exit=2
 exit=0
 
 === 3. --dry-run
-orchestrator.sh: 342: export: DRY_RUN: is read only
+orchestrator.sh: 368: export: DRY_RUN: is read only
 [ERROR] Script failed with exit code: 2
 exit=2
 
@@ -18,10 +18,10 @@ exit=2
     SCRIPT_ORDER declares: 1:02-firewall-setup.sh:01-ssh-hardening.sh
     01-ssh-hardening has NOT run:
     (no completion markers yet)
-✓ Completed: 02-firewall-setup.sh
-[INFO] SUCCESS: Completed: 02-firewall-setup.sh
-✗ Script not found: 02-firewall-setup.sh
-[ERROR] Script not found: 02-firewall-setup.sh
+[INFO] =
+[WARN] Dependency not met: 01-ssh-hardening required for 02-firewall-setup.sh
+✗ Dependencies not met for 02-firewall-setup.sh
+[ERROR] Dependencies not met for 02-firewall-setup.sh
 [ERROR] Script failed with exit code: 1
 exit=1
 
@@ -34,49 +34,84 @@ exit=1
       2:10-sudo-restrictions.sh:09-account-lockdown.sh
       2:14-sysctl-hardening.sh:03-kernel-params.sh,04-network-stack.sh
     no completion markers exist, so all of them are due to run:
-
-==> Running Priority 2 scripts only
-[INFO] Running Priority 2 scripts only
-[INFO] Script completed successfully
-exit=0
-    the argument get_scripts_by_priority was actually called with,
-    from sh -x:
-      get_scripts_by_priority INFO
+kernel.sysrq = 0
+✗ Failed: 03-kernel-params.sh
+[ERROR] Failed: 03-kernel-params.sh
+[ERROR] Script failed with exit code: 1
+exit=1
 
 === 6. --all, and what it actually ran
-exit=0
-    the moment FAIL_FAST is supposed to stop the run:
+exit=1
+    where FAIL_FAST stops the run:
       ✗ Stopping execution due to failure
       [ERROR] Stopping execution due to failure
       
-      ==> Processing Priority 3 scripts
-      --
-      ✗ Stopping execution due to failure
-      [ERROR] Stopping execution due to failure
-      
-      ==> Processing Priority 4 scripts
+      =====================================
     scripts in SCRIPT_ORDER that were never executed:
       04-network-stack.sh
       05-file-permissions.sh
       06-process-limits.sh
+      07-audit-logging.sh
+      08-password-policy.sh
+      09-account-lockdown.sh
       10-sudo-restrictions.sh
+      11-service-disable.sh
+      12-tmp-hardening.sh
+      13-core-dump-disable.sh
       14-sysctl-hardening.sh
+      15-cron-restrictions.sh
       16-mount-options.sh
+      17-shell-timeout.sh
+      18-banner-warnings.sh
       19-log-retention.sh
+      20-integrity-baseline.sh
     declared / executed:
-      20 / 13
-    a dependency reported unmet immediately after it succeeded:
-      ✓ Completed: 01-ssh-hardening.sh
-      [INFO] SUCCESS: Completed: 01-ssh-hardening.sh
-      [WARN] Dependency not met: 01-ssh-hardening.sh required for 02-firewall-setup.sh
-    completion markers written (note: no ".sh" suffix):
+      20 / 3
+    unmet-dependency warnings during the run:
+      0
+    completion markers written:
       00-ssh-verification
       01-ssh-hardening
     final summary:
       Hardening Execution Complete
       =====================================
       Total Scripts: 20
-      Completed: 0
-      Failed: 0
+      Completed: 2
+      Failed: 1
       =====================================
-      [INFO] Script completed successfully
+      [ERROR] Script failed with exit code: 1
+
+=== 7. --all with FAIL_FAST=0, so one failure does not end the run
+exit=1
+    per-script result, in execution order:
+      ✓ Completed: 01-ssh-hardening.sh
+      ✓ Completed: 02-firewall-setup.sh
+      ✗ Failed: 03-kernel-params.sh
+      [WARN] Skipping 04-network-stack.sh - dependencies not met
+      ✓ Completed: 05-file-permissions.sh
+      [WARN] Skipping 06-process-limits.sh - dependencies not met
+      [WARN] Skipping 10-sudo-restrictions.sh - dependencies not met
+      [WARN] Skipping 14-sysctl-hardening.sh - dependencies not met
+      ✓ Completed: 07-audit-logging.sh
+      ✓ Completed: 08-password-policy.sh
+      ✓ Completed: 09-account-lockdown.sh
+      ✓ Completed: 11-service-disable.sh
+      ✓ Completed: 12-tmp-hardening.sh
+      ✗ Failed: 15-cron-restrictions.sh
+      ✓ Completed: 16-mount-options.sh
+      ✓ Completed: 19-log-retention.sh
+      [WARN] Skipping 13-core-dump-disable.sh - dependencies not met
+      ✓ Completed: 17-shell-timeout.sh
+      ✓ Completed: 18-banner-warnings.sh
+      ✓ Completed: 20-integrity-baseline.sh
+    the errors behind the two failures:
+      sysctl: setting key "net.ipv4.tcp_congestion_control": No such file or directory
+      chmod: cannot access '/etc/crontab': No such file or directory
+    final summary:
+      Hardening Execution Complete
+      =====================================
+      Total Scripts: 20
+      Completed: 13
+      Failed: 2
+      =====================================
+      [ERROR] Script failed with exit code: 1

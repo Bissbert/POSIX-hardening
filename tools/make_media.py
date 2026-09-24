@@ -132,7 +132,7 @@ def main():
     args = ap.parse_args()
 
     with open(args.capture, encoding="utf-8", errors="replace") as fh:
-        lines = fh.read().splitlines()
+        lines = [ln.expandtabs(8) for ln in fh.read().splitlines()]
     lines = lines[args.start:args.end]
 
     title = args.title or os.path.basename(args.capture)

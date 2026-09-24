@@ -16,6 +16,12 @@ set -eu
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 IMAGE="${IMAGE:-posix-hardening-target:local}"
 
-docker build -t "$IMAGE" -f "$ROOT/ansible/testing/Dockerfile" \
-    "$ROOT/ansible/testing"
+# The Dockerfile copies an authorized_keys file that is not tracked in git.
+# Build from a temporary context with an empty one: the capture tools never
+# log in over SSH, they use docker exec.
+CTX="$(mktemp -d)"
+trap 'rm -rf "$CTX"' EXIT INT TERM
+cp "$ROOT/ansible/testing/Dockerfile" "$CTX/"
+: > "$CTX/authorized_keys"
+docker build -t "$IMAGE" "$CTX"
 echo "built $IMAGE"

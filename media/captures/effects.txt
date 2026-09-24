@@ -15,11 +15,11 @@ yes
 --- backups written ---
 manifest
 snapshots
-sshd_config.20260922-004759.bak
-sysctl.backup.20260922-004807
-sysctl.conf.20260922-004807.bak
-sysctl.conf.20260922-004807.bak.meta
-sysctl.conf.20260922-004807.bak.sha256
+sshd_config.20260924-085418.bak
+sysctl.backup.20260924-085426
+sysctl.conf.20260924-085426.bak
+sysctl.conf.20260924-085426.bak.meta
+sysctl.conf.20260924-085426.bak.sha256
 --- completion markers ---
 00-ssh-verification
 01-ssh-hardening

@@ -1,8 +1,9 @@
 #!/bin/sh
 # capture-ansible.sh - static facts about the two Ansible entry points.
 #
-# Host-only and read-only: nothing here contacts a managed host. Every
-# ansible-playbook call is --syntax-check, which parses and exits.
+# Read-only: nothing here contacts a managed host. Every ansible-playbook
+# call is --syntax-check, which parses and exits. Run it through
+# tools/host-tools-env.sh so it executes in a Linux container.
 #
 # Output: media/captures/ansible.txt
 set -eu
@@ -84,18 +85,17 @@ cd "$ROOT/ansible"
     grep -n 'inventory.ini' README.md | head -2 | sed 's/^/      /'
 
     echo
-    echo "=== 6b. do the relative src: paths in playbooks/site.yml resolve"
+    echo "=== 6b. do the relative src: paths in both copies of site.yml resolve"
     echo "    ansible resolves copy: src: against the playbook directory."
-    echo "    what playbooks/site.yml asks for, and whether it is there:"
-    for rel in ../lib/ ../scripts/ ../tests/ ../orchestrator.sh \
-               ../emergency-rollback.sh templates/defaults.conf.j2; do
-        printf '      %-32s -> %-44s %s\n' "$rel" "ansible/playbooks/$rel" \
-            "$(test -e "playbooks/$rel" && echo present || echo MISSING)"
-    done
-    echo "    the same paths as the root copy resolves them:"
-    for rel in ../lib/ ../scripts/ templates/defaults.conf.j2; do
-        printf '      %-32s -> %-44s %s\n' "$rel" "ansible/$rel" \
-            "$(test -e "$rel" && echo present || echo MISSING)"
+    for pb in site.yml playbooks/site.yml; do
+        _dir=$(dirname "$pb")
+        _shown=ansible/; [ "$_dir" = . ] || _shown="ansible/$_dir/"
+        echo "    $pb:"
+        grep -oE 'src: "[^"{]+"' "$pb" | sed 's/^src: "//; s/"$//' \
+            | while read -r rel; do
+                printf '      %-32s -> %-44s %s\n' "$rel" "$_shown$rel" \
+                    "$(test -e "$_dir/$rel" && echo present || echo MISSING)"
+            done
     done
     echo "    controlled reproduction of the resolution rule, so the"
     echo "    search path is visible rather than asserted:"
