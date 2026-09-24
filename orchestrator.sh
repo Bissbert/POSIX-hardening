@@ -7,14 +7,26 @@
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 LIB_DIR="$SCRIPT_DIR/lib"
 
+# --dry-run has to be known before lib/common.sh makes DRY_RUN read-only.
+# It is exported so the scripts run from here inherit it, and lib/config.sh
+# keeps it over the config file's value.
+for _arg in "$@"; do
+    case "$_arg" in
+        --dry-run|-n) DRY_RUN=1; export DRY_RUN ;;
+    esac
+done
+unset _arg
+
+# Load configuration first (before libraries set readonly variables)
+# Environment values win over the file (see lib/config.sh)
+CONFIG_FILE="$SCRIPT_DIR/config/defaults.conf"
+. "$LIB_DIR/config.sh"
+load_config "$CONFIG_FILE"
+
 # Source libraries
 . "$LIB_DIR/common.sh"
 . "$LIB_DIR/backup.sh"
 . "$LIB_DIR/rollback.sh"
-
-# Load configuration
-CONFIG_FILE="$SCRIPT_DIR/config/defaults.conf"
-[ -f "$CONFIG_FILE" ] && . "$CONFIG_FILE"
 
 # ============================================================================
 # Script Execution Order and Dependencies
@@ -310,8 +322,9 @@ interactive_mode() {
                 show_status
                 ;;
             8)
-                export DRY_RUN=1
+                # DRY_RUN is read-only by now; start over in dry-run mode
                 show_warning "DRY RUN mode enabled"
+                exec sh "$SCRIPT_DIR/orchestrator.sh" --dry-run
                 ;;
             9)
                 create_system_snapshot "manual_$(date +%Y%m%d-%H%M%S)"
@@ -365,7 +378,7 @@ main() {
             show_status
             ;;
         --dry-run|-n)
-            export DRY_RUN=1
+            # DRY_RUN was set before the libraries were sourced
             shift
             main "$@"
             ;;

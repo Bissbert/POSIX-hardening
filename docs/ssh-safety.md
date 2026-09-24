@@ -6,25 +6,22 @@ Every other hardening step can be undone from a console. SSH cannot: the
 machine you are hardening is usually the machine you are hardening it *from*.
 `lib/ssh_safety.sh` is the part of the toolkit that exists for that single
 problem, and this page draws its promise as a decision flow so the guarantee
-can be read rather than inferred, including the two places where it is still
-weaker than it looks.
+can be read rather than inferred.
 
 ## The five defences, and whether each one works
 
 | Defence | Where | State as measured |
 |---|---|---|
-| Refuse to start unless SSH is verifiably alive | `verify_ssh_connection`, `lib/ssh_safety.sh:21` | Works |
+| Refuse to start unless SSH is verifiably alive | `verify_ssh_connection`, `lib/ssh_safety.sh:24` | Works |
 | Syntax-check the new config before it is installed | `test_ssh_config`, `lib/ssh_safety.sh:109` | Works |
-| Boot a throwaway sshd on port 2222 with the new config | `test_ssh_config`, `lib/ssh_safety.sh:128` | Passes whenever anything answers on port 2222 ([BUG-20](BUGS-FOUND.md#bug-20), unresolved) |
-| Background watchdog that restores the backup after 60 s of silence | `update_ssh_config_safe`, `lib/ssh_safety.sh:234` | Works: fired and restored `sshd_config` in the container capture |
-| Emergency sshd on a second port, opened before hardening starts | `create_emergency_ssh_access`, `lib/ssh_safety.sh:523` | Works when called; never armed on the manual path ([BUG-21](BUGS-FOUND.md#bug-21), open) |
-
-Three of the five hold. The other two are examined below.
+| Boot a throwaway sshd on port 2223 with the new config | `test_ssh_config`, `lib/ssh_safety.sh:133` | Works: fails if the port is already taken or its own daemon did not start ([#17](https://github.com/Bissbert/POSIX-hardening/issues/17)) |
+| Background watchdog that restores the backup after 60 s of silence | `update_ssh_config_safe`, `lib/ssh_safety.sh:265` | Works: fired and restored `sshd_config` in the container capture |
+| Emergency sshd on a second port, opened before hardening starts | `create_emergency_ssh_access`, `lib/ssh_safety.sh:568` | Works when called; off unless `ENABLE_EMERGENCY_SSH=1` ([#18](https://github.com/Bissbert/POSIX-hardening/issues/18)) |
 
 ## The decision flow
 
 This is `update_ssh_config_safe`, the single function every SSH change in the
-toolkit goes through. `scripts/01-ssh-hardening.sh:306` calls it with
+toolkit goes through. `scripts/01-ssh-hardening.sh:321` calls it with
 `apply_ssh_hardening`; `manage_ssh_access` calls it for `AllowUsers` and
 friends. Nothing writes `sshd_config` directly.
 
@@ -36,9 +33,11 @@ flowchart TD
     BAK --> WORK["copy to sshd_config.work<br/>apply changes to the copy only"]
     WORK --> SYN{"sshd -t -f work copy"}
     SYN -->|"syntax error"| DISCARD["delete the copy, return 1<br/>the live config never changed"]
-    SYN -->|"ok"| DAEMON{"start a real sshd on port 2222<br/>with the new config"}
-    DAEMON -->|"nothing answers on 2222"| DISCARD
-    DAEMON -->|"something answers on 2222"| DRY{"DRY_RUN = 1"}
+    SYN -->|"ok"| BUSY{"is port 2223<br/>already taken?"}
+    BUSY -->|"yes"| DISCARD
+    BUSY -->|"no"| DAEMON{"start a real sshd on port 2223<br/>with the new config"}
+    DAEMON -->|"no live pid in its pid file,<br/>or nothing answers on 2223"| DISCARD
+    DAEMON -->|"its own daemon answers"| DRY{"DRY_RUN = 1"}
     DRY -->|"yes"| STOP["report what would change, return 0"]
     DRY -->|"no"| GUARD["fork watchdog:<br/>sleep 60 then probe port 22"]
     GUARD --> INSTALL["mv work copy over sshd_config"]
@@ -59,23 +58,25 @@ flowchart TD
     style RESTORE fill:#238636,color:#fff
 ```
 
-Read the green boxes as the safe exits. Two of the four failure modes — no
-verified connection, and a config that will not parse — are caught *before*
-anything is written to `/etc/ssh/sshd_config`. For those the guarantee is
-structural: the live file is still the file that was working a moment ago.
+Read the green boxes as the safe exits. Three of the four failure modes — no
+verified connection, a config that will not parse, and a config a real sshd
+will not serve — are caught *before* anything is written to
+`/etc/ssh/sshd_config`. For those the guarantee is structural: the live file
+is still the file that was working a moment ago.
 
-The purple box is weaker than it looks. `test_ssh_config` starts `sshd`
-without `-D`, so the parent forks and exits 0 before the child has tried to
-bind, and the port probe on 2222 that follows is answered by whatever holds
-the port rather than by the daemon that was just asked for. Since the
-toolkit's own emergency daemon defaults to that same port 2222, the check can
-be satisfied entirely by a daemon running a different configuration
-([BUG-20](BUGS-FOUND.md#bug-20)). In the container re-run, with the emergency
-daemon on 2222, `test_ssh_config` returned 0 while the only listener on the
-port was still the emergency daemon's pid and no test pid file was ever
-written (section 4 of
-[`emergency-ssh.txt`](../media/captures/emergency-ssh.txt)). The entry stays
-unresolved until it is confirmed on an isolated OpenSSH target.
+The purple box starts a real `sshd` on `SSHD_TEST_PORT`, 2223 by default
+(`SSH_TEST_PORT` in `config/defaults.conf` sets it too), away from the
+emergency daemon's 2222. Because a probe of the port would be answered by
+whatever holds it, the test first refuses a port that is already in use, and
+after starting the daemon it requires a live pid in the daemon's own pid file:
+`sshd` forks, so its exit status alone does not show that it came up
+([#17](https://github.com/Bissbert/POSIX-hardening/issues/17)). In the container capture, with the emergency daemon
+on 2222, the test on 2223 returns 0, the same test pointed at 2222 fails with
+`Test port 2222 is already in use`, and once 2222 is free it passes again
+(sections 4 to 6 of
+[`emergency-ssh.txt`](../media/captures/emergency-ssh.txt)). Section 5 shows
+why the pid check is needed: a test `sshd` started by hand on the taken port
+exits 0 and writes no pid file.
 
 The last case is a new config that parses, satisfies the port probe, and still
 leaves sshd silent after the reload. That is the case the watchdog exists
@@ -83,7 +84,7 @@ for.
 
 ## The watchdog, captured
 
-The watchdog closes over `$_backup_file`, set at `lib/ssh_safety.sh:194` from
+The watchdog closes over `$_backup_file`, set at `lib/ssh_safety.sh:219` from
 `safe_backup_file`, which returns the backup path alone on stdout. When it
 fires it copies that backup over `sshd_config`, reloads or restarts `sshd`, and
 probes port 22 again before it logs success. Every probe goes through
@@ -102,12 +103,12 @@ RESULT: sshd_config was restored
 sshd back up: yes
 
 == the lines that matter, from the run ==
-79:[INFO] SSH config backed up to: /var/backups/hardening/sshd_config.20260924-084123.bak
+79:[INFO] SSH config backed up to: /var/backups/hardening/sshd_config.20260924-193810.bak
 87:[INFO] Setting up automatic rollback (15s timeout)
 88:[INFO] Reloading SSH daemon
 89:[ERROR] SSH not responding after reload
-97:[ERROR] SSH not responding - executing rollback
-98:[INFO] SSH configuration rolled back and connectivity restored
+101:[ERROR] SSH not responding - executing rollback
+102:[INFO] SSH configuration rolled back and connectivity restored
 ```
 
 ![The SSH watchdog firing and restoring the backup in a Linux container](../media/ssh-watchdog.gif)
@@ -125,7 +126,7 @@ routes back in:
 ```mermaid
 flowchart LR
     PRE["01-ssh-hardening.sh<br/>pre-flight"] --> S{"inside an SSH session"}
-    S -->|"yes, and ENABLE_EMERGENCY_ACCESS=1"| EMG["create_emergency_ssh_access<br/>second sshd, own config,<br/>port from EMERGENCY_SSH_PORT"]
+    S -->|"yes, and ENABLE_EMERGENCY_SSH=1"| EMG["create_emergency_ssh_access<br/>second sshd, own config,<br/>port from EMERGENCY_SSH_PORT"]
     S -->|"no"| SKIP["skipped: a console is assumed"]
     PRE --> FW["ensure_ssh_firewall_access<br/>iptables -I INPUT 1 for SSH_PORT"]
     FW --> ADM{"ADMIN_IP set"}
@@ -139,28 +140,28 @@ flowchart LR
     style SKIP fill:#9e6a03,color:#fff
 ```
 
-One thing to set before using this path: `EMERGENCY_SSH_PORT` defaults to
-2222, the same value as `SSHD_TEST_PORT`, on both the manual path
-(`config/defaults.conf.template:64`) and the Ansible one
-(`ansible/group_vars/all.yml:60` and `:70`). Give the emergency daemon its own
-port, or it will be the thing answering every later config test — the
-mechanism behind [BUG-20](BUGS-FOUND.md#bug-20).
+`EMERGENCY_SSH_PORT` defaults to 2222 and the config test to 2223, on both
+the manual path (`config/defaults.conf.template:58` and `:70`) and the Ansible
+one (`ansible/group_vars/all.yml:60` and `:70`). If both are set to the same
+port while the emergency daemon runs, the config test fails rather than
+passing.
 
 The emergency daemon is a deliberate hole: its generated config sets
 `PermitRootLogin yes` and `PasswordAuthentication yes`
-(`lib/ssh_safety.sh:533-534`). It is a way back in, not a hardened service,
+(`lib/ssh_safety.sh:578-579`). It is a way back in, not a hardened service,
 and `kill_emergency_ssh` is what closes it again. Nothing in the toolkit
-closes it automatically at the end of a run.
+closes it automatically at the end of a run, and a rollback leaves it
+running.
 
-On the manual path it is never opened at all. The gate at
-`scripts/01-ssh-hardening.sh:108` tests `ENABLE_EMERGENCY_ACCESS`, which only
-the two Ansible `defaults.conf.j2` templates ever set — it is absent from
-`config/defaults.conf.template`, so a script that has sourced the generated
-config sees the empty string and skips the branch. The line
-`Currently in SSH session - extra safety measures enabled` is printed just
-above it either way ([BUG-21](BUGS-FOUND.md#bug-21)). Called directly, the
-function works: it writes `/etc/ssh/sshd_emergency_config`, starts a daemon and
-records the port, as section 3 of
+Because it is a hole, it is off by default. The gate at
+`scripts/01-ssh-hardening.sh:111` opens it only when `ENABLE_EMERGENCY_SSH=1`,
+the name `config/defaults.conf.template` uses, or `ENABLE_EMERGENCY_ACCESS=1`,
+the name the Ansible `defaults.conf.j2` templates write; unset means off
+([#18](https://github.com/Bissbert/POSIX-hardening/issues/18)). With it off, a run inside an SSH session logs that
+emergency SSH is off and that the session should stay open until the run
+completes. Called directly, the function writes
+`/etc/ssh/sshd_emergency_config`, starts a daemon and records the port, as
+section 3 of
 [`media/captures/emergency-ssh.txt`](../media/captures/emergency-ssh.txt)
 shows.
 
@@ -194,58 +195,48 @@ flowchart TD
 
 The intent, from `ansible/team_keys/README.md`: the automation key never
 leaves the controller, the team key is what humans carry, and both are
-installed before `01-ssh-hardening` turns off password authentication. Only
-public halves are meant to reach git —
-`.gitignore:87-95` blocks `*_ed25519` and re-admits `*.pub`.
-
-That last part is where it goes wrong. Both public keys are committed, and
-the deployment defaults point straight at them:
+installed before `01-ssh-hardening` turns off password authentication. No key
+is committed: `.gitignore:89` and `:93` ignore both halves, so every operator
+generates their own pair
+([#16](https://github.com/Bissbert/POSIX-hardening/issues/16)). The deployment defaults point at the generated files:
 
 ```yaml
 posix_hardening_ansible_key_path: "{{ playbook_dir }}/team_keys/ansible_ed25519.pub"
 posix_hardening_team_key_path:    "{{ playbook_dir }}/team_keys/team_shared_ed25519.pub"
 ```
 
-A fresh clone therefore arrives with two usable-looking public keys whose
-private halves exist only on whichever machine first ran `generate_keys.sh`.
-`generate_keys.sh` will not replace them, because its `key_exists` test
-matches the `.pub` file alone. Reproduced with
-`tools/capture-team-keys.sh`, output in `media/captures/team-keys.txt`:
+On a fresh clone those files do not exist, so nothing is deployed until
+`generate_keys.sh` has run. `generate_keys.sh` counts a key as present only
+when its private half exists, replaces a stray `.pub`, and exits non-zero if a
+pair is incomplete. Reproduced with `tools/capture-team-keys.sh`, output in
+`media/captures/team-keys.txt`:
 
 ```text
 === 4. generate_keys.sh run in that fresh clone
     [INFO] Generating ansible_ed25519...
-    [WARNING] Key ansible_ed25519 already exists, skipping generation
     [INFO] Generating team_shared_ed25519...
-    [WARNING] Key team_shared_ed25519 already exists, skipping generation
-      (No private keys found)
     exit status: 0
 
 === 5. private keys present in the clone afterwards
-    (nothing listed above means none)
+    /tmp/tmp.UxLGnVeVWz/clone/ansible/team_keys/team_shared_ed25519
+    /tmp/tmp.UxLGnVeVWz/clone/ansible/team_keys/ansible_ed25519
 ```
 
-Run the Ansible path on a fresh clone and `deploy_keys.yml` finds both files
-present, skips its "keys are missing" warning, and installs those public keys
-into `root/.ssh/authorized_keys` on every host — while `01-ssh-hardening`
-disables password login. The operator holds no matching private key. This is
-[BUG-18](BUGS-FOUND.md#bug-18).
-
-The two committed keys, so you can check whether a clone still carries them:
+Earlier versions of the repository committed two public keys whose private
+halves nobody else holds, and the Ansible path deployed them to
+`root/.ssh/authorized_keys`. They are still in the git history. If a host was
+hardened from such a clone, remove these two keys from its `authorized_keys`:
 
 | File | Fingerprint | Comment |
 |---|---|---|
 | `ansible_ed25519.pub` | `SHA256:S7Z7K/80/EdFifFBu7xnq8s5SAY3H2NGnweT4TguV9s` | `ansible-automation@posix-hardening` |
 | `team_shared_ed25519.pub` | `SHA256:7yHffuV420KbdPbB4PAXodEqG0WY4/GEpm4BOXzPwBQ` | `team-access@posix-hardening` |
 
-Deleting both `.pub` files and re-running `generate_keys.sh` produces a fresh
-pair and restores the intended behaviour.
-
 ## The manual path has no key management at all
 
 `scripts/01-ssh-hardening.sh` does not deploy keys. It checks for
 `/root/.ssh/authorized_keys` or `$HOME/.ssh/authorized_keys`
-(`scripts/01-ssh-hardening.sh:120`) and, finding neither, prompts on a TTY and
+(`scripts/01-ssh-hardening.sh:130`) and, finding neither, prompts on a TTY and
 refuses if the answer is not yes. Run without a TTY it logs two warnings and
 carries on to disable password authentication:
 
@@ -267,8 +258,9 @@ it.
 - The container had `nc` installed, so the `ss`/`netstat`/`telnet` fallbacks
   and the no-probe-tool path were not exercised.
 - `create_emergency_ssh_access` was called directly and observed to work. The
-  gated call site in `scripts/01-ssh-hardening.sh` was not reached, because
-  `docker exec` is not an SSH session and `$SSH_CONNECTION` is empty there.
+  gated call site in `scripts/01-ssh-hardening.sh` is covered by
+  `tests/regression/emergency-ssh-setting.sh`, which sets `SSH_CONNECTION`
+  itself; no real SSH session was used.
 - No multi-host Ansible run was performed. The key-deployment behaviour is
   read from `deploy_keys.yml` and from the reproduced state of a fresh clone,
   not from a play against real hosts.

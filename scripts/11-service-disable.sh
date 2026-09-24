@@ -15,7 +15,9 @@ LIB_DIR="$TOOLKIT_ROOT/lib"
 CONFIG_FILE="$TOOLKIT_ROOT/config/defaults.conf"
 
 # Load configuration first (before libraries set readonly variables)
-[ -f "$CONFIG_FILE" ] && . "$CONFIG_FILE"
+# Environment values win over the file (see lib/config.sh)
+. "$LIB_DIR/config.sh"
+load_config "$CONFIG_FILE"
 
 # Source libraries
 . "$LIB_DIR/common.sh"
@@ -51,6 +53,7 @@ disable_services() {
                     log "DRY_RUN" "Would stop and disable service: $service"
                     disabled_count=$((disabled_count + 1))
                 else
+                    track_service "$service"
                     # Stop the service
                     if systemctl stop "$service" 2>/dev/null; then
                         log "INFO" "Stopped service: $service"
@@ -79,6 +82,7 @@ disable_services() {
                     log "DRY_RUN" "Would stop and disable service: $service"
                     disabled_count=$((disabled_count + 1))
                 else
+                    track_service "$service"
                     service "$service" stop 2>/dev/null
                     if command -v update-rc.d >/dev/null 2>&1; then
                         update-rc.d "$service" disable 2>/dev/null

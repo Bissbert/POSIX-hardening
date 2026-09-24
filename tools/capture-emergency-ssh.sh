@@ -1,7 +1,7 @@
 #!/bin/sh
 # capture-emergency-ssh.sh - exercise the emergency SSH fallback in
-# lib/ssh_safety.sh and record what it does to the test daemon that
-# test_ssh_config wants to start on the same port.
+# lib/ssh_safety.sh and record how test_ssh_config behaves next to it: on
+# its own default port, and when both are pointed at the same port.
 #
 # WARNING: container only. See tools/capture-lib.sh.
 #
@@ -28,18 +28,15 @@ docker exec "$CNAME" sh -c '
         | sed "s/^/    /"
 
     echo
-    echo "=== 2. is ENABLE_EMERGENCY_ACCESS set by config/defaults.conf"
-    if grep -q "ENABLE_EMERGENCY_ACCESS" config/defaults.conf; then
-        grep -n "ENABLE_EMERGENCY_ACCESS" config/defaults.conf | sed "s/^/    /"
-    else
-        echo "    not present in config/defaults.conf"
-    fi
+    echo "=== 2. which setting starts the emergency sshd"
+    grep -n "ENABLE_EMERGENCY_SSH\|ENABLE_EMERGENCY_ACCESS" config/defaults.conf \
+        | sed "s/^/    /" || echo "    neither is in config/defaults.conf"
     echo "    the gate in scripts/01-ssh-hardening.sh:"
-    grep -n "ENABLE_EMERGENCY_ACCESS" scripts/01-ssh-hardening.sh \
+    grep -n "ENABLE_EMERGENCY_SSH:-0" scripts/01-ssh-hardening.sh \
         | sed "s/^/      /"
     echo "    value seen by a script after sourcing the config:"
     ( . ./config/defaults.conf
-      echo "      ENABLE_EMERGENCY_ACCESS=[${ENABLE_EMERGENCY_ACCESS:-}]" )
+      echo "      ENABLE_EMERGENCY_SSH=[${ENABLE_EMERGENCY_SSH:-}]" )
 
     echo
     echo "=== 3. create_emergency_ssh_access 2222"
@@ -55,24 +52,34 @@ docker exec "$CNAME" sh -c '
         || echo "      nothing"
 
     echo
-    echo "=== 4. what test_ssh_config does while the emergency daemon holds 2222"
-    echo "    listeners before the test:"
-    ss -ltnp 2>/dev/null | grep ":2222" | sed "s/^/      /"
+    echo "=== 4. test_ssh_config on its default port while the emergency daemon holds 2222"
     cp /etc/ssh/sshd_config /tmp/candidate
     LIB_DIR=/opt/posix-hardening/lib sh -c "
         . ./config/defaults.conf
         . lib/common.sh
         . lib/ssh_safety.sh
-        test_ssh_config /tmp/candidate
-        echo \"    test_ssh_config returned: \$?\"
+        echo \"    test port: \$SSHD_TEST_PORT\"
+        # common.sh sets -e; keep the shell alive to print the status
+        test_ssh_config /tmp/candidate && rc=0 || rc=\$?
+        echo \"    test_ssh_config returned: \$rc\"
     " 2>&1 | sed "s/\x1b\[[0-9;]*m//g" | sed "s/^/    /"
-    echo "    listeners after the test:"
-    ss -ltnp 2>/dev/null | grep ":2222" | sed "s/^/      /"
-    echo "    /var/run/sshd_test.pid:"
-    ls -l /var/run/sshd_test.pid 2>&1 | sed "s/^/      /"
 
     echo
-    echo "=== 5. the same start, run by hand, so its exit status is visible"
+    echo "=== 4b. the same test pointed at 2222, the port the emergency daemon holds"
+    echo "    listeners before the test:"
+    ss -ltnp 2>/dev/null | grep ":2222" | sed "s/^/      /"
+    LIB_DIR=/opt/posix-hardening/lib SSHD_TEST_PORT=2222 sh -c "
+        . ./config/defaults.conf
+        . lib/common.sh
+        . lib/ssh_safety.sh
+        # common.sh sets -e; keep the shell alive to print the status
+        test_ssh_config /tmp/candidate && rc=0 || rc=\$?
+        echo \"    test_ssh_config returned: \$rc\"
+    " 2>&1 | sed "s/\x1b\[[0-9;]*m//g" | sed "s/^/    /"
+
+    echo
+    echo "=== 5. why the test also checks the pid file: a test sshd started by"
+    echo "===    hand on the taken port"
     LIB_DIR=/opt/posix-hardening/lib sh -c "
         . ./config/defaults.conf
         . lib/common.sh
@@ -91,17 +98,18 @@ docker exec "$CNAME" sh -c '
     rm -f /tmp/candidate.test
 
     echo
-    echo "=== 6. the same test with port 2222 free"
+    echo "=== 6. the test on 2222 once the port is free"
     kill "$(cat /var/run/sshd_emergency.pid 2>/dev/null)" 2>/dev/null || true
     sleep 1
     ss -ltn 2>/dev/null | grep -q ":2222" \
         && echo "    2222 still held" || echo "    2222 is free"
-    LIB_DIR=/opt/posix-hardening/lib sh -c "
+    LIB_DIR=/opt/posix-hardening/lib SSHD_TEST_PORT=2222 sh -c "
         . ./config/defaults.conf
         . lib/common.sh
         . lib/ssh_safety.sh
-        test_ssh_config /tmp/candidate
-        echo \"    test_ssh_config returned: \$?\"
+        # common.sh sets -e; keep the shell alive to print the status
+        test_ssh_config /tmp/candidate && rc=0 || rc=\$?
+        echo \"    test_ssh_config returned: \$rc\"
     " 2>&1 | sed "s/\x1b\[[0-9;]*m//g" | sed "s/^/    /"
 ' > "$OUT" 2>&1 || true
 

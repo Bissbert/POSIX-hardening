@@ -15,7 +15,9 @@ LIB_DIR="$TOOLKIT_ROOT/lib"
 CONFIG_FILE="$TOOLKIT_ROOT/config/defaults.conf"
 
 # Load configuration first (before libraries set readonly variables)
-[ -f "$CONFIG_FILE" ] && . "$CONFIG_FILE"
+# Environment values win over the file (see lib/config.sh)
+. "$LIB_DIR/config.sh"
+load_config "$CONFIG_FILE"
 
 # Source libraries
 . "$LIB_DIR/common.sh"
@@ -102,12 +104,20 @@ pre_flight_checks() {
 
     # Check if we're in an SSH session
     if [ -n "$SSH_CONNECTION" ] || [ -n "$SSH_CLIENT" ]; then
-        show_warning "Currently in SSH session - extra safety measures enabled"
-
-        # Create emergency SSH access as fallback
-        if [ "$ENABLE_EMERGENCY_ACCESS" = "1" ]; then
-            create_emergency_ssh_access "$EMERGENCY_SSH_PORT" || \
-                log "WARN" "Could not create emergency SSH access"
+        # The emergency daemon allows root login with a password, so it only
+        # starts when asked for. ENABLE_EMERGENCY_SSH is the name in
+        # config/defaults.conf; the Ansible template writes
+        # ENABLE_EMERGENCY_ACCESS. Unset means off.
+        if [ "${ENABLE_EMERGENCY_SSH:-0}" = "1" ] || [ "${ENABLE_EMERGENCY_ACCESS:-0}" = "1" ]; then
+            show_warning "Currently in SSH session - starting emergency SSH on port ${EMERGENCY_SSH_PORT:-2222}"
+            if [ "$DRY_RUN" = "1" ]; then
+                log "DRY_RUN" "Would create emergency SSH on port ${EMERGENCY_SSH_PORT:-2222}"
+            else
+                create_emergency_ssh_access "${EMERGENCY_SSH_PORT:-2222}" || \
+                    log "WARN" "Could not create emergency SSH access"
+            fi
+        else
+            show_warning "Currently in SSH session - emergency SSH is off (ENABLE_EMERGENCY_SSH=0); keep this session open until the run completes"
         fi
     fi
 
@@ -211,6 +221,10 @@ fix_ssh_permissions() {
 
     # Fix SSH daemon files
     if [ -d /etc/ssh ]; then
+        for _f in /etc/ssh /etc/ssh/*.pub /etc/ssh/ssh_host_*_key \
+                  /etc/ssh/ssh_config /etc/ssh/sshd_config; do
+            track_mode "$_f"
+        done
         chmod 755 /etc/ssh
         chmod 644 /etc/ssh/*.pub 2>/dev/null || true
         chmod 600 /etc/ssh/ssh_host_*_key 2>/dev/null || true
@@ -249,6 +263,7 @@ configure_ssh_banner() {
     show_progress "Configuring SSH banner"
 
     # Create warning banner
+    track_file "$banner_file"
     cat > "$banner_file" <<'EOF'
 ###############################################################
 #                      SECURITY WARNING                      #

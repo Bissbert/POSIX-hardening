@@ -1,7 +1,7 @@
 #!/bin/sh
 # shell-semantics-demo.sh - demonstrate the four POSIX shell behaviours that
-# several bugs in this repository rest on, so the claims in
-# docs/BUGS-FOUND.md can be checked without reading the toolkit.
+# several defects fixed in this repository rested on, so the explanations in
+# docs/measurement.md can be checked without reading the toolkit.
 #
 # Each demo is self-contained and touches nothing outside its own temp dir.
 # It is safe to run on a workstation; it runs inside the analysis container
@@ -37,7 +37,7 @@ sh "$ROOT/tools/analysis-env.sh" build >/dev/null
 
             echo
             echo "--- 1. a while loop fed by a pipeline runs in a subshell,"
-            echo "---    so assignments made in it are lost (BUG-9b, BUG-9c)"
+            echo "---    so assignments made in it are lost"
             run "
                 n=0
                 printf \"a\nb\nc\n\" | while read -r x; do n=\$((n+1)); done
@@ -46,7 +46,7 @@ sh "$ROOT/tools/analysis-env.sh" build >/dev/null
 
             echo
             echo "--- 2. return inside that subshell leaves the subshell,"
-            echo "---    not the function (BUG-5, BUG-9a)"
+            echo "---    not the function"
             run "
                 f() {
                     printf \"a\nb\n\" | while read -r x; do return 1; done
@@ -56,7 +56,7 @@ sh "$ROOT/tools/analysis-env.sh" build >/dev/null
             "
 
             echo
-            echo "--- 3. break 2 cannot see a loop in the parent shell (BUG-16)"
+            echo "--- 3. break 2 cannot see a loop in the parent shell"
             run "
                 for outer in 1 2 3; do
                     printf \"a\nb\n\" | while read -r x; do break 2; done
@@ -66,7 +66,7 @@ sh "$ROOT/tools/analysis-env.sh" build >/dev/null
 
             echo
             echo "--- 4. A || B | C parses as A || (B | C), so when A succeeds"
-            echo "---    the loop in C never runs (BUG-17)"
+            echo "---    the loop in C never runs"
             run "
                 printf \"A|1\nB|2\n\" > /tmp/s.txt
                 tac /tmp/s.txt 2>/dev/null || tail -r /tmp/s.txt 2>/dev/null | while IFS=\"|\" read -r t d; do
@@ -77,7 +77,7 @@ sh "$ROOT/tools/analysis-env.sh" build >/dev/null
 
             echo
             echo "--- 5. local is dynamically scoped: a callee that assigns the"
-            echo "---    same name overwrites the callers local (BUG-15)"
+            echo "---    same name overwrites the callers local"
             run "
                 callee() { level=\"CLOBBERED\"; }
                 caller() {

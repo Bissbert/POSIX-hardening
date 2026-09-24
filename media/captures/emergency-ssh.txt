@@ -1,15 +1,16 @@
 === 1. the two ports the toolkit defaults to
-    12:readonly SSHD_TEST_PORT="${SSHD_TEST_PORT:-2222}"
-    64:EMERGENCY_SSH_PORT=2222      # Emergency SSH port number
-    60:ssh_test_port: 2222              # Port for connectivity testing
+    15:readonly SSHD_TEST_PORT="${SSHD_TEST_PORT:-${SSH_TEST_PORT:-2223}}"
+    70:EMERGENCY_SSH_PORT=2222      # Emergency SSH port number
+    60:ssh_test_port: 2223              # Test sshd port; must differ from emergency_ssh_port
     70:emergency_ssh_port: 2222         # Emergency SSH port number
 
-=== 2. is ENABLE_EMERGENCY_ACCESS set by config/defaults.conf
-    not present in config/defaults.conf
+=== 2. which setting starts the emergency sshd
+    69:ENABLE_EMERGENCY_SSH=0       # Emergency sshd on alternate port (1=on, 0=off)
+    204:# 6. Emergency access: ssh -p 2222 user@host (if ENABLE_EMERGENCY_SSH=1)
     the gate in scripts/01-ssh-hardening.sh:
-      108:        if [ "$ENABLE_EMERGENCY_ACCESS" = "1" ]; then
+      111:        if [ "${ENABLE_EMERGENCY_SSH:-0}" = "1" ] || [ "${ENABLE_EMERGENCY_ACCESS:-0}" = "1" ]; then
     value seen by a script after sourcing the config:
-      ENABLE_EMERGENCY_ACCESS=[]
+      ENABLE_EMERGENCY_SSH=[0]
 
 === 3. create_emergency_ssh_access 2222
     [WARN] Creating emergency SSH access on port 2222
@@ -19,31 +20,33 @@
       LISTEN 0      128          0.0.0.0:2222      0.0.0.0:*          
       LISTEN 0      128             [::]:2222         [::]:*          
 
-=== 4. what test_ssh_config does while the emergency daemon holds 2222
-    listeners before the test:
-      LISTEN 0      128          0.0.0.0:2222      0.0.0.0:*    users:(("sshd",pid=46,fd=3))
-      LISTEN 0      128             [::]:2222         [::]:*    users:(("sshd",pid=46,fd=4))
+=== 4. test_ssh_config on its default port while the emergency daemon holds 2222
+        test port: 2223
     [INFO] Testing SSH configuration: /tmp/candidate
     [INFO] Test SSH daemon is accepting connections
         test_ssh_config returned: 0
-    listeners after the test:
-      LISTEN 0      128          0.0.0.0:2222      0.0.0.0:*    users:(("sshd",pid=46,fd=3))
-      LISTEN 0      128             [::]:2222         [::]:*    users:(("sshd",pid=46,fd=4))
-    /var/run/sshd_test.pid:
-      ls: cannot access '/var/run/sshd_test.pid': No such file or directory
 
-=== 5. the same start, run by hand, so its exit status is visible
+=== 4b. the same test pointed at 2222, the port the emergency daemon holds
+    listeners before the test:
+      LISTEN 0      128          0.0.0.0:2222      0.0.0.0:*    users:(("sshd",pid=47,fd=3))
+      LISTEN 0      128             [::]:2222         [::]:*    users:(("sshd",pid=47,fd=4))
+    [INFO] Testing SSH configuration: /tmp/candidate
+    [ERROR] Test port 2222 is already in use; set SSHD_TEST_PORT to a free port
+        test_ssh_config returned: 1
+
+=== 5. why the test also checks the pid file: a test sshd started by
+===    hand on the taken port
     the port and pid file the test config asks for:
       Port 2222
       PidFile /var/run/sshd_test.pid
     /usr/sbin/sshd -f exit status: 0
     listeners on 2222 afterwards:
-      LISTEN 0      128          0.0.0.0:2222      0.0.0.0:*    users:(("sshd",pid=46,fd=3))
-      LISTEN 0      128             [::]:2222         [::]:*    users:(("sshd",pid=46,fd=4))
+      LISTEN 0      128          0.0.0.0:2222      0.0.0.0:*    users:(("sshd",pid=47,fd=3))
+      LISTEN 0      128             [::]:2222         [::]:*    users:(("sshd",pid=47,fd=4))
     /var/run/sshd_test.pid:
       ls: cannot access '/var/run/sshd_test.pid': No such file or directory
 
-=== 6. the same test with port 2222 free
+=== 6. the test on 2222 once the port is free
     2222 is free
     [INFO] Testing SSH configuration: /tmp/candidate
     [INFO] Test SSH daemon is accepting connections

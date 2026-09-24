@@ -2,18 +2,19 @@
 
 [← back to the documentation index](README.md)
 
-Five files in `lib/` hold everything the 21 hardening scripts share: logging,
-configuration, backups, transactions and the SSH safety net. This page maps
+Six files in `lib/` hold everything the 21 hardening scripts share:
+configuration, logging, backups, transactions and the SSH safety net. This page maps
 them, shows the load order every script depends on, and marks the parts that
 are defined but never reached.
 
-## The five files
+## The six files
 
 | File | Lines | Functions | What it owns |
 |---|---|---|---|
-| `lib/common.sh` | 565 | 25 | Configuration, logging, the environment check, completion markers, progress output |
-| `lib/ssh_safety.sh` | 585 | 12 | The SSH lockout-avoidance path: test daemon, watchdog, emergency access |
-| `lib/rollback.sh` | 628 | 19 | Transactions, the undo stack, traps, checkpoints |
+| `lib/config.sh` | 47 | 1 | `load_config`: flags and environment win over `config/defaults.conf` |
+| `lib/common.sh` | 565 | 25 | Configuration defaults, logging, the environment check, completion markers, progress output |
+| `lib/ssh_safety.sh` | 630 | 13 | The SSH lockout-avoidance path: test daemon, watchdog, emergency access |
+| `lib/rollback.sh` | 910 | 28 | Transactions, the undo stack, the `track_*` helpers, traps, checkpoints |
 | `lib/backup.sh` | 448 | 9 | File and directory backups, system snapshots, restore |
 | `lib/posix_compat.sh` | 271 | 7 | Portable replacements for `tac`, `mktemp`, `sed -i`, `realpath`, `timeout` |
 
@@ -24,7 +25,7 @@ Counts from `wc -l` and a grep for top-level `name() {` definitions.
 ```mermaid
 flowchart TD
     S["scripts/NN-*.sh"]
-    S --> C1["1. config/defaults.conf<br/>plain variable assignments"]
+    S --> C1["1. lib/config.sh, then<br/>load_config config/defaults.conf"]
     C1 --> C2["2. lib/common.sh"]
     C2 --> C3["3. lib/ssh_safety.sh"]
     C3 --> C4["4. lib/backup.sh"]
@@ -48,14 +49,16 @@ is when `common.sh` is sourced becomes permanent for the rest of the process.
 
 Two consequences follow, and both are load-bearing:
 
-- **Configuration must be sourced first.** Every script in `scripts/` sources
-  `config/defaults.conf` before `lib/common.sh`, with a comment saying why.
-  `orchestrator.sh` does it the other way round and cannot start when the
-  config file exists ([BUG-7](BUGS-FOUND.md#bug-7), open).
+- **Configuration must be loaded first.** `orchestrator.sh` and every script
+  in `scripts/` call `load_config config/defaults.conf` before
+  `lib/common.sh`, with a comment saying why. `load_config` sources the file
+  but keeps every variable that already had a non-empty value, so command-line
+  flags (which the orchestrator exports before loading) and the environment
+  win over the file ([#13](https://github.com/Bissbert/POSIX-hardening/issues/13), [#15](https://github.com/Bissbert/POSIX-hardening/issues/15)).
 - **Nothing may assign those names later.** `emergency-rollback.sh` sets
-  `SAFETY_MODE=0` and `DRY_RUN=0` before it sources `common.sh`, which is the
-  correct order. `orchestrator.sh` still assigns `DRY_RUN` after the fact when
-  given `--dry-run`, and exits 2 ([BUG-8](BUGS-FOUND.md#bug-8), open).
+  `SAFETY_MODE=0` and `DRY_RUN=0` before it sources `common.sh`, and
+  `orchestrator.sh` handles `--dry-run` before it loads anything
+  ([#14](https://github.com/Bissbert/POSIX-hardening/issues/14)).
 
 The dotted edges are how the two consumers of `lib/posix_compat.sh` find it.
 They cannot compute their own location, because in a sourced file `$0` is the
@@ -88,7 +91,7 @@ which tries `nc`, `ss`, `netstat` and `telnet` in turn, each behind a
 `command -v` check, and logs an error when none is installed; every probe in
 `lib/ssh_safety.sh` uses it.
 
-## `lib/backup.sh` and how a backup is meant to reach rollback
+## `lib/backup.sh` and how a backup reaches rollback
 
 ```mermaid
 sequenceDiagram
@@ -116,9 +119,11 @@ captured value is one line naming an existing file.
 The backups are `cp -p` copies with a `.meta` and a `.sha256` sidecar, listed
 in a `manifest` under `/var/backups/hardening/`.
 
-The bottom half of that diagram is mostly unused, though: only
-`scripts/02-firewall-setup.sh` registers an undo action at all
-([BUG-24](BUGS-FOUND.md#bug-24), open).
+The scripts mostly reach the stack through the `track_*` helpers in
+`lib/rollback.sh` instead, which copy the file into
+`/var/backups/hardening/transactions/` themselves and register the matching
+undo action; [rollback.md](rollback.md#how-the-scripts-register-their-undo-actions)
+lists them.
 
 ## `lib/posix_compat.sh`
 
@@ -127,8 +132,8 @@ Seven helpers that exist because the toolkit targets POSIX `sh` rather than
 
 | Function | Replaces | Callers found in `lib/` |
 |---|---|---|
-| `posix_sed_inplace` | `sed -i` | `ssh_safety.sh:85`, `:92` (`create_ssh_test_config`), `:356` (`update_ssh_setting`) |
-| `posix_reverse` | `tac` | `rollback.sh:95` (`rollback_transaction`), `:474` (`rollback_to_checkpoint`) |
+| `posix_sed_inplace` | `sed -i` | `ssh_safety.sh:91`, `:98` (`create_ssh_test_config`), `:388` (`update_ssh_setting`) |
+| `posix_reverse` | `tac` | `rollback.sh:101` (`rollback_transaction`), `:756` (`rollback_to_checkpoint`) |
 | `posix_mktemp` | `mktemp` without a template | none |
 | `posix_realpath` | `realpath` | none |
 | `posix_timeout` | `timeout` | none |
@@ -148,7 +153,7 @@ Measured by grepping for callers outside `lib/`:
 | Area | Functions with no caller outside `lib/` | Status |
 |---|---|---|
 | Checkpoints | `create_checkpoint`, `rollback_to_checkpoint` | No callers; the API works but nothing uses it |
-| Undo registration | all five `register_*_rollback` except one call site | One call in 21 scripts ([BUG-24](BUGS-FOUND.md#bug-24), open) |
+| Undo registration | `register_service_rollback`, `register_firewall_rollback` | No callers; the scripts register through the `track_*` helpers, `register_file_rollback` and `register_command_rollback` |
 | Backup browsing | `list_backups`, `list_snapshots`, `cleanup_old_backups`, `backup_directory`, `generate_backup_name` | Defined, no caller |
 | SSH config testing | `create_ssh_test_config`, `test_ssh_config`, `manage_ssh_access` | Called only from within `lib/ssh_safety.sh` |
 | Atomic helpers | `atomic_operation`, `atomic_file_update`, `safe_file_operation`, `safe_service_operation` | No callers |
@@ -166,9 +171,11 @@ reached by any documented workflow.
 - **Line and function counts are structural, not semantic.** `565 lines` counts
   comments and blank lines; `25 functions` counts top-level `name() {`
   definitions and would miss a function defined conditionally.
-- **No library function was unit-tested in isolation.** What was exercised is
-  what the captured runs in [measurement.md](measurement.md) exercised, plus
-  the targeted probes in `tools/capture-*.sh`. `lib/backup.sh`'s snapshot and
+- **Few library functions are tested in isolation.** What was exercised is
+  what the captured runs in [measurement.md](measurement.md) exercised, the
+  targeted probes in `tools/capture-*.sh`, and the regression tests under
+  `tests/regression/`, which cover `load_config`, the rollback default,
+  `test_ssh_config` and every `track_*` helper. `lib/backup.sh`'s snapshot and
   restore functions, in particular, were never run.
 - **`lib/posix_compat.sh` is exercised only indirectly.** It is loaded by every
   captured run, but no capture calls its functions directly.

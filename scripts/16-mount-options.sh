@@ -11,8 +11,11 @@ TOOLKIT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 LIB_DIR="$TOOLKIT_ROOT/lib"
 CONFIG_FILE="$TOOLKIT_ROOT/config/defaults.conf"
 # Load configuration first (before libraries set readonly variables)
-[ -f "$CONFIG_FILE" ] && . "$CONFIG_FILE"
+# Environment values win over the file (see lib/config.sh)
+. "$LIB_DIR/config.sh"
+load_config "$CONFIG_FILE"
 . "$LIB_DIR/common.sh"
+. "$LIB_DIR/rollback.sh"
 
 SCRIPT_NAME="16-mount-options"
 
@@ -21,18 +24,21 @@ secure_mounts() {
 
     # Remount /proc with hidepid
     if mount | grep -q " /proc "; then
+        track_mount /proc
         mount -o remount,hidepid=2 /proc 2>/dev/null && \
             log "INFO" "Remounted /proc with hidepid=2"
     fi
 
     # Remount /dev/shm
     if mount | grep -q " /dev/shm "; then
+        track_mount /dev/shm
         mount -o remount,noexec,nosuid,nodev /dev/shm 2>/dev/null && \
             log "INFO" "Secured /dev/shm mount"
     fi
 
     # Add nodev to /home if separate partition
     if mount | grep -q " /home "; then
+        track_mount /home
         mount -o remount,nodev /home 2>/dev/null && \
             log "INFO" "Added nodev to /home"
     fi
@@ -42,12 +48,14 @@ secure_mounts() {
 
 main() {
     init_hardening_environment "$SCRIPT_NAME"
+    begin_transaction "mount_options"
 
     if [ "$DRY_RUN" != "1" ]; then
         secure_mounts
     fi
 
     mark_completed "$SCRIPT_NAME"
+    commit_transaction
     exit 0
 }
 

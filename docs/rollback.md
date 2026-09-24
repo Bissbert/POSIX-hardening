@@ -5,8 +5,8 @@
 `lib/rollback.sh` is the safety story of this toolkit. Every hardening script
 opens a transaction, registers an undo action before each change, and relies on
 an `EXIT` trap to replay those actions in reverse if anything fails. This page
-describes that machinery, shows a captured file restore, and then measures how
-little of the toolkit actually registers anything to restore.
+describes that machinery, shows a captured file restore, lists what each
+script registers, and names the few changes that are deliberately not undone.
 
 ## The state machine
 
@@ -16,11 +16,11 @@ stateDiagram-v2
 
     Idle --> Open: begin_transaction<br/>clears the stack, writes the id<br/>traps EXIT INT TERM
 
-    Open --> Open: register_file_rollback<br/>register_command_rollback<br/>register_service_rollback<br/>register_sysctl_rollback<br/>register_firewall_rollback
+    Open --> Open: track_file, track_mode, track_sysctl …<br/>register_file_rollback<br/>register_command_rollback
 
     Open --> Committed: script exits 0<br/>commit_transaction
     Open --> Rolling: script exits non-zero<br/>and ROLLBACK_ENABLED is 1
-    Open --> Abandoned: script exits non-zero<br/>and ROLLBACK_ENABLED is unset
+    Open --> Abandoned: script exits non-zero<br/>and ROLLBACK_ENABLED=0
 
     Rolling --> Replaying: stack is non-empty<br/>reversed with posix_reverse
     Rolling --> Cleared: stack is empty
@@ -35,19 +35,18 @@ stateDiagram-v2
 
     state Replaying {
         [*] --> FILE_RESTORE
-        [*] --> COMMAND
-        [*] --> SERVICE
+        [*] --> MODE
         [*] --> SYSCTL
-        [*] --> FIREWALL
+        [*] --> SERVICE_STATE
+        [*] --> MOUNT
+        [*] --> ACCOUNT
+        [*] --> COMMAND
     }
 ```
 
-One transition in that diagram is still a risk:
-`Open --> Abandoned`. `ROLLBACK_ENABLED` has no default, so without
-`config/defaults.conf` the trap runs and does nothing
-([BUG-4](BUGS-FOUND.md#bug-4), open). The fix is not a one-liner, because the
-same missing file is what lets the orchestrator start at all
-([BUG-7](BUGS-FOUND.md#bug-7)); see the README for how the two interact.
+`ROLLBACK_ENABLED` defaults to 1, with or without `config/defaults.conf`, so
+`Open --> Abandoned` happens only when an operator sets `ROLLBACK_ENABLED=0`
+([#12](https://github.com/Bissbert/POSIX-hardening/issues/12)).
 
 ## What a rollback action looks like
 
@@ -57,9 +56,16 @@ action per line, `TYPE|DATA`:
 | Type | `DATA` | Replayed by |
 |---|---|---|
 | `FILE_RESTORE` | `backup_path:original_path` | `cp -p` back over the original |
+| `FILE_REMOVE` | a path | `rm -f`, for a file the transaction created |
+| `DIR_REMOVE` | a path | `rmdir`, for a directory the transaction created |
+| `LINK` | `path:target` | `ln -sfn`, puts a symlink back |
+| `MODE` | `mode:uid:gid:path` | `chmod` and `chown` |
+| `SERVICE_STATE` | `name:enabled:active` | enables and starts the service again if it was enabled or running |
+| `MOUNT` | `mountpoint:options` | `mount -o remount` with the old options |
+| `ACCOUNT` | `user:shell:lastchg:password` | `usermod -s -p`, then `chage -d` |
 | `COMMAND` | a shell command | `eval` |
 | `SERVICE` | `name:start`, `name:stop`, `name:restart`, `name:reload` | `safe_service_<action>` |
-| `SYSCTL` | `parameter:value` | `sysctl -w` |
+| `SYSCTL` | `parameter:value` | `sysctl -w`, or a write to the `/proc/sys` path |
 | `FIREWALL` | a shell command | `eval`, if `iptables` exists |
 
 `rollback_transaction` moves the stack aside, reverses it with `posix_reverse`,
@@ -102,13 +108,13 @@ The captured return value and the stack:
 
 ```text
 == what safe_backup_file actually returns ==
-[INFO] Backed up /etc/demo.conf to /var/backups/hardening/demo.conf.20260924-084115.bak
-     1	/var/backups/hardening/demo.conf.20260924-084115.bak
+[INFO] Backed up /etc/demo.conf to /var/backups/hardening/demo.conf.20260924-193506.bak
+     1	/var/backups/hardening/demo.conf.20260924-193506.bak
 lines captured: 1
 names an existing file: yes
 
 == rollback stack contents ==
-     1	FILE_RESTORE|/var/backups/hardening/demo.conf.20260924-084115.bak:/etc/demo.conf
+     1	FILE_RESTORE|/var/backups/hardening/demo.conf.20260924-193506.bak:/etc/demo.conf
 ```
 
 The `[INFO]` line is on stderr, so it appears in the terminal but not in the
@@ -121,90 +127,109 @@ ORIGINAL - this must come back after rollback
 RESULT: file was restored
 ```
 
-The demo registers its own undo action. None of the scripts that edit
-`/etc/sysctl.conf` do, so in the captured `03-kernel-params.sh` run
-([`media/captures/03-kernel-params.log`](../media/captures/03-kernel-params.log))
-the hardening block was still in the file after `Rollback completed`. The next
-section is why.
+## How the scripts register their undo actions
 
-## How much of the toolkit is actually inside a transaction
+Every script opens a transaction, and before each change it calls one of the
+`track_*` helpers in `lib/rollback.sh`
+([#19](https://github.com/Bissbert/POSIX-hardening/issues/19)). Each helper
+records the current state and registers the undo action for it, once per
+object per transaction, so a rollback returns to the state before the script
+started:
 
-The demo above shows that a registered file comes back. The larger question is
-how often a hardening script registers anything at all.
+| Helper | Called before | Registers |
+|---|---|---|
+| `track_file PATH` | editing, replacing or creating a file | a copy under `/var/backups/hardening/transactions/` and `FILE_RESTORE`; `FILE_REMOVE` if the file did not exist; `LINK` for a symlink |
+| `track_dir PATH` | creating a directory | `DIR_REMOVE` if it did not exist |
+| `track_mode PATH` | `chmod` or `chown` | `MODE` |
+| `track_sysctl NAME`, `track_sysctl_file FILE` | `sysctl -w`, `sysctl -p` or a write to `/proc/sys` | `SYSCTL` with the live value, for every key the file sets |
+| `track_service NAME` | stopping or disabling a service | `SERVICE_STATE` |
+| `track_mount MOUNTPOINT` | a remount | `MOUNT` with the current options |
+| `track_account USER` | `usermod -L` or `-s` | `ACCOUNT` |
 
-Once. `tools/capture-rollback-coverage.sh` counts both sides of the API across
-`scripts/`:
+In a dry run, or outside a transaction, the helpers record nothing.
+`update_ssh_config_safe` registers the restore of `sshd_config` and an sshd
+reload for its caller. `02-firewall-setup.sh` registers `iptables-restore` of
+the saved rules, and before that a reset of the filter tables to `ACCEPT`, so
+that a host that had no rules gets back to none.
+
+`tools/capture-rollback-coverage.sh` counts the calls per script
+([`media/captures/rollback-coverage.txt`](../media/captures/rollback-coverage.txt)):
 
 ```text
-    script                     begin commit rollback register
-    00-ssh-verification.sh         1      1        3        0
-    01-ssh-hardening.sh            1      2        4        0
-    02-firewall-setup.sh           1      1        1        1
-    03-kernel-params.sh            1      1        0        0
-    04-network-stack.sh            1      1        0        0
-    05-file-permissions.sh         1      1        0        0
-    06-process-limits.sh           1      1        0        0
-    07-audit-logging.sh            0      0        0        0
-    08-password-policy.sh          1      1        0        0
-    09-account-lockdown.sh         0      0        0        0
-    10-sudo-restrictions.sh        1      1        0        0
-    11-service-disable.sh          1      1        1        0
-    12-tmp-hardening.sh            0      0        0        0
-    13-core-dump-disable.sh        0      0        0        0
-    14-sysctl-hardening.sh         1      1        0        0
-    15-cron-restrictions.sh        0      0        0        0
-    16-mount-options.sh            0      0        0        0
-    17-shell-timeout.sh            0      0        0        0
-    18-banner-warnings.sh          0      0        0        0
-    19-log-retention.sh            0      0        0        0
-    20-integrity-baseline.sh       0      0        0        0
-    TOTAL over 21 scripts         11     12        9        1
+    script                     begin commit register  track
+    00-ssh-verification.sh         1      1        2      0
+    01-ssh-hardening.sh            1      2        0      2
+    02-firewall-setup.sh           1      1        3      7
+    03-kernel-params.sh            1      1        0      2
+    04-network-stack.sh            1      1        0     12
+    05-file-permissions.sh         1      1        0      1
+    06-process-limits.sh           1      1        0      1
+    07-audit-logging.sh            1      1        1      2
+    08-password-policy.sh          1      1        0      2
+    09-account-lockdown.sh         1      1        0      2
+    10-sudo-restrictions.sh        1      1        0      2
+    11-service-disable.sh          1      1        0      2
+    12-tmp-hardening.sh            1      1        0      3
+    13-core-dump-disable.sh        1      1        0      4
+    14-sysctl-hardening.sh         1      1        0      2
+    15-cron-restrictions.sh        1      1        0      5
+    16-mount-options.sh            1      1        0      3
+    17-shell-timeout.sh            1      1        0      2
+    18-banner-warnings.sh          1      1        0      3
+    19-log-retention.sh            1      1        0      2
+    20-integrity-baseline.sh       1      1        0      3
+    TOTAL over 21 scripts         21     22        6     62
 ```
 
-Full output:
-[`media/captures/rollback-coverage.txt`](../media/captures/rollback-coverage.txt).
+`00-ssh-verification.sh` has no `track_*` call because its only change goes
+through `update_ssh_config_safe`, which registers for it.
 
-```mermaid
-flowchart TD
-    ALL["21 scripts in scripts/"]
-    ALL --> NOTX["10 open no transaction<br/>07 09 12 13 15 16 17 18 19 20"]
-    ALL --> TX["11 open a transaction"]
-    TX --> EMPTY["10 register nothing<br/>stack stays empty"]
-    TX --> ONE["1 registers an undo action<br/>02-firewall-setup.sh:94"]
+A count shows that a call is there, not that it undoes the change. That is
+what `tests/regression/rollback-coverage.sh` checks, in a Debian 12 container
+(`sh tests/docker.sh rollback-coverage`). For each of scripts 01 to 20 it:
 
-    EMPTY --> OUT1["rollback_transaction logs<br/>Rollback completed, undoes nothing"]
-    ONE --> OUT2["one iptables-restore<br/>is replayed"]
+1. takes a snapshot of the files, modes, kernel parameters, mounts, firewall
+   rules, accounts and service state the scripts touch;
+2. runs the script so that it fails after its last change (the completion
+   marker cannot be written), and checks that it exits non-zero, that the
+   rollback log records a rollback, and that the snapshot is unchanged;
+3. runs the script again normally and checks that the snapshot does change,
+   so the comparison is not vacuous.
 
-    style ALL fill:#8250df,color:#fff
-    style NOTX fill:#da3633,color:#fff
-    style EMPTY fill:#da3633,color:#fff
-    style OUT1 fill:#da3633,color:#fff
-    style ONE fill:#238636,color:#fff
-    style OUT2 fill:#238636,color:#fff
-```
+All 20 scripts come back to the snapshot. `00-ssh-verification.sh` reinstalls
+the SSH package, which the offline container cannot do, so the test checks
+its registrations statically.
 
-`scripts/01-ssh-hardening.sh` is the clearest case. It calls
-`rollback_transaction` on four separate failure paths — a failed config update,
-lost connectivity, failed validation, failed verification — and registers
-nothing on any of them. Each of those four calls reaches
-`rollback_transaction` with an empty stack, takes the `Cleared` transition in
-the state machine at the top of this page, logs `Rollback completed` and
-returns 0.
+In the captured hardening run, `03-kernel-params.sh` fails on
+`net.ipv4.tcp_congestion_control = htcp`, which the container kernel lacks.
+Its rollback restores `/etc/sysctl.conf` and the kernel values
+([`media/captures/03-kernel-params.log`](../media/captures/03-kernel-params.log)),
+and afterwards the hardening block is gone from the file and `sysctl -p` loads
+it cleanly ([`media/captures/effects.txt`](../media/captures/effects.txt)).
 
-This is [BUG-24](BUGS-FOUND.md#bug-24), and it is still open: it needs a
-decision about which undo action each script should register, not a one-line
-patch. Until then, the restore path works for exactly the one script that uses
-it.
+## What rollback does not undo
+
+Three changes are left in place on purpose:
+
+- `12-tmp-hardening.sh` deletes files in `/tmp` and `/var/tmp` that were not
+  accessed for seven days. They are not copied first, so they do not come
+  back.
+- `00-ssh-verification.sh` reinstalls the SSH package when it finds modified
+  binaries. Rollback restores `sshd_config` and reloads sshd, but leaves the
+  package files at the packaged version, since putting them back would restore
+  the modified binaries.
+- An emergency sshd started for the run (`ENABLE_EMERGENCY_SSH=1`) keeps
+  running after a rollback, so a rollback never takes away a way back in.
 
 ## What the rest of the machinery guarantees
 
 - The `EXIT INT TERM` trap is installed by `begin_transaction` and removed by
-  `commit_transaction`, so an interrupted script does attempt a rollback, as
-  long as `ROLLBACK_ENABLED` is set ([BUG-4](BUGS-FOUND.md#bug-4)).
+  `commit_transaction`, so an interrupted script does attempt a rollback
+  unless `ROLLBACK_ENABLED=0`.
 - The stack is cleared at the start of every transaction, so a stale stack from
   a previous run is not replayed.
-- `SYSCTL`, `COMMAND`, `SERVICE` and `FIREWALL` actions were not exercised by
-  any capture. Only `FILE_RESTORE` has been seen to work.
+- The regression test replays every action type the scripts register.
+  `SERVICE` and `FIREWALL` are registered by no script and are not exercised.
 - `posix_reverse` in `lib/posix_compat.sh` is a correct POSIX reversal and is
   used by both `rollback_transaction` and `rollback_to_checkpoint`.
 
@@ -228,5 +253,4 @@ actions added since the checkpoint in reverse order and keeps the stack intact
 if one fails. No capture exercises it.
 
 See [measurement.md](measurement.md) for how the captures on this page were
-produced, and [BUGS-FOUND.md](BUGS-FOUND.md) for the entries that are still
-open.
+produced.

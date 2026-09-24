@@ -1,6 +1,8 @@
 === 1. with config/defaults.conf present, as quick-start.sh creates it
-orchestrator.sh: 20: /opt/posix-hardening/config/defaults.conf: BACKUP_DIR: is read only
-exit=2
+
+==> POSIX Server Hardening Orchestrator Starting
+[INFO] POSIX Server Hardening Orchestrator Starting
+exit=0
 
 === 2. same command with config/defaults.conf removed
 [ ] P3 - 19-log-retention.sh
@@ -10,9 +12,9 @@ exit=2
 exit=0
 
 === 3. --dry-run
-orchestrator.sh: 368: export: DRY_RUN: is read only
-[ERROR] Script failed with exit code: 2
-exit=2
+=====================================
+[INFO] Script completed successfully
+exit=0
 
 === 4. --script 02-firewall-setup.sh
     SCRIPT_ORDER declares: 1:02-firewall-setup.sh:01-ssh-hardening.sh
@@ -34,7 +36,7 @@ exit=1
       2:10-sudo-restrictions.sh:09-account-lockdown.sh
       2:14-sysctl-hardening.sh:03-kernel-params.sh,04-network-stack.sh
     no completion markers exist, so all of them are due to run:
-kernel.sysrq = 0
+[INFO] Rollback completed
 ✗ Failed: 03-kernel-params.sh
 [ERROR] Failed: 03-kernel-params.sh
 [ERROR] Script failed with exit code: 1

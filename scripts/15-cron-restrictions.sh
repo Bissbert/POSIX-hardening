@@ -11,13 +11,25 @@ TOOLKIT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 LIB_DIR="$TOOLKIT_ROOT/lib"
 CONFIG_FILE="$TOOLKIT_ROOT/config/defaults.conf"
 # Load configuration first (before libraries set readonly variables)
-[ -f "$CONFIG_FILE" ] && . "$CONFIG_FILE"
+# Environment values win over the file (see lib/config.sh)
+. "$LIB_DIR/config.sh"
+load_config "$CONFIG_FILE"
 . "$LIB_DIR/common.sh"
+. "$LIB_DIR/rollback.sh"
 
 SCRIPT_NAME="15-cron-restrictions"
 
 restrict_cron() {
     show_progress "Restricting cron access"
+
+    track_file /etc/cron.allow
+    track_file /etc/cron.deny
+    track_file /etc/at.allow
+    track_file /etc/at.deny
+    for f in /etc/crontab /etc/cron.d /etc/cron.daily /etc/cron.hourly \
+             /etc/cron.monthly /etc/cron.weekly; do
+        track_mode "$f"
+    done
 
     # Create cron.allow with only root
     echo "root" > /etc/cron.allow
@@ -44,12 +56,14 @@ restrict_cron() {
 
 main() {
     init_hardening_environment "$SCRIPT_NAME"
+    begin_transaction "cron_restrictions"
 
     if [ "$DRY_RUN" != "1" ]; then
         restrict_cron
     fi
 
     mark_completed "$SCRIPT_NAME"
+    commit_transaction
     exit 0
 }
 
