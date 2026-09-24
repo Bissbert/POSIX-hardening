@@ -61,10 +61,12 @@ SSH_ROLLBACK_TIMEOUT=60      # Seconds to wait before auto-rollback
 # ==============================================================================
 # EMERGENCY ACCESS
 # ==============================================================================
-# Creates a temporary SSH port with password auth for emergency recovery
-# Recommended: Keep enabled during initial deployment, remove after verification
+# Starts a second sshd on EMERGENCY_SSH_PORT that allows root login and
+# password authentication, as a fallback while SSH is being hardened.
+# Off by default. Turn it on only for the initial deployment, with the port
+# firewalled to ADMIN_IP, and remove it after verification.
 
-ENABLE_EMERGENCY_SSH=1       # Create emergency SSH on alternate port (1=on, 0=off)
+ENABLE_EMERGENCY_SSH=0       # Emergency sshd on alternate port (1=on, 0=off)
 EMERGENCY_SSH_PORT=2222      # Emergency SSH port number
 REMOVE_EMERGENCY_SSH=0       # Auto-remove after successful deployment (1=on, 0=off)
                              # Set to 1 for staging/test environments

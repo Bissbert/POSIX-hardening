@@ -141,7 +141,8 @@ configure_basics() {
     current_user="${SUDO_USER:-root}"
     get_input "Allowed SSH users (space-separated)" "$current_user" ssh_users
 
-    get_input "Enable emergency SSH? (recommended)" "yes" emergency_ssh
+    print_msg "$YELLOW" "Emergency SSH starts a second sshd that allows root login with a password."
+    get_input "Enable emergency SSH?" "no" emergency_ssh
     if [ "$emergency_ssh" = "yes" ] || [ "$emergency_ssh" = "y" ]; then
         emergency_enabled=1
         get_input "Emergency SSH port" "2222" emergency_port
@@ -208,7 +209,7 @@ write_config() {
     sed -i "s|ADMIN_EMAIL=\"\"|ADMIN_EMAIL=\"$admin_email\"|" "$CONFIG_FILE"
     sed -i "s|SSH_PORT=22|SSH_PORT=$ssh_port|" "$CONFIG_FILE"
     sed -i "s|SSH_ALLOW_USERS=\"\"|SSH_ALLOW_USERS=\"$ssh_users\"|" "$CONFIG_FILE"
-    sed -i "s|ENABLE_EMERGENCY_SSH=1|ENABLE_EMERGENCY_SSH=$emergency_enabled|" "$CONFIG_FILE"
+    sed -i "s|^ENABLE_EMERGENCY_SSH=0|ENABLE_EMERGENCY_SSH=$emergency_enabled|" "$CONFIG_FILE"
     sed -i "s|EMERGENCY_SSH_PORT=2222|EMERGENCY_SSH_PORT=$emergency_port|" "$CONFIG_FILE"
     sed -i "s|HARDENING_LEVEL=\"standard\"|HARDENING_LEVEL=\"$hardening_level\"|" "$CONFIG_FILE"
     sed -i "s|ALLOWED_PORTS=\"\"|ALLOWED_PORTS=\"$allowed_ports\"|" "$CONFIG_FILE"

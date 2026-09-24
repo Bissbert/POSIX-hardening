@@ -104,12 +104,20 @@ pre_flight_checks() {
 
     # Check if we're in an SSH session
     if [ -n "$SSH_CONNECTION" ] || [ -n "$SSH_CLIENT" ]; then
-        show_warning "Currently in SSH session - extra safety measures enabled"
-
-        # Create emergency SSH access as fallback
-        if [ "$ENABLE_EMERGENCY_ACCESS" = "1" ]; then
-            create_emergency_ssh_access "$EMERGENCY_SSH_PORT" || \
-                log "WARN" "Could not create emergency SSH access"
+        # The emergency daemon allows root login with a password, so it only
+        # starts when asked for. ENABLE_EMERGENCY_SSH is the name in
+        # config/defaults.conf; the Ansible template writes
+        # ENABLE_EMERGENCY_ACCESS. Unset means off.
+        if [ "${ENABLE_EMERGENCY_SSH:-0}" = "1" ] || [ "${ENABLE_EMERGENCY_ACCESS:-0}" = "1" ]; then
+            show_warning "Currently in SSH session - starting emergency SSH on port ${EMERGENCY_SSH_PORT:-2222}"
+            if [ "$DRY_RUN" = "1" ]; then
+                log "DRY_RUN" "Would create emergency SSH on port ${EMERGENCY_SSH_PORT:-2222}"
+            else
+                create_emergency_ssh_access "${EMERGENCY_SSH_PORT:-2222}" || \
+                    log "WARN" "Could not create emergency SSH access"
+            fi
+        else
+            show_warning "Currently in SSH session - emergency SSH is off (ENABLE_EMERGENCY_SSH=0); keep this session open until the run completes"
         fi
     fi
 
